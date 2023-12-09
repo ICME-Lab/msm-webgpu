@@ -1,3 +1,4 @@
+use msm_webgpu::gpu;
 fn main() {
-    println!("Hello, world!");
+    pollster::block_on(gpu::run_compute());
 }
