@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 use wgpu::util::DeviceExt;
-use wgpu::Instance;
+use wgpu::{Instance, BufferUsages};
 
-pub async fn device_setup_default() -> (
+pub async fn device_setup_default(wgsl_source: &str) -> (
     wgpu::Instance,
     wgpu::Adapter,
     wgpu::Device,
@@ -29,33 +29,12 @@ pub async fn device_setup_default() -> (
         .await
         .expect("Could not create adapter for device");
 
-    let shader = "
-      struct Array {
-          data: array<f32>,
-      }; 
-
-      @group(0) 
-      @binding(0)
-      var<storage, read> x: Array;
-
-      @group(0) 
-      @binding(1)
-      var<storage, read_write> y: Array;
-          
-      @compute
-      @workgroup_size(1)
-      fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-          let gidx = global_id.x;
-          y.data[gidx] = cos(x.data[gidx]);
-      }
-    ";
-
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: None,
         layout: None,
         module: &device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(&shader)),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(wgsl_source)),
         }),
         entry_point: "main",
     });
@@ -66,8 +45,8 @@ pub async fn device_setup_default() -> (
     // assert_eq!(&res[0..5], &expected_result);
 }
 
-pub async fn run_compute() {
-    let (_, _, device, queue, pipeline, mut encoder) = device_setup_default().await;
+pub async fn run_cos_compute(wgsl_source: &str) {
+    let (_, _, device, queue, pipeline, mut encoder) = device_setup_default(wgsl_source).await;
 
     let x: Vec<f32> = (0..1024).map(|v| v as f32).collect();
 
@@ -127,3 +106,4 @@ pub async fn run_compute() {
     println!("Result: {:?}", &res[0..5]);
     println!("expected result: {:?}", &expected_result);
 }
+
