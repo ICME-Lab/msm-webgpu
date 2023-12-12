@@ -3,6 +3,7 @@ const W_mask = 65535u;
 const L = 256;
 const N = 16u;
 const N2 = 32u;
+const NPlusOne = 17u;
 
 // No overflow
 struct BigInt256 {
@@ -11,6 +12,10 @@ struct BigInt256 {
 
 struct BigInt512 {
     limbs: array<u32,N2>
+}
+
+struct BigInt272 {
+    limbs: array<u32,NPlusOne>
 }
 
 fn add(a: ptr<function, BigInt256>, b: ptr<function, BigInt256>, res: ptr<function, BigInt256>) -> u32 {
@@ -51,6 +56,21 @@ fn sub_512(a: ptr<function, BigInt512>, b: ptr<function, BigInt512>, res: ptr<fu
     return borrow;
 }
 
+// assumes a >= b
+fn sub_272(a: ptr<function, BigInt272>, b: ptr<function, BigInt272>, res: ptr<function, BigInt272>) -> u32 {
+    var borrow: u32 = 0u;
+    for (var i: u32 = 0u; i < NPlusOne; i = i + 1u) {
+        (*res).limbs[i] = (*a).limbs[i] - (*b).limbs[i] - borrow;
+        if ((*a).limbs[i] < ((*b).limbs[i] + borrow)) {
+            (*res).limbs[i] += W_mask + 1u;
+            borrow = 1u;
+        } else {
+            borrow = 0u;
+        }
+    }
+    return borrow;
+}
+
 fn mul(a: ptr<function, BigInt256>, b: ptr<function, BigInt256>) -> BigInt512 {
     var res: BigInt512;
     let N = 16u;
@@ -72,6 +92,8 @@ fn mul(a: ptr<function, BigInt256>, b: ptr<function, BigInt256>) -> BigInt512 {
 alias BaseField = BigInt256;
 alias ScalarField = BigInt256;
 
+const BASE_NBITS = 255;
+
 fn get_base_mod() -> BigInt256 {
     var p: BigInt256;
     p.limbs[0] = 1u;
@@ -90,6 +112,28 @@ fn get_base_mod() -> BigInt256 {
     p.limbs[13] = 0u;
     p.limbs[14] = 0u;
     p.limbs[15] = 16384u;
+    return p;
+}
+
+fn get_base_mod_med_wide() -> BigInt272 {
+    var p: BigInt272;
+    p.limbs[0] = 1u;
+    p.limbs[1] = 0u;
+    p.limbs[2] = 12525u;
+    p.limbs[3] = 39213u;
+    p.limbs[4] = 63771u;
+    p.limbs[5] = 2380u;
+    p.limbs[6] = 39164u;
+    p.limbs[7] = 8774u;
+    p.limbs[8] = 0u;
+    p.limbs[9] = 0u;
+    p.limbs[10] = 0u;
+    p.limbs[11] = 0u;
+    p.limbs[12] = 0u;
+    p.limbs[13] = 0u;
+    p.limbs[14] = 0u;
+    p.limbs[15] = 16384u;
+    p.limbs[16] = 0u;
     return p;
 }
 
@@ -129,8 +173,6 @@ fn get_base_mod_wide() -> BigInt512 {
     p.limbs[31] = 0u;
     return p;
 }
-
-const BASE_NBITS = 255;
 
 fn get_base_m() -> BigInt256 {
     var p: BigInt256;
@@ -195,10 +237,6 @@ fn get_one() -> BigInt256 {
     return p;
 }
 
-const ONE: BigInt256 = BigInt256(
-    array(1u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u)
-);
-
 fn get_higher_with_slack(a: ptr<function, BigInt512>) -> BaseField {
     var out: BaseField;
     var slack = 256u - 255u;
@@ -218,6 +256,38 @@ fn field_reduce(a: ptr<function, BigInt256>) -> BaseField {
     } else {
         return res;
     }
+}
+
+fn shorten(a: ptr<function, BigInt272>) -> BigInt256 {
+    var out: BigInt256;
+    for (var i = 0u; i < N; i = i + 1u) {
+        out.limbs[i] = (*a).limbs[i];
+    }
+    return out;
+}
+
+// reduces l times (assumes that 0 <= a < multi * mod)
+fn field_reduce_272(a: ptr<function, BigInt272>, multi: u32) -> BaseField {
+    var zero = get_zero();
+    var ans = zero;
+    var res: BigInt272;
+    var cur = *a;
+    var cur_multi = multi + 1u;
+    var mod_med_wide = get_base_mod_med_wide();
+    while (cur_multi > 0u) {
+        var underflow = sub_272(&cur, &mod_med_wide, &res);
+        if (underflow == 1u) {
+            ans = shorten(&cur);
+
+            //return statement was corrupting output for some reason?
+            cur_multi = 1u;
+        } else {
+            cur = res;
+        }
+        cur_multi = cur_multi - 1u;
+    }
+
+    return ans;
 }
 
 fn field_add(a: ptr<function, BaseField>, b: ptr<function, BaseField>) -> BaseField { 
@@ -268,6 +338,19 @@ fn field_small_scalar_mul(a: u32, b: ptr<function, BaseField>) -> BaseField {
     return field_mul(&constant, b);
 }
 
+fn field_small_scalar_shift(l: u32, a: ptr<function, BaseField>) -> BaseField { // max shift allowed is 16
+    // assert (l < 16u);
+    var res: BigInt272;
+    for (var i = 0u; i < N; i = i + 1u) {
+        let shift = (*a).limbs[i] << l;
+        res.limbs[i] = res.limbs[i] | (shift & W_mask);
+        res.limbs[i + 1u] = (shift >> W);
+    }
+
+    var output = field_reduce_272(&res, (1u << l)); // can probably be optimised
+    return output;
+}
+
 fn field_pow(p: ptr<function, BaseField>, e: u32) -> BaseField {
     var res: BaseField = *p;
     for (var i = 1u; i < e; i = i + 1u) {
@@ -294,15 +377,22 @@ struct JacobianPoint {
     z: BaseField
 };
 
-fn jacobian_double(p: ptr<function, JacobianPoint>) -> JacobianPoint {
+fn is_inf(p: ptr<function, JacobianPoint>) -> bool {
+    var pz = (*p).z;
+    var zero: BigInt256 = get_zero();
+    return field_eq(&pz, &zero);
+}
+
+fn slow_jacobian_double(p: ptr<function, JacobianPoint>) -> JacobianPoint {
     var zero: BigInt256 = get_zero();
     var py = (*p).y;
     var px = (*p).x;
     var pz = (*p).z;
+
     if (field_eq(&py, &zero)) {
         return JacobianPoint(zero, zero, zero);
     }
-
+    
     var ysq: BigInt256 = field_pow(&py, 2u);
     var s1: BigInt256 = field_mul(&px, &ysq);
     var m1: BigInt256 = field_pow(&px, 2u);
@@ -330,6 +420,46 @@ fn jacobian_double(p: ptr<function, JacobianPoint>) -> JacobianPoint {
     var nz = field_mul(&nz1, &pz);
 
     return JacobianPoint(nx, ny, nz);
+}
+
+fn jacobian_double(p: ptr<function, JacobianPoint>) -> JacobianPoint {
+    // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
+    var zero: BigInt256 = get_zero();
+    var py = (*p).y;
+    var px = (*p).x;
+    var pz = (*p).z;
+    // if (field_eq(&py, &zero)) {
+    //     return JacobianPoint(zero, zero, zero);
+    // }
+
+    var A = field_mul(&px, &px);
+    var B = field_mul(&py, &py);
+    var C = field_mul(&B, &B);
+
+    var X1plusB = field_add(&px, &B);
+
+    var d_fs_1 = field_mul(&X1plusB, &X1plusB);
+    var d_fs_2 = field_add(&A, &C);
+    var d_2 = field_sub(&d_fs_1, &d_fs_2);
+    var D = field_small_scalar_shift(1u, &d_2);
+
+    var e_1 = field_small_scalar_shift(1u, &A);
+    var E = field_add(&e_1, &A);
+    var F = field_mul(&E, &E);
+
+    var x3_2 = field_small_scalar_shift(1u, &D);
+    var x3 = field_sub(&F, &x3_2);
+
+    var y3_1_fs = field_sub(&D, &x3);
+    var y3_1 = field_mul(&E, &y3_1_fs);
+    var y3_2 = field_small_scalar_shift(3u, &C);
+    var y3 = field_sub(&y3_1, &y3_2);
+
+    var z3_1 = field_small_scalar_shift(1u, &py);
+    var z3 = field_mul(&z3_1, &pz);
+    var one = get_one();
+
+    return JacobianPoint(x3, y3, z3);
 }
 
 fn jacobian_add(p: ptr<function, JacobianPoint>, q: ptr<function, JacobianPoint>) -> JacobianPoint {
@@ -423,36 +553,16 @@ var<storage, read_write> scalars: array<ScalarField>;
 @group(0) @binding(2)
 var<storage, read_write> result: JacobianPoint;
 
-const WORKGROUP_SIZE = 128;
-
-var<workgroup> mem: array<JacobianPoint, WORKGROUP_SIZE>;
-
-@compute @workgroup_size(WORKGROUP_SIZE)
+@compute @workgroup_size(1)
 fn main(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(local_invocation_id) local_id: vec3<u32>
 ) {
     var gidx = global_id.x;
-    var lidx = local_id.x;
+
 
     var point_1 = points[gidx];
     var scalar_1 = scalars[gidx];
-    mem[lidx] = jacobian_mul(&point_1, &scalar_1);
 
-    workgroupBarrier();
-    
-    for (var offset: u32 = 128u / 2u; offset > 0u; offset = offset / 2u) {
-        if (lidx < offset) {
-            var mem_1 = mem[lidx];
-            var mem_2 = mem[lidx + offset];
-
-            mem[lidx] = jacobian_add(&mem_1, &mem_2);
-        }
-        workgroupBarrier();
-    }
-
-    // TODO: read about memory ordering and fix this when we have multiple global invocations
-    if (lidx == 0u) {
-        result = mem[0];
-    }
+    result = jacobian_double(&point_1);
 }

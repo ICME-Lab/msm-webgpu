@@ -1,8 +1,10 @@
 use std::borrow::Cow;
 use wgpu::util::DeviceExt;
-use wgpu::{Instance, BufferUsages};
+use wgpu::{BufferUsages, Instance};
 
-pub async fn device_setup_default(wgsl_source: &str) -> (
+pub async fn device_setup_default(
+    wgsl_source: &str,
+) -> (
     wgpu::Instance,
     wgpu::Adapter,
     wgpu::Device,
@@ -42,7 +44,6 @@ pub async fn device_setup_default(wgsl_source: &str) -> (
     let encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
     (instance, adapter, device, queue, pipeline, encoder)
-    // assert_eq!(&res[0..5], &expected_result);
 }
 
 pub async fn run_cos_compute(wgsl_source: &str) {
@@ -107,3 +108,84 @@ pub async fn run_cos_compute(wgsl_source: &str) {
     println!("expected result: {:?}", &expected_result);
 }
 
+pub async fn run_msm_compute(
+    wgsl_source: &str,
+    points_bytes: &[u8],
+    scalars_bytes: &[u8],
+    result_size: u64,
+) -> Vec<u32> {
+    let (_, _, device, queue, pipeline, mut encoder) = device_setup_default(wgsl_source).await;
+
+    let points_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("points"),
+        contents: points_bytes,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+    });
+
+    let scalars_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("scalars"),
+        contents: scalars_bytes,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+    });
+
+    let result_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("result"),
+        size: result_size,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+
+    let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("staging"),
+        size: result_size,
+        usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &pipeline.get_bind_group_layout(0),
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: points_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: scalars_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: result_buffer.as_entire_binding(),
+            },
+        ],
+    });
+
+    {
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: None,
+            timestamp_writes: None,
+        });
+
+        cpass.set_pipeline(&pipeline);
+        cpass.set_bind_group(0, &bind_group, &[]);
+        cpass.dispatch_workgroups(1, 1, 1);
+    }
+
+    encoder.copy_buffer_to_buffer(&result_buffer, 0, &staging_buffer, 0, result_size);
+
+    queue.submit(Some(encoder.finish()));
+
+    let buffer_slice = staging_buffer.slice(..);
+    let buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
+
+    device.poll(wgpu::Maintain::Wait);
+
+    let data = buffer_slice.get_mapped_range();
+
+    let res: Vec<u32> = bytemuck::cast_slice(&data).to_vec();
+    drop(data);
+    staging_buffer.unmap();
+
+    res
+}
