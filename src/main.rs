@@ -1,24 +1,17 @@
-use ark_curve25519::{Curve25519Config, EdwardsProjective as G1Projective, Fr};
-use ark_ec::{
-    short_weierstrass::{Affine, SWCurveConfig},
-    ScalarMul,
-};
+use ark_curve25519::{EdwardsProjective as G1Projective, Fr};
+use ark_ec::ScalarMul;
 use ark_ff::UniformRand;
 use msm_webgpu::{
     gpu,
-    utils::{bigints_to_bytes, concat_files, point_to_bytes, split_biguint, u32s_to_bigints},
+    utils::{bigints_to_bytes, concat_files, point_to_bytes, u32s_to_bigints, fr_vec_to_biguint_vec},
 };
-use num_bigint::{BigUint, ToBigInt};
-
-pub fn fr_vec_to_biguint_vec(vals: &Vec<Fr>) -> Vec<BigUint> {
-    vals.iter().map(|v| (*v).into()).collect()
-}
+use num_bigint::BigUint;
 
 fn main() {
     /*
        SETUP
     */
-    const SAMPLES: usize = 10;
+    const SAMPLES: usize = 1;
     let mut rng = ark_std::test_rng();
 
     let v = (0..SAMPLES).map(|_| Fr::rand(&mut rng)).collect::<Vec<_>>();
@@ -37,8 +30,7 @@ fn main() {
         .map(|affine| (affine.x.into(), affine.y.into(), (1 as u32).into()))
         .collect();
 
-    let points_slice = point_to_bytes(packed_points);
-
+    let points_slice = point_to_bytes(&packed_points);
     /*
        RUN
     */
@@ -50,6 +42,6 @@ fn main() {
         3 * 64,
     ));
     let result = u32s_to_bigints(result);
-
+    
     println!("{:?}", result);
 }

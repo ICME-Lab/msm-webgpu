@@ -464,12 +464,13 @@ fn jacobian_double(p: ptr<function, JacobianPoint>) -> JacobianPoint {
 
 fn jacobian_add(p: ptr<function, JacobianPoint>, q: ptr<function, JacobianPoint>) -> JacobianPoint {
     var zero = get_zero();
-    var py = (*p).y;
+
     var px = (*p).x;
+    var py = (*p).y;
     var pz = (*p).z;
 
-    var qy = (*q).y;
     var qx = (*q).x;
+    var qy = (*q).y;
     var qz = (*q).z;
 
     if (field_eq(&py, &zero)) {
@@ -479,15 +480,16 @@ fn jacobian_add(p: ptr<function, JacobianPoint>, q: ptr<function, JacobianPoint>
         return *p;
     }
 
-    var fp_qz_2 = field_pow(&qz, 2u);
-    var fp_pz_2 = field_pow(&pz, 2u);
-    var fp_qz_3 = field_pow(&qz, 3u);
-    var fp_pz_3 = field_pow(&pz, 3u);
+    var Z1Z1 = field_mul(&pz, &pz);
+    var Z2Z2 = field_mul(&qz, &qz);
+    var U1 = field_mul(&px, &Z1Z1);
+    var U2 = field_mul(&qx, &Z2Z2);
 
-    var U1 = field_mul(&px, &fp_qz_2);
-    var U2 = field_mul(&qx, &fp_pz_2);
-    var S1 = field_mul(&py, &fp_qz_3);
-    var S2 = field_mul(&qy, &fp_pz_3);
+    var s1_2 = field_mul(&Z2Z2, &qz);
+    var S1 = field_mul(&py, &s1_2);
+
+    var s2_2 = field_mul(&Z1Z1, &pz);
+    var S2 = field_mul(&qy, &s2_2);
 
     if (field_eq(&U1, &U2)) {
         if (field_eq(&S1, &S2)) {
@@ -499,26 +501,34 @@ fn jacobian_add(p: ptr<function, JacobianPoint>, q: ptr<function, JacobianPoint>
     }
 
     var H = field_sub(&U2, &U1);
-    var R = field_sub(&S2, &S1);
-    var H2 = field_mul(&H, &H);
-    var H3 = field_mul(&H2, &H);
-    var U1H2 = field_mul(&U1, &H2);
+    
+    var i_2 = field_mul(&H, &H);
+    var I = field_small_scalar_shift(2u, &i_2);
+    var J = field_mul(&H, &I);
 
-    //nx args
-    var nx1_fp_inner = field_pow(&R, 2u);
-    var nx1 = field_sub(&nx1_fp_inner, &H3);
-    var nx2 = field_small_scalar_mul(2u, &U1H2);
-    var nx = field_sub(&nx1, &nx2);
+    var r_2 = field_sub(&S2, &S1);
+    var R = field_small_scalar_shift(1u, &r_2);
+    var V = field_mul(&U1, &I);
 
-    //ny args
-    var ny1_fs_inner = field_sub(&U1H2, &nx);
-    var ny1 = field_mul(&R, &ny1_fs_inner);
-    var ny2 = field_mul(&S1, &H3);
+    var nx_1 = field_mul(&R, &R);
 
-    var ny = field_sub(&ny1, &ny2);
+    var nx_2_fa_2 = field_small_scalar_shift(1u, &V);
+    var nx_2 = field_add(&J, &nx_2_fa_2);
+    var nx = field_sub(&nx_1, &nx_2);
 
-    var nz1 = field_mul(&H, &pz);
-    var nz = field_mul(&nz1, &qz);
+    var ny_1_fm_2 = field_sub(&V, &nx);
+    var ny_1 = field_mul(&R, &ny_1_fm_2);
+
+    var ny_2_fss_2 = field_mul(&S1, &J);
+    var ny_2 = field_small_scalar_shift(1u, &ny_2_fss_2);
+
+    var ny = field_sub(&ny_1, &ny_2);
+
+    var nz_2_fs_1_fa = field_add(&pz, &qz);
+    var nz_2_fs_1 = field_pow(&nz_2_fs_1_fa, 2u);
+    var nz_2_fs_2 = field_add(&Z1Z1, &Z2Z2);
+    var nz_2 = field_sub(&nz_2_fs_1, &nz_2_fs_2);
+    var nz = field_mul(&H, &nz_2);
     
     return JacobianPoint(nx, ny, nz);
 }
@@ -553,16 +563,33 @@ var<storage, read_write> scalars: array<ScalarField>;
 @group(0) @binding(2)
 var<storage, read_write> result: JacobianPoint;
 
-@compute @workgroup_size(1)
+const WORKGROUP_SIZE = 1u;
+var<workgroup> mem: array<JacobianPoint, WORKGROUP_SIZE>;
+
+@compute @workgroup_size(WORKGROUP_SIZE)
 fn main(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(local_invocation_id) local_id: vec3<u32>
 ) {
-    var gidx = global_id.x;
+    let gidx = global_id.x;
+    let lidx = local_id.x;
 
+    var point = points[gidx];
+    var scalar = scalars[gidx];
 
-    var point_1 = points[gidx];
-    var scalar_1 = scalars[gidx];
+    workgroupBarrier();
+    for (var offset: u32 = WORKGROUP_SIZE / 2u; offset > 0u; offset = offset / 2u) {
+        if (lidx < offset) {
+            var mem_lidx = mem[lidx];
+            var mem_lidx_off = mem[lidx + offset];
+            mem[lidx] = jacobian_add(&mem_lidx, &mem_lidx_off);
+        }
+    workgroupBarrier();
 
-    result = jacobian_double(&point_1);
+    }
+
+    // // // TDO: read about memory ordering and fix this when we have multiple global invocations
+    if (lidx == 0u) {
+        result = mem[0];
+    }
 }

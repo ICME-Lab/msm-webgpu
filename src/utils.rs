@@ -1,6 +1,11 @@
 use itertools::Itertools;
 use num_bigint::BigUint;
 use num_traits::identities::Zero;
+use ark_curve25519::Fr;
+
+pub fn fr_vec_to_biguint_vec(vals: &Vec<Fr>) -> Vec<BigUint> {
+    vals.iter().map(|v| (*v).into()).collect()
+}
 
 pub fn concat_files(filenames: Vec<&str>) -> String {
     let mut result = String::new();
@@ -64,7 +69,7 @@ pub fn bigints_to_bytes(vals: Vec<BigUint>) -> Vec<u8> {
     input_as_bytes.into_iter().flatten().collect()
 }
 
-pub fn point_to_bytes(vals: Vec<(BigUint, BigUint, BigUint)>) -> Vec<u8> {
+pub fn point_to_bytes(vals: &Vec<(BigUint, BigUint, BigUint)>) -> Vec<u8> {
     let mut input_as_bytes: Vec<Vec<u8>> = Vec::with_capacity(vals.len() * 3);
 
     for (x, y, z) in vals {
