@@ -563,7 +563,7 @@ var<storage, read_write> scalars: array<ScalarField>;
 @group(0) @binding(2)
 var<storage, read_write> result: JacobianPoint;
 
-const WORKGROUP_SIZE = 128u;
+const WORKGROUP_SIZE = 1u;
 var<workgroup> mem: array<JacobianPoint, WORKGROUP_SIZE>;
 
 @compute @workgroup_size(WORKGROUP_SIZE)

@@ -11,7 +11,7 @@ fn main() {
     /*
        SETUP
     */
-    const SAMPLES: usize = 128;
+    const SAMPLES: usize = 1;
     let mut rng = ark_std::test_rng();
 
     let v = (0..SAMPLES).map(|_| Fr::rand(&mut rng)).collect::<Vec<_>>();
