@@ -563,7 +563,7 @@ var<storage, read_write> scalars: array<ScalarField>;
 @group(0) @binding(2)
 var<storage, read_write> result: JacobianPoint;
 
-const WORKGROUP_SIZE = 1u;
+const WORKGROUP_SIZE = 128u;
 var<workgroup> mem: array<JacobianPoint, WORKGROUP_SIZE>;
 
 @compute @workgroup_size(WORKGROUP_SIZE)
@@ -574,9 +574,9 @@ fn main(
     let gidx = global_id.x;
     let lidx = local_id.x;
 
-    var point = points[gidx];
-    var scalar = scalars[gidx];
-
+    var point = points[lidx];
+    var scalar = scalars[lidx];
+    mem[gidx] = jacobian_mul(&point, &scalar);
     workgroupBarrier();
     for (var offset: u32 = WORKGROUP_SIZE / 2u; offset > 0u; offset = offset / 2u) {
         if (lidx < offset) {
