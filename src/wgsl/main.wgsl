@@ -577,6 +577,7 @@ fn main(
     var point = points[lidx];
     var scalar = scalars[lidx];
     mem[gidx] = jacobian_mul(&point, &scalar);
+    
     workgroupBarrier();
     for (var offset: u32 = WORKGROUP_SIZE / 2u; offset > 0u; offset = offset / 2u) {
         if (lidx < offset) {

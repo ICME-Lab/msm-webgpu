@@ -31,6 +31,7 @@ pub async fn device_setup_default(
         .await
         .expect("Could not create adapter for device");
 
+        println!("{:?}", adapter.get_info());
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: None,
         layout: None,
@@ -93,7 +94,7 @@ pub async fn run_cos_compute(wgsl_source: &str) {
 
     queue.submit(Some(encoder.finish()));
     let buffer_slice = y_buffer.slice(..);
-    let buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
+    let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
     device.poll(wgpu::Maintain::Wait);
 
     let data = buffer_slice.get_mapped_range();
@@ -177,7 +178,7 @@ pub async fn run_msm_compute(
     queue.submit(Some(encoder.finish()));
 
     let buffer_slice = staging_buffer.slice(..);
-    let buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
+    let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
 
     device.poll(wgpu::Maintain::Wait);
 

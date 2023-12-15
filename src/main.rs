@@ -6,6 +6,7 @@ use msm_webgpu::{
     utils::{bigints_to_bytes, concat_files, point_to_bytes, u32s_to_bigints, fr_vec_to_biguint_vec},
 };
 use num_bigint::BigUint;
+use std::time::Instant;
 
 fn main() {
     /*
@@ -34,6 +35,7 @@ fn main() {
     /*
        RUN
     */
+    let now = Instant::now();
     let shader_code = concat_files(vec!["src/wgsl/main.wgsl"]);
     let result = pollster::block_on(gpu::run_msm_compute(
         &shader_code,
@@ -41,6 +43,8 @@ fn main() {
         &v_slice,
         3 * 64,
     ));
+    let elapsed = now.elapsed();
+    println!("Elapsed: {:.2?}", elapsed);
     let result = u32s_to_bigints(result);
     
     println!("{:?}", result);
