@@ -1,8 +1,8 @@
+use ark_bn254::Fr;
+use ark_ff::BigInt;
 use itertools::Itertools;
 use num_bigint::BigUint;
 use num_traits::identities::Zero;
-use ark_bn254::Fr;
-use ark_ff::BigInt;
 
 pub fn fr_vec_to_biguint_vec(vals: &Vec<Fr>) -> Vec<BigUint> {
     vals.iter().map(|v| (*v).into()).collect()
@@ -93,4 +93,3 @@ pub fn u32s_to_bigints(b: Vec<u32>) -> Vec<BigUint> {
 
     chunks.iter().map(|c| limbs_to_bigint256(c)).collect()
 }
-

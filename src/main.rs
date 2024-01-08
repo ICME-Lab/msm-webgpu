@@ -1,13 +1,15 @@
-use ark_bn254::{G1Projective, Fr, g1::Config, Fq};
-use ark_ec::{ScalarMul, VariableBaseMSM, CurveGroup, short_weierstrass::Projective};
-use ark_ff::{UniformRand};
+use ark_bn254::{g1::Config, Fq, Fr, G1Projective};
+use ark_ec::{short_weierstrass::Projective, CurveGroup, ScalarMul, VariableBaseMSM};
+use ark_ff::UniformRand;
+use ark_std::{One, Zero};
 use msm_webgpu::{
     gpu,
-    utils::{bigints_to_bytes, concat_files, point_to_bytes, u32s_to_bigints, fr_vec_to_biguint_vec},
+    utils::{
+        bigints_to_bytes, concat_files, fr_vec_to_biguint_vec, point_to_bytes, u32s_to_bigints,
+    },
 };
 use num_bigint::BigUint;
-use std::{time::Instant};
-use ark_std::{Zero, One};
+use std::time::Instant;
 
 fn main() {
     /*
@@ -48,13 +50,17 @@ fn main() {
         &v_slice,
         3 * 64,
     ));
-    
+
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
-    
+
     let result = u32s_to_bigints(result);
 
-    let ans = Projective::<Config>::new_unchecked(result[0].clone().try_into().expect("failed"),result[1].clone().try_into().expect("failed"),result[2].clone().try_into().expect("failed"));
+    let ans = Projective::<Config>::new_unchecked(
+        result[0].clone().try_into().expect("failed"),
+        result[1].clone().try_into().expect("failed"),
+        result[2].clone().try_into().expect("failed"),
+    );
 
     assert_eq!(fast.into_affine(), ans.into_affine());
 }
