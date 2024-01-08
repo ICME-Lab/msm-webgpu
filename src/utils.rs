@@ -94,21 +94,3 @@ pub fn u32s_to_bigints(b: Vec<u32>) -> Vec<BigUint> {
     chunks.iter().map(|c| limbs_to_bigint256(c)).collect()
 }
 
-pub fn biguint_to_ffbigint(val: num_bigint::BigUint) -> BigInt<4> {
-    let bytes = val.to_bytes_le();
-
-        let mut limbs = [0u64; 4];
-
-        bytes
-            .chunks(8)
-            .into_iter()
-            .enumerate()
-            .for_each(|(i, chunk)| {
-                let mut chunk_padded = [0u8; 8];
-                chunk_padded[..chunk.len()].copy_from_slice(chunk);
-                limbs[i] = u64::from_le_bytes(chunk_padded)
-            });
-
-        BigInt(limbs)
-    
-}
