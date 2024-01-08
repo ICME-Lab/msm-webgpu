@@ -563,7 +563,7 @@ var<storage, read_write> scalars: array<ScalarField>;
 @group(0) @binding(2)
 var<storage, read_write> result: JacobianPoint;
 
-const WORKGROUP_SIZE = 1u;
+const WORKGROUP_SIZE = 8u;
 var<workgroup> mem: array<JacobianPoint, WORKGROUP_SIZE>;
 
 @compute @workgroup_size(WORKGROUP_SIZE)
@@ -586,7 +586,6 @@ fn main(
             mem[lidx] = jacobian_add(&mem_lidx, &mem_lidx_off);
         }
     workgroupBarrier();
-
     }
 
     // // // TDO: read about memory ordering and fix this when we have multiple global invocations

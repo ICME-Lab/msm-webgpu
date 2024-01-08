@@ -31,7 +31,7 @@ pub async fn device_setup_default(
         .await
         .expect("Could not create adapter for device");
 
-        println!("{:?}", adapter.get_info());
+    println!("{:?}", adapter.get_info());
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: None,
         layout: None,
