@@ -1,12 +1,12 @@
-use ark_pallas::Fr;
-use ark_ff::{BigInt, PrimeField, Field};
 use itertools::Itertools;
 use num_bigint::BigUint;
 use num_traits::identities::Zero;
 
-pub fn fr_vec_to_biguint_vec(vals: &Vec<Fr>) -> Vec<BigUint> {
-    vals.iter().map(|v| (*v).into()).collect()
-}
+
+    
+    
+
+
 
 pub fn concat_files(filenames: Vec<&str>) -> String {
     let mut result = String::new();
@@ -61,26 +61,7 @@ pub fn split_biguint(a: BigUint) -> Vec<u8> {
     result
 }
 
-pub fn fields_to_u16_vec<F: PrimeField>(fields: &[F]) -> Vec<u16> {
-    fields
-        .iter()
-        .map(|field| field_to_u16_vec(field))
-        .flatten()
-        .collect()
-}
 
-pub fn field_to_u16_vec<F: PrimeField>(field: &F) -> Vec<u16> {
-    let mut bytes = Vec::new();
-    field.serialize_uncompressed(&mut bytes).unwrap();
-    let mut u16_vec = Vec::new();
-
-    for chunk in bytes.chunks_exact(2) {
-        u16_vec.push(u16::from_le_bytes(chunk.try_into().unwrap()));
-    }
-
-    // u16_vec.reverse();
-    u16_vec
-}
 
 pub fn bigints_to_bytes(vals: Vec<BigUint>) -> Vec<u8> {
     let mut input_as_bytes: Vec<Vec<u8>> = Vec::with_capacity(vals.len());
@@ -115,21 +96,7 @@ pub fn u32s_to_bigints(b: Vec<u32>) -> Vec<BigUint> {
     chunks.iter().map(|c| limbs_to_bigint256(c)).collect()
 }
 
-pub fn u16_array_to_fields<F: PrimeField>(u16_array: &[u16]) -> Vec<F> {
-    u16_array
-        .chunks_exact(16) // Each field element is 16 u16s (16 * 16 bits)
-        .map(|chunk| {
-            // reversed_chunk.reverse();
-            let bytes = chunk.iter()
-            .flat_map(|x| x.to_le_bytes())
-            .collect::<Vec<u8>>();
-            F::from_le_bytes_mod_order(&bytes)
 
-            // let biguint = u16_array_to_big_int(&reversed_chunk);
-            // bigint_to_field(biguint)
-        })
-        .collect()
-}
 
 
 pub fn u16_array_to_big_int(digits: &[u16]) -> BigUint {
