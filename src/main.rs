@@ -1,4 +1,4 @@
-use ark_bn254::{g1::Config, Fq, Fr, G1Projective};
+use ark_pallas::{Fq, Fr, Projective as PallasProjective};
 use ark_ec::{short_weierstrass::Projective, CurveGroup, ScalarMul, VariableBaseMSM};
 use ark_ff::UniformRand;
 use ark_std::{One, Zero};
@@ -23,16 +23,16 @@ fn main() {
     let v_slice = bigints_to_bytes(bigint_v.clone());
 
     let g = (0..SAMPLES)
-        .map(|_| G1Projective::rand(&mut rng))
+        .map(|_| PallasProjective::rand(&mut rng))
         .collect::<Vec<_>>();
 
-    let g = G1Projective::batch_convert_to_mul_base(&g);
-    let mut acc = G1Projective::zero();
+    let g = PallasProjective::batch_convert_to_mul_base(&g);
+    let mut acc = PallasProjective::zero();
 
     for (base, scalar) in g.iter().zip(v.iter()) {
         acc += *base * scalar;
     }
-    let fast = G1Projective::msm(g.as_slice(), v.as_slice()).unwrap();
+    let fast = PallasProjective::msm(g.as_slice(), v.as_slice()).unwrap();
 
     let packed_points: Vec<(BigUint, BigUint, BigUint)> = g
         .into_iter()
@@ -56,7 +56,7 @@ fn main() {
 
     let result = u32s_to_bigints(result);
 
-    let ans = Projective::<Config>::new_unchecked(
+    let ans = PallasProjective::new_unchecked(
         result[0].clone().try_into().expect("failed"),
         result[1].clone().try_into().expect("failed"),
         result[2].clone().try_into().expect("failed"),

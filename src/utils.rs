@@ -1,4 +1,4 @@
-use ark_bn254::Fr;
+use ark_pallas::Fr;
 use ark_ff::BigInt;
 use itertools::Itertools;
 use num_bigint::BigUint;
