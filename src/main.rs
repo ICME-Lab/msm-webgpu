@@ -15,7 +15,7 @@ fn main() {
     /*
        SETUP
     */
-    const SAMPLES: usize = 8;
+    const SAMPLES: usize = 100;
     let mut rng = ark_std::test_rng();
 
     let v = (0..SAMPLES).map(|_| Fr::rand(&mut rng)).collect::<Vec<_>>();
@@ -34,13 +34,17 @@ fn main() {
 
     let g = PallasProjective::batch_convert_to_mul_base(&g);
     println!("g: {:?}", g);
-    let mut acc = PallasProjective::zero();
 
+    let now = Instant::now();
+    let mut acc = PallasProjective::zero();
     for (base, scalar) in g.iter().zip(v.iter()) {
         acc += *base * scalar;
     }
-    let fast = PallasProjective::msm(g.as_slice(), v.as_slice()).unwrap();
+    println!("Slow Elapsed: {:.2?}", now.elapsed());
 
+    let now = Instant::now();
+    let fast = PallasProjective::msm(g.as_slice(), v.as_slice()).unwrap();
+    println!("Fast Elapsed: {:.2?}", now.elapsed());
     let packed_points: Vec<Fq> = g
         .into_iter()
         .flat_map(|affine| [affine.x, affine.y, Fq::one()])
@@ -58,7 +62,7 @@ fn main() {
         x as u16
     }).collect::<Vec<_>>();
     let result: Vec<Fq> = u16_array_to_fields(&output_u16);
-    println!("result: {:?}", result);
+    // println!("result: {:?}", result);
 
     assert_eq!(result, packed_points);
     /*
@@ -73,12 +77,11 @@ fn main() {
         // 3 * 64,
     ));
 
-    let elapsed = now.elapsed();
-    println!("Elapsed: {:.2?}", elapsed);
+    println!("WebGPU Elapsed: {:.2?}", now.elapsed());
 
     let result: Vec<Fq> = u16_array_to_fields(&result);
 
-    println!("result: {:?}", result.len());
+    // println!("result: {:?}", result.len());
 
     let ans = PallasProjective::new_unchecked(
         result[0].clone(),

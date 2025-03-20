@@ -50,7 +50,7 @@ pub async fn run_msm_compute(
         .await
         .expect("Could not create adapter for device");
 
-    println!("{:?}", adapter.get_info());
+    // println!("{:?}", adapter.get_info());
 
     let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("MSM Shader"),
@@ -102,7 +102,7 @@ pub async fn run_msm_compute(
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
     });
 
-    println!("msm_len: {:?}", scalars_bytes.len() / 32);
+    // println!("msm_len: {:?}", scalars_bytes.len() / 32);
 
     // Create the Bind Group Layout
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -211,7 +211,7 @@ pub async fn run_msm_compute(
     //     cache: None,
     //   });
 
-    println!("points_bytes: {}, {:?}", points_bytes.len(), points_bytes);
+    // println!("points_bytes: {}, {:?}", points_bytes.len(), points_bytes);
 
     // Create the Bind Group
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -277,7 +277,7 @@ pub async fn run_msm_compute(
     //   {
     //     let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
     //       label: Some("Aggregate compute pass"),
-    //       timestamp_writes: None,
+    //       timestamp_writes: None,WebGPU
     //     });
     //     cpass.set_pipeline(&aggregate_pipeline);
     //     cpass.set_bind_group(0, &bind_group, &[]);
@@ -300,12 +300,12 @@ pub async fn run_msm_compute(
     // Get the data
     let data = buffer_slice.get_mapped_range();
 
-    println!("data: {}, {:?}", data.to_vec().len(), data.to_vec());
+    // println!("data: {}, {:?}", data.to_vec().len(), data.to_vec());
 
     //   let data = points_bytes.to_vec();
     let output_u32: Vec<u32> = bytemuck::cast_slice::<u8, u32>(&data).to_vec();
     //   let output_u32: Vec<u32> = bytemuck::cast_slice::<u8, u32>(&points_bytes).to_vec();
-    println!("output_u32: {:?}", output_u32);
+    // println!("output_u32: {:?}", output_u32);
     let output_u16 = output_u32
         .iter()
         .map(|&x| {
