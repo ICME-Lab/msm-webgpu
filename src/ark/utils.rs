@@ -1,5 +1,6 @@
 use ark_ff::PrimeField;
 
+
 pub fn fields_to_u16_vec<F: PrimeField>(fields: &[F]) -> Vec<u16> {
     fields
         .iter()
@@ -26,19 +27,19 @@ pub fn u16_vec_to_fields<F: PrimeField>(u16_array: &[u16]) -> Vec<F> {
         .chunks_exact(16) // Each field element is 16 u16s (16 * 16 bits)
         .map(|chunk| {
             // reversed_chunk.reverse();
-            let bytes = chunk.iter()
-            .flat_map(|x| x.to_le_bytes())
-            .collect::<Vec<u8>>();
+            let bytes = chunk
+                .iter()
+                .flat_map(|x| x.to_le_bytes())
+                .collect::<Vec<u8>>();
             F::from_le_bytes_mod_order(&bytes)
         })
         .collect()
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ark_pallas::{Fr};
+    use ark_pallas::Fr;
     #[test]
     fn test_fields_to_u16_vec() {
         let fields: Vec<Fr> = vec![Fr::from(1), Fr::from(2), Fr::from(3)];

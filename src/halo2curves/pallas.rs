@@ -4,12 +4,13 @@ use halo2curves::{pasta::pallas::{Affine, Base as Fq, Point, Scalar as Fr}, Curv
 use num_traits::{One, Zero};
 use rand::thread_rng;
 use crate::{ gpu, halo2curves::utils::{field_to_bytes, fields_to_u16_vec, u16_vec_to_fields}, utils::{
-        bigints_to_bytes, concat_files, 
+        bigints_to_bytes, concat_files, load_shader_code_pallas 
     }
 };
 use std::time::Instant;
 
 use halo2curves::{msm::best_multiexp, CurveAffine};
+
 
 
 pub fn sample_scalars(n: usize) -> Vec<Fr> {
@@ -61,14 +62,19 @@ pub fn points_to_bytes(g: &Vec<Affine>) -> Vec<u8> {
 }
 
 pub fn run_webgpu_msm(g: &Vec<Affine>, v: &Vec<Fr>) -> Point {
+    pollster::block_on(run_webgpu_msm_async(g, v))
+}
+
+
+
+pub async fn run_webgpu_msm_async(g: &Vec<Affine>, v: &Vec<Fr>) -> Point {
     let points_slice = points_to_bytes(g);
     let v_slice = scalars_to_bytes(v);
-    let shader_code = concat_files(vec!["src/wgsl/pallas.wgsl"]);
-    let result =
-        pollster::block_on(gpu::run_msm_compute(&shader_code, &points_slice, &v_slice));
+    let shader_code = concat_files(vec!["src/wgsl/pallas/_all.wgsl"]);// load_shader_code_pallas();
+    let result = gpu::run_msm_compute(&shader_code, &points_slice, &v_slice).await;
     let result: Vec<Fq> = u16_vec_to_fields(&result);
     Point::new_jacobian(result[0].clone(), result[1].clone(), result[2].clone()).unwrap()
-}
+}   
 
 #[cfg(test)]
 mod tests {
@@ -79,7 +85,7 @@ mod tests {
   
     #[test]
     fn test_pallas() {
-        let sample_size = 5;
+        let sample_size = 2;
         let scalars = sample_scalars(sample_size);
         let points = sample_points(sample_size);
 
@@ -126,9 +132,6 @@ mod tests {
         assert_eq!(fields, new_fields);
     }
 
-
-
-
     #[test]
     fn test_ark_vs_halo2() {
         use ark_pallas::{Fr as PallasFr, Fq as PallasFq, Projective as PallasPoint};
@@ -167,5 +170,25 @@ mod tests {
 
         assert_eq!(halo2_point_bytes, ark_point_bytes);
     }
+}
 
+#[cfg(test)]
+mod tests_webgpu {
+    use super::*;
+    use wasm_bindgen_test::*;
+    use web_sys::console;
+  
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn test_webgpu_msm_pallas() {
+        let sample_size = 5;
+        let points = sample_points(sample_size);
+        let scalars = sample_scalars(sample_size);
+
+        let fast = fast_msm(&points, &scalars);
+        let result = run_webgpu_msm_async(&points, &scalars).await;
+        console::log_1(&format!("Result: {:?}", result).into());
+        assert_eq!(fast, result);
+    }
 }

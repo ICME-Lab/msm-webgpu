@@ -25,7 +25,13 @@ wasm-bindgen-futures = "0.4"
 js-sys = "0.3.77"
 web-sys = { version = "0.3", features = ["console"] }
 halo2curves = { git = "https://github.com/ICME-Lab/halo2curves", branch = "main", features = ["bits", "derive_serde"] }
-# pallas_curves = "0.5.0"
 group = "0.13.0"
 ff = { version = "0.13.0", features = ["derive"] }
 rand = "0.8.5"
+oneshot = "0.1.11"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3.50"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2.0", default-features = false, features = ["js"] }

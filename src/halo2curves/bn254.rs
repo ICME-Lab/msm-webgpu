@@ -1,7 +1,6 @@
 use crate::{
     gpu,
-    halo2curves::utils::{fields_to_u16_vec, u16_vec_to_fields},
-    utils::concat_files,
+    halo2curves::utils::{fields_to_u16_vec, u16_vec_to_fields}, utils::load_shader_code_bn254,
 };
 use ff::Field;
 use group::Group;
@@ -12,6 +11,7 @@ use halo2curves::{
 use rand::thread_rng;
 
 use halo2curves::{msm::best_multiexp, CurveAffine};
+
 
 pub fn sample_scalars(n: usize) -> Vec<Fr> {
     let mut rng = thread_rng();
@@ -62,10 +62,14 @@ pub fn points_to_bytes(g: &Vec<G1Affine>) -> Vec<u8> {
 }
 
 pub fn run_webgpu_msm(g: &Vec<G1Affine>, v: &Vec<Fr>) -> G1 {
+    pollster::block_on(run_webgpu_msm_async(g, v))
+}
+
+pub async fn run_webgpu_msm_async(g: &Vec<G1Affine>, v: &Vec<Fr>) -> G1 {
     let points_slice = points_to_bytes(g);
     let v_slice = scalars_to_bytes(v);
-    let shader_code = concat_files(vec!["src/wgsl/bn254.wgsl"]);
-    let result = pollster::block_on(gpu::run_msm_compute(&shader_code, &points_slice, &v_slice));
+    let shader_code = load_shader_code_bn254();
+    let result = gpu::run_msm_compute(&shader_code, &points_slice, &v_slice).await;
     let result: Vec<Fq> = u16_vec_to_fields(&result);
     G1::new_jacobian(result[0].clone(), result[1].clone(), result[2].clone()).unwrap()
 }
@@ -123,5 +127,26 @@ mod tests {
             .collect::<Vec<_>>();
         let new_fields = u16_vec_to_fields(&casted_16);
         assert_eq!(fields, new_fields);
+    }
+}
+
+#[cfg(test)]
+mod tests_webgpu {
+    use super::*;
+    use wasm_bindgen_test::*;
+    use web_sys::console;
+  
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn test_webgpu_msm_bn254() {
+        let sample_size = 5;
+        let points = sample_points(sample_size);
+        let scalars = sample_scalars(sample_size);
+
+        let fast = fast_msm(&points, &scalars);
+        let result = run_webgpu_msm_async(&points, &scalars).await;
+        console::log_1(&format!("Result: {:?}", result).into());
+        assert_eq!(fast, result);
     }
 }

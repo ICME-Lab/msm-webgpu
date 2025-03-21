@@ -5,10 +5,11 @@ use ark_pallas::PallasConfig;
 use ark_pallas::{Fq, Fr, Projective as PallasProjective};
 use ark_std::{One, Zero};
 use num_bigint::BigUint;
+use crate::utils::load_shader_code_pallas;
 use crate::{
     gpu,
     utils::{
-        bigints_to_bytes, concat_files,
+        bigints_to_bytes,
     },
     ark::utils::{
         fields_to_u16_vec,
@@ -16,6 +17,7 @@ use crate::{
     },
 };
 use std::time::Instant;
+
 
 pub fn sample_scalars(n: usize) -> Vec<Fr> {
     let mut rng = ark_std::test_rng();
@@ -60,7 +62,7 @@ pub fn points_to_bytes(g: &Vec<Affine<PallasConfig>>) -> Vec<u8> {
 pub fn run_webgpu_msm(g: &Vec<Affine<PallasConfig>>, v: &Vec<Fr>) -> PallasProjective {
     let points_slice = points_to_bytes(g);
     let v_slice = scalars_to_bytes(v);
-    let shader_code = concat_files(vec!["src/wgsl/pallas.wgsl"]);
+    let shader_code = load_shader_code_pallas();
     let result =
         pollster::block_on(gpu::run_msm_compute(&shader_code, &points_slice, &v_slice));
     let result: Vec<Fq> = u16_vec_to_fields(&result);

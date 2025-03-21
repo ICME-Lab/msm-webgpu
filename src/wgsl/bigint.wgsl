@@ -1,7 +1,9 @@
 const W = 16u;
 const W_mask = (1 << W) - 1u;
-const L = 256;
-const N = L / W;
+const L = 256u;
+const N = 16u;
+const NN = N * 2u;
+const N1 = N + 1u;
 
 // No overflow
 struct BigInt256 {
@@ -9,11 +11,11 @@ struct BigInt256 {
 }
 
 struct BigInt512 {
-    limbs: array<u32,2*N>
+    limbs: array<u32,NN>
 }
 
 struct BigInt272 {
-    limbs: array<u32,N+1>
+    limbs: array<u32,N1>
 }
 
 // Careful, a and res may point to the same thing.

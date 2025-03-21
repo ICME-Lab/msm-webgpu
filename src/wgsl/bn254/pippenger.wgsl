@@ -1,3 +1,5 @@
+// This file is curve-dependent:
+// The Jacobian ZERO may differ from curve to curve
 const POINTS_PER_INVOCATION = 64u;
 const PARTITION_SIZE = 8u;
 const POW_PART = (1u << PARTITION_SIZE);

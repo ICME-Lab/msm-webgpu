@@ -1,3 +1,4 @@
+// This file is curve-dependent:
 // The Jacobian ZERO may differ from curve to curve
 struct JacobianPoint {
     x: BaseField,

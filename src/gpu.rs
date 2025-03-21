@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use wgpu::util::DeviceExt;
-use wgpu::{BufferUsages, Instance};
+use wgpu::{BufferAsyncError, BufferSlice, BufferUsages, Instance, MapMode};
 
 const LIMB_WIDTH: usize = 16;
 const BIGINT_SIZE: usize = 256;
@@ -294,7 +294,11 @@ pub async fn run_msm_compute(
     device.poll(wgpu::Maintain::Wait);
     let buffer_slice = readback_buffer.slice(..);
 
-    let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
+    // let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
+    map_buffer_async(buffer_slice, wgpu::MapMode::Read)
+    .await
+    .expect("map_async failed");
+
 
     device.poll(wgpu::Maintain::Wait);
     // Get the data
@@ -320,3 +324,19 @@ pub async fn run_msm_compute(
 
     output_u16
 }
+
+fn map_buffer_async(
+    slice: BufferSlice<'_>,
+    mode: MapMode,
+  ) -> impl std::future::Future<Output = Result<(), BufferAsyncError>> {
+    let (sender, receiver) = oneshot::channel();
+    slice.map_async(mode, move |res| {
+      let _ = sender.send(res);
+    });
+    async move {
+      match receiver.await {
+        Ok(result) => result,
+        Err(_) => Err(BufferAsyncError {}),
+      }
+    }
+  }

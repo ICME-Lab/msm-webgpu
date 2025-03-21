@@ -255,11 +255,6 @@ fn field_mul(a: BaseField, b: BaseField) -> BaseField {
     return field_reduce(r);
 }
 
-// ------------------------------------------------------------------------------------------------
-
-
-
-
 // This is slow, probably don't want to use this
 // fn field_small_scalar_mul(a: u32, b: BaseField) -> BaseField {
 //     var constant: BaseField;
@@ -462,8 +457,6 @@ const BB_SIZE_NUM_INVOCATIONS = BB_SIZE;//1048576u; // BB_SIZE * NUM_INVOCATIONS
 var<storage, read_write> powerset_sums: array<JacobianPoint, PS_SZ_NUM_INVOCATIONS>;
 @group(0) @binding(5)
 var<storage, read_write> cur_sum: array<JacobianPoint, BB_SIZE_NUM_INVOCATIONS>;
-
-
 @group(0) @binding(6)
 var<storage, read_write> msm_len: u32;
 
@@ -536,9 +529,6 @@ fn main(
     let gidx = global_id.x;
     let lidx = local_id.x;
 
-    // result[gidx] = pippenger(gidx);
-    // result[gidx] = jacobian_mul(points[gidx], scalars[gidx]);
-    // result[0] = points[0];
     var running: JacobianPoint;
     for (var i = 0u; i < msm_len; i = i + 1u) {
         let p = points[i];

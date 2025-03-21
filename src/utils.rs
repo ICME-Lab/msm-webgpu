@@ -16,6 +16,30 @@ pub fn concat_files(filenames: Vec<&str>) -> String {
     String::from(result)
 }
 
+pub fn load_shader_code_pallas() -> String {
+    let mut all = String::new();
+    // all.push_str(include_str!("./wgsl/pallas/_all.wgsl"));
+    all.push_str(include_str!("./wgsl/bigint.wgsl"));
+    all.push_str(include_str!("./wgsl/pallas/field.wgsl"));
+    all.push_str(include_str!("./wgsl/pallas/curve.wgsl"));
+    all.push_str(include_str!("./wgsl/storage.wgsl"));
+    all.push_str(include_str!("./wgsl/pallas/pippenger.wgsl"));
+    all.push_str(include_str!("./wgsl/main.wgsl"));
+    all
+}
+
+pub fn load_shader_code_bn254() -> String {
+    let mut all = String::new();
+    // all.push_str(include_str!("./wgsl/bn254/_all.wgsl"));
+    all.push_str(include_str!("./wgsl/bigint.wgsl"));
+    all.push_str(include_str!("./wgsl/bn254/field.wgsl"));
+    all.push_str(include_str!("./wgsl/bn254/curve.wgsl"));
+    all.push_str(include_str!("./wgsl/storage.wgsl"));
+    all.push_str(include_str!("./wgsl/bn254/pippenger.wgsl"));
+    all.push_str(include_str!("./wgsl/main.wgsl"));
+    all
+}
+
 /// Converts an array of 16 limbs to a BigUint.
 pub fn limbs_to_bigint256(limbs: &[u32]) -> BigUint {
     assert!(limbs.len() == 16);
