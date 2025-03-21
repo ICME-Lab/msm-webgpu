@@ -6,6 +6,8 @@ struct JacobianPoint {
     z: BaseField
 };
 
+const JACOBIAN_IDENTITY: JacobianPoint = JacobianPoint(ZERO, ONE, ZERO);
+
 fn is_inf(p: JacobianPoint) -> bool {
     return field_eq(p.z, ZERO);
 }
@@ -64,7 +66,7 @@ fn jacobian_add(p: JacobianPoint, q: JacobianPoint) -> JacobianPoint {
         if (field_eq(S1, S2)) {
             return jacobian_double(p);
         } else {
-            return JacobianPoint(ZERO, ZERO, ONE);
+            return JACOBIAN_IDENTITY;
         }
     }
 
@@ -80,7 +82,7 @@ fn jacobian_add(p: JacobianPoint, q: JacobianPoint) -> JacobianPoint {
 }
 
 fn jacobian_mul(p: JacobianPoint, k: ScalarField) -> JacobianPoint {
-    var r: JacobianPoint = JacobianPoint(ZERO, ZERO, ONE);
+    var r: JacobianPoint = JACOBIAN_IDENTITY;
     var t: JacobianPoint = p;
     for (var i = 0u; i < N; i = i + 1u) {
         var k_s = k.limbs[i];

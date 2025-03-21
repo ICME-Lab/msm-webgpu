@@ -12,8 +12,6 @@ const BB_SIZE_NUM_INVOCATIONS = BB_SIZE;//1048576u; // BB_SIZE * NUM_INVOCATIONS
 var<storage, read_write> powerset_sums: array<JacobianPoint, PS_SZ_NUM_INVOCATIONS>;
 @group(0) @binding(5)
 var<storage, read_write> cur_sum: array<JacobianPoint, BB_SIZE_NUM_INVOCATIONS>;
-@group(0) @binding(6)
-var<storage, read_write> msm_len: u32;
 
 fn pippenger(gidx: u32) -> JacobianPoint {
     var ps_base = gidx * PS_SZ;

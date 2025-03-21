@@ -14,8 +14,6 @@ const BASE_MODULUS_WIDE: BigInt512 = BigInt512(
         0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u)
 );
 
-const BASE_NBITS = 255u;
-
 const BASE_M = BigInt256(
     array(65532u, 65535u, 15435u, 39755u, 7057u, 56012u, 39951u, 30437u, 65535u, 65535u, 65535u, 65535u, 65535u, 65535u, 65535u, 65535u)
 );
@@ -34,7 +32,7 @@ const ONE: BigInt256 = BigInt256(
 
 fn get_higher_with_slack(a: BigInt512) -> BaseField {
     var out: BaseField;
-    const slack = 1u;
+    const slack = 1u; // 256 - 255
     for (var i = 0u; i < N; i = i + 1u) {
         out.limbs[i] = ((a.limbs[i + N] << slack) + (a.limbs[i + N - 1] >> (W - slack))) & W_mask;
     }

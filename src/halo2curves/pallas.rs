@@ -65,12 +65,10 @@ pub fn run_webgpu_msm(g: &Vec<Affine>, v: &Vec<Fr>) -> Point {
     pollster::block_on(run_webgpu_msm_async(g, v))
 }
 
-
-
 pub async fn run_webgpu_msm_async(g: &Vec<Affine>, v: &Vec<Fr>) -> Point {
     let points_slice = points_to_bytes(g);
     let v_slice = scalars_to_bytes(v);
-    let shader_code = concat_files(vec!["src/wgsl/pallas/_all.wgsl"]);// load_shader_code_pallas();
+    let shader_code = load_shader_code_pallas();
     let result = gpu::run_msm_compute(&shader_code, &points_slice, &v_slice).await;
     let result: Vec<Fq> = u16_vec_to_fields(&result);
     Point::new_jacobian(result[0].clone(), result[1].clone(), result[2].clone()).unwrap()

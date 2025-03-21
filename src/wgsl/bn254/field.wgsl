@@ -2,26 +2,20 @@ alias BaseField = BigInt256;
 alias ScalarField = BigInt256;
 
 const BASE_MODULUS: BigInt256 = BigInt256(
-    array(1u, 0u, 12525u, 39213u, 63771u, 2380u, 39164u, 8774u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 16384u)
+    array(64839u, 55420u, 35862u, 15392u, 51853u, 26737u, 27281u, 38785u, 22621u, 33153u, 17846u, 47184u, 41001u, 57649u, 20082u, 12388u)
 );
 
 const BASE_MODULUS_MEDIUM_WIDE: BigInt272 = BigInt272(
-    array(1u, 0u, 12525u, 39213u, 63771u, 2380u, 39164u, 8774u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 16384u, 0u)
+    array(64839u, 55420u, 35862u, 15392u, 51853u, 26737u, 27281u, 38785u, 22621u, 33153u, 17846u, 47184u, 41001u, 57649u, 20082u, 12388u, 0u)
 );
 
 const BASE_MODULUS_WIDE: BigInt512 = BigInt512(
-    array(1u, 0u, 12525u, 39213u, 63771u, 2380u, 39164u, 8774u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 16384u,
+    array(64839u, 55420u, 35862u, 15392u, 51853u, 26737u, 27281u, 38785u, 22621u, 33153u, 17846u, 47184u, 41001u, 57649u, 20082u, 12388u,
         0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u)
 );
 
-const BASE_NBITS = 255u;
-
 const BASE_M = BigInt256(
-    array(65532u, 65535u, 15435u, 39755u, 7057u, 56012u, 39951u, 30437u, 65535u, 65535u, 65535u, 65535u, 65535u, 65535u, 65535u, 65535u)
-);
-
-const U = BigInt256(
-    array(1u, 0u, 12525u, 39213u, 63771u, 2380u, 39164u, 8774u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u)
+    array(2788u, 40460u, 53156u, 3965u, 54731u, 24120u, 21946u, 41466u, 40585u, 63994u, 59685u, 7870u, 32601u, 31545u, 50740u, 48750u)
 );
 
 const ZERO: BigInt256 = BigInt256(
@@ -34,7 +28,7 @@ const ONE: BigInt256 = BigInt256(
 
 fn get_higher_with_slack(a: BigInt512) -> BaseField {
     var out: BaseField;
-    const slack = 1u;
+    const slack = 1u; // 256 - 255
     for (var i = 0u; i < N; i = i + 1u) {
         out.limbs[i] = ((a.limbs[i + N] << slack) + (a.limbs[i + N - 1] >> (W - slack))) & W_mask;
     }

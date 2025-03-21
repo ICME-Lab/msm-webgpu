@@ -101,6 +101,8 @@ mod tests {
 
     #[test]
     fn test_fields_to_u16_vec() {
+        use group::{Group};
+        println!("G1: {:?}", G1::identity());
         let fields = sample_scalars(10);
         let u16_vec = fields_to_u16_vec(&fields);
         let new_fields = u16_vec_to_fields(&u16_vec);

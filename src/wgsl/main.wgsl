@@ -1,7 +1,8 @@
 // 3 -> 2
 // storage -> workgroup
 // second stage
-
+@group(0) @binding(6)
+var<storage, read_write> msm_len: u32;
 
 @compute @workgroup_size(1)
 fn main(

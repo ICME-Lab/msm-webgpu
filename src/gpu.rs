@@ -304,12 +304,7 @@ pub async fn run_msm_compute(
     // Get the data
     let data = buffer_slice.get_mapped_range();
 
-    // println!("data: {}, {:?}", data.to_vec().len(), data.to_vec());
-
-    //   let data = points_bytes.to_vec();
     let output_u32: Vec<u32> = bytemuck::cast_slice::<u8, u32>(&data).to_vec();
-    //   let output_u32: Vec<u32> = bytemuck::cast_slice::<u8, u32>(&points_bytes).to_vec();
-    // println!("output_u32: {:?}", output_u32);
     let output_u16 = output_u32
         .iter()
         .map(|&x| {
