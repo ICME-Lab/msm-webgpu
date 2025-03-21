@@ -3,7 +3,7 @@ use group::{Group, Curve};
 use halo2curves::{pasta::pallas::{Affine, Base as Fq, Point, Scalar as Fr}, CurveExt};
 use num_traits::{One, Zero};
 use rand::thread_rng;
-use crate::{ gpu, halo2_utils::{field_to_bytes, fields_to_u16_vec, u16_vec_to_fields}, utils::{
+use crate::{ gpu, halo2curves::utils::{field_to_bytes, fields_to_u16_vec, u16_vec_to_fields}, utils::{
         bigints_to_bytes, concat_files, 
     }
 };
@@ -130,8 +130,8 @@ mod tests {
     #[test]
     fn test_ark_vs_halo2() {
         use ark_pallas::{Fr as PallasFr, Fq as PallasFq, Projective as PallasPoint};
-        use crate::ark_utils::fields_to_u16_vec as ark_fields_to_u16_vec;
-        use crate::pallas::ark_pallas::{scalars_to_bytes as ark_scalars_to_bytes, points_to_bytes as ark_points_to_bytes};
+        use crate::ark::utils::fields_to_u16_vec as ark_fields_to_u16_vec;
+        use crate::ark::pallas::{scalars_to_bytes as ark_scalars_to_bytes, points_to_bytes as ark_points_to_bytes};
 
         let halo2_scalars = vec![Fr::from(1), Fr::from(2), Fr::from(3)];
         let halo2_generator = Point::generator();

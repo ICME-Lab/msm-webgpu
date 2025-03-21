@@ -10,7 +10,7 @@ use crate::{
     utils::{
         bigints_to_bytes, concat_files,
     },
-    ark_utils::{
+    ark::utils::{
         fields_to_u16_vec,
         u16_vec_to_fields,
     },
