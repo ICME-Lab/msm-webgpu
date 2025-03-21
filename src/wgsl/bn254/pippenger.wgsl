@@ -25,10 +25,10 @@ fn pippenger(gidx: u32) -> JacobianPoint {
     // then calculate the sets for each point
 
     for(var bb = 0; bb < BB_SIZE; bb = bb + 1) {
-        cur_sum[sum_base + bb] = JacobianPoint(ZERO, ZERO, ONE);
+        cur_sum[sum_base + bb] = JACOBIAN_IDENTITY;
     }
     for(var i = 0u; i < PS_SZ; i = i + 1) {
-        powerset_sums[ps_base + i] = JacobianPoint(ZERO, ZERO, ONE);
+        powerset_sums[ps_base + i] = JACOBIAN_IDENTITY;
     }
 
 
@@ -62,7 +62,7 @@ fn pippenger(gidx: u32) -> JacobianPoint {
             cur_sum[sum_base + bb] = jacobian_add(cur_sum[sum_base + bb], powerset_sums[ps_base + powerset_idx]);
         }
     }
-    var running_total: JacobianPoint;
+    var running_total: JacobianPoint = JACOBIAN_IDENTITY;
     for(var bb = BB_SIZE - 1; bb >= 0; bb = bb - 1){
         running_total = jacobian_add(jacobian_double(running_total), cur_sum[sum_base + bb]);
     }

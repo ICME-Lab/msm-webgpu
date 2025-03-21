@@ -293,10 +293,10 @@ pub async fn run_msm_compute(
     device.poll(wgpu::Maintain::Wait);
     let buffer_slice = readback_buffer.slice(..);
 
-    // let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
-    map_buffer_async(buffer_slice, wgpu::MapMode::Read)
-    .await
-    .expect("map_async failed");
+    let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
+    // map_buffer_async(buffer_slice, wgpu::MapMode::Read)
+    // .await
+    // .expect("map_async failed");
 
 
     device.poll(wgpu::Maintain::Wait);

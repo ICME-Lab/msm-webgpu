@@ -69,6 +69,8 @@ pub fn run_webgpu_msm(g: &Vec<Affine<PallasConfig>>, v: &Vec<Fr>) -> PallasProje
 }
 #[cfg(test)]
 mod tests {
+    use std::time::Instant;
+
     use super::*;
     #[test]
     fn test_pallas() {

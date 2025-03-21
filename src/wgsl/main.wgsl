@@ -12,7 +12,7 @@ fn main(
     let gidx = global_id.x;
     let lidx = local_id.x;
 
-    var running: JacobianPoint;
+    var running: JacobianPoint = JACOBIAN_IDENTITY;
     for (var i = 0u; i < msm_len; i = i + 1u) {
         let p = points[i];
         let s = scalars[i];

@@ -27,26 +27,6 @@ fn jacobian_double(p: JacobianPoint) -> JacobianPoint {
     return JacobianPoint(x3, y3, z3);
 }
 
-// double p and add q
-// todo: can be optimized if one of the z coordinates is 1
-// fn jacobian_dadd(p: JacobianPoint, q: JacobianPoint) -> JacobianPoint {
-//     if (is_inf(p)) {
-//         return q;
-//     } else if (is_inf(q)) {
-//         return jacobian_double(p);
-//     }
-
-//     let twox = field_small_scalar_shift(1, p.x);
-//     let sqrx = field_mul(p.x, p.x);
-//     let dblR = field_add(field_small_scalar_shift(1, sqrx), sqrx);
-//     let dblH = field_small_scalar_shift(1, p.y);
-
-//     let x3 = field_mul(q.z, q.z);
-//     let z3 = field_mul(p.z, q.z);
-//     let addH = field_mul(p.z, p.z);
-
-// }
-
 fn jacobian_add(p: JacobianPoint, q: JacobianPoint) -> JacobianPoint {
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#addition-add-2007-bl
     if (field_eq(p.y, ZERO)) {

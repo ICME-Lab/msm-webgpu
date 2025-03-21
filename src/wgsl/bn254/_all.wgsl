@@ -155,10 +155,8 @@ const BASE_MODULUS_WIDE: BigInt512 = BigInt512(
         0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u)
 );
 
-const BASE_NBITS = 254u;
-
 const BASE_M = BigInt256(
-    array(64839u, 55420u, 35862u, 15392u, 51853u, 26737u, 27281u, 38785u, 22621u, 33153u, 17846u, 47184u, 41001u, 57649u, 20082u, 4196u)
+    array(2788u, 40460u, 53156u, 3965u, 54731u, 24120u, 21946u, 41466u, 40585u, 63994u, 59685u, 7870u, 32601u, 31545u, 50740u, 48750u)
 );
 
 const ZERO: BigInt256 = BigInt256(
@@ -171,7 +169,7 @@ const ONE: BigInt256 = BigInt256(
 
 fn get_higher_with_slack(a: BigInt512) -> BaseField {
     var out: BaseField;
-    const slack = 1u;
+    const slack = 2u;
     for (var i = 0u; i < N; i = i + 1u) {
         out.limbs[i] = ((a.limbs[i + N] << slack) + (a.limbs[i + N - 1] >> (W - slack))) & W_mask;
     }
@@ -331,6 +329,8 @@ struct JacobianPoint {
     z: BaseField
 };
 
+const JACOBIAN_IDENTITY: JacobianPoint = JacobianPoint(ZERO, ONE, ZERO);
+
 fn is_inf(p: JacobianPoint) -> bool {
     return field_eq(p.z, ZERO);
 }
@@ -389,7 +389,7 @@ fn jacobian_add(p: JacobianPoint, q: JacobianPoint) -> JacobianPoint {
         if (field_eq(S1, S2)) {
             return jacobian_double(p);
         } else {
-            return JacobianPoint(ZERO, ZERO, ONE);
+            return JACOBIAN_IDENTITY;
         }
     }
 
@@ -405,7 +405,7 @@ fn jacobian_add(p: JacobianPoint, q: JacobianPoint) -> JacobianPoint {
 }
 
 fn jacobian_mul(p: JacobianPoint, k: ScalarField) -> JacobianPoint {
-    var r: JacobianPoint = JacobianPoint(ZERO, ZERO, ONE);
+    var r: JacobianPoint = JACOBIAN_IDENTITY;
     var t: JacobianPoint = p;
     for (var i = 0u; i < N; i = i + 1u) {
         var k_s = k.limbs[i];
@@ -467,10 +467,10 @@ fn pippenger(gidx: u32) -> JacobianPoint {
     // then calculate the sets for each point
 
     for(var bb = 0; bb < BB_SIZE; bb = bb + 1) {
-        cur_sum[sum_base + bb] = JacobianPoint(ZERO, ZERO, ONE);
+        cur_sum[sum_base + bb] = JACOBIAN_IDENTITY;
     }
     for(var i = 0u; i < PS_SZ; i = i + 1) {
-        powerset_sums[ps_base + i] = JacobianPoint(ZERO, ZERO, ONE);
+        powerset_sums[ps_base + i] = JACOBIAN_IDENTITY;
     }
 
 
@@ -504,7 +504,7 @@ fn pippenger(gidx: u32) -> JacobianPoint {
             cur_sum[sum_base + bb] = jacobian_add(cur_sum[sum_base + bb], powerset_sums[ps_base + powerset_idx]);
         }
     }
-    var running_total: JacobianPoint;
+    var running_total: JacobianPoint = JACOBIAN_IDENTITY;
     for(var bb = BB_SIZE - 1; bb >= 0; bb = bb - 1){
         running_total = jacobian_add(jacobian_double(running_total), cur_sum[sum_base + bb]);
     }
@@ -530,7 +530,7 @@ fn main(
     // result[gidx] = pippenger(gidx);
     // result[gidx] = jacobian_mul(points[gidx], scalars[gidx]);
     // result[0] = points[0];
-    var running: JacobianPoint;
+    var running: JacobianPoint = JACOBIAN_IDENTITY;
     for (var i = 0u; i < msm_len; i = i + 1u) {
         let p = points[i];
         let s = scalars[i];

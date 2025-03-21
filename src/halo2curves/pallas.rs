@@ -73,8 +73,12 @@ pub async fn run_webgpu_msm_async(g: &Vec<Affine>, v: &Vec<Fr>) -> Point {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Instant;
+
     use ark_ec::CurveGroup;
     use ark_ff::PrimeField;
+
+    use crate::halo2curves::utils::field_to_bytes;
 
     use super::*;
   

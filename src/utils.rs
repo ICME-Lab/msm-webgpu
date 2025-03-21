@@ -163,13 +163,16 @@ mod tests {
     #[test]
     fn test_wgsl_pallas_constants() {
         let two_pow_256 = BigUint::from_str_radix("115792089237316195423570985008687907853269984665640564039457584007913129639936", 10).unwrap();
+        let two_pow_254 = BigUint::from_str_radix("28948022309329048855892746252171976963317496166410141009864396001978282409984", 10).unwrap();
         let fp = BigUint::from_str_radix("28948022309329048855892746252171976963363056481941560715954676764349967630337", 10).unwrap();
         let r = BigUint::from_str_radix("28948022309329048855892746252171976963363056481941647379679742748393362948097", 10).unwrap();
         let base_m = BigUint::from_str_radix("115792089237316195423570985008687907853087743403514885215096460958426388758524", 10).unwrap();
+        // p = 2^254 + u
         let u = BigUint::from_str_radix("45560315531419706090280762371685220353", 10).unwrap();
+        assert_eq!(fp.clone(), two_pow_254.clone() + u.clone());
 
-        // 4 * (2^256 - u) `mod` 2^256
-        let t =  BigUint::from(4u32) * (two_pow_256.clone() - u.clone());
+        // 4 * (2^254 - u) `mod` 2^256
+        let t =  BigUint::from(4u32) * (two_pow_254.clone() - u.clone());
         assert_eq!(t.mod_floor(&two_pow_256), base_m);
 
         let fp_bytes = bigint_to_u16s(&fp);
@@ -190,14 +193,15 @@ mod tests {
 
     #[test]
     fn test_wgsl_bn254_constants() {
+        let two_pow_253 = BigUint::from_str_radix("14474011154664524427946373126085988481658748083205070504932198000989141204992", 10).unwrap();
         let two_pow_256 = BigUint::from_str_radix("115792089237316195423570985008687907853269984665640564039457584007913129639936", 10).unwrap();
         let fp = BigUint::from_str_radix("21888242871839275222246405745257275088696311157297823662689037894645226208583", 10).unwrap();
         let r = BigUint::from_str_radix("21888242871839275222246405745257275088548364400416034343698204186575808495617", 10).unwrap();
-        let base_m = BigUint::from_str_radix("86135162368617192246370854532002761425119732369269551408430224433288789625572", 10).unwrap();
+        let base_m = BigUint::from_str_radix("28239117749959094534585362027658807498484740036449269388701432429332224805604", 10).unwrap();
         let u = BigUint::from_str_radix("7414231717174750794300032619171286607037563074092753157756839893656085003591", 10).unwrap();
 
-        // 4 * (2^256 - u) `mod` 2^256
-        let t =  BigUint::from(4u32) * (two_pow_256.clone() - u.clone());
+        // 4 * (2^253 - u) `mod` 2^256
+        let t =  BigUint::from(4u32) * (two_pow_253.clone() - u.clone());
         assert_eq!(t.mod_floor(&two_pow_256), base_m);
 
         let fp_bytes = bigint_to_u16s(&fp);
@@ -205,11 +209,10 @@ mod tests {
         let base_m_bytes = bigint_to_u16s(&base_m);
         let u_bytes = bigint_to_u16s(&u);
 
-        println!("u_bytes: {:?}", u_bytes);
-        // These are the values hardcoded in pallas.wgsl
+        // These are the values hardcoded in bn254.wgsl
         assert_eq!(fp_bytes, vec![64839, 55420, 35862, 15392, 51853, 26737, 27281, 38785, 22621, 33153, 17846, 47184, 41001, 57649, 20082, 12388]);
         assert_eq!(r_bytes, vec![1, 61440, 62867, 17377, 28817, 31161, 59464, 10291, 22621, 33153, 17846, 47184, 41001, 57649, 20082, 12388]);
-        assert_eq!(base_m_bytes, vec![2788, 40460, 53156, 3965, 54731, 24120, 21946, 41466, 40585, 63994, 59685, 7870, 32601, 31545, 50740, 48750]);
+        assert_eq!(base_m_bytes, vec![2788, 40460, 53156, 3965, 54731, 24120, 21946, 41466, 40585, 63994, 59685, 7870, 32601, 31545, 50740, 15982]);
         assert_eq!(u_bytes, vec![64839, 55420, 35862, 15392, 51853, 26737, 27281, 38785, 22621, 33153, 17846, 47184, 41001, 57649, 20082, 4196]);
 
         use group::Group;
