@@ -1,13 +1,10 @@
 use ff::Field;
 use group::{Group, Curve};
 use halo2curves::{pasta::pallas::{Affine, Base as Fq, Point, Scalar as Fr}, CurveExt};
-use num_traits::{One, Zero};
+use num_traits::One;
 use rand::thread_rng;
-use crate::{ gpu, halo2curves::utils::{field_to_bytes, fields_to_u16_vec, u16_vec_to_fields}, utils::{
-        bigints_to_bytes, concat_files, load_shader_code_pallas 
-    }
+use crate::{ gpu, halo2curves::utils::{fields_to_u16_vec, u16_vec_to_fields}, utils::load_shader_code_pallas
 };
-use std::time::Instant;
 
 use halo2curves::{msm::best_multiexp, CurveAffine};
 

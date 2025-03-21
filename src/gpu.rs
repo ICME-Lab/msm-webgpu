@@ -1,6 +1,5 @@
-use std::borrow::Cow;
 use wgpu::util::DeviceExt;
-use wgpu::{BufferAsyncError, BufferSlice, BufferUsages, Instance, MapMode};
+use wgpu::{BufferAsyncError, BufferSlice, MapMode};
 
 const LIMB_WIDTH: usize = 16;
 const BIGINT_SIZE: usize = 256;

@@ -16,7 +16,6 @@ use crate::{
         u16_vec_to_fields,
     },
 };
-use std::time::Instant;
 
 
 pub fn sample_scalars(n: usize) -> Vec<Fr> {
