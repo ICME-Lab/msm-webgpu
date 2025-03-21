@@ -872,6 +872,7 @@ dependencies = [
  "itertools 0.12.1",
  "js-sys",
  "num-bigint 0.4.6",
+ "num-integer",
  "num-traits",
  "oneshot",
  "pollster",
