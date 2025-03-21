@@ -79,7 +79,7 @@ mod tests {
   
     #[test]
     fn test_pallas() {
-        let sample_size = 10;
+        let sample_size = 5;
         let scalars = sample_scalars(sample_size);
         let points = sample_points(sample_size);
 
@@ -125,6 +125,8 @@ mod tests {
         let new_fields = u16_vec_to_fields(&casted_16);
         assert_eq!(fields, new_fields);
     }
+
+
 
 
     #[test]

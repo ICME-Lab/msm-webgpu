@@ -1,55 +1,59 @@
-use ark_ec::short_weierstrass::Affine;
-use ark_ec::{CurveGroup, VariableBaseMSM};
-use ark_ff::UniformRand;
-use ark_pallas::PallasConfig;
-use ark_pallas::{Fq, Fr, Projective as PallasProjective};
-use ark_std::{One, Zero};
-use num_bigint::BigUint;
 use crate::{
     gpu,
-    utils::{
-        bigints_to_bytes, concat_files,
-    },
-    ark::utils::{
-        fields_to_u16_vec,
-        u16_vec_to_fields,
-    },
+    halo2curves::utils::{fields_to_u16_vec, u16_vec_to_fields},
+    utils::concat_files,
 };
-use std::time::Instant;
+use ff::Field;
+use group::Group;
+use halo2curves::{
+    bn256::{Fq, Fr, G1Affine, G1},
+    CurveExt,
+};
+use rand::thread_rng;
+
+use halo2curves::{msm::best_multiexp, CurveAffine};
 
 pub fn sample_scalars(n: usize) -> Vec<Fr> {
-    let mut rng = ark_std::test_rng();
-    (0..n).map(|_| Fr::rand(&mut rng)).collect::<Vec<_>>()
+    let mut rng = thread_rng();
+    (0..n).map(|_| Fr::random(&mut rng)).collect::<Vec<_>>()
 }
 
-pub fn sample_points(n: usize) -> Vec<Affine<PallasConfig>> {
-    let mut rng = ark_std::test_rng();
+pub fn sample_points(n: usize) -> Vec<G1Affine> {
+    let mut rng = thread_rng();
     (0..n)
-        .map(|_| PallasProjective::rand(&mut rng).into_affine())
+        .map(|_| G1Affine::random(&mut rng))
         .collect::<Vec<_>>()
 }
 
-pub fn slow_msm(g: &Vec<Affine<PallasConfig>>, v: &Vec<Fr>) -> PallasProjective {
-    let mut acc = PallasProjective::zero();
+pub fn slow_msm(g: &Vec<G1Affine>, v: &Vec<Fr>) -> G1 {
+    let mut acc = G1::identity();
     for (base, scalar) in g.iter().zip(v.iter()) {
         acc += *base * scalar;
     }
     acc
 }
 
-pub fn fast_msm(g: &Vec<Affine<PallasConfig>>, v: &Vec<Fr>) -> PallasProjective {
-    PallasProjective::msm(g.as_slice(), v.as_slice()).unwrap()
+pub fn fast_msm(g: &Vec<G1Affine>, v: &Vec<Fr>) -> G1 {
+    best_multiexp(v, g)
 }
 
 pub fn scalars_to_bytes(v: &Vec<Fr>) -> Vec<u8> {
-    let bigint_v: Vec<BigUint> = v.iter().map(|v| (*v).into()).collect();
-    bigints_to_bytes(bigint_v.clone())
+    fields_to_u16_vec(&v)
+        .into_iter()
+        .flat_map(|x| (x as u32).to_le_bytes())
+        .collect::<Vec<_>>()
 }
 
-pub fn points_to_bytes(g: &Vec<Affine<PallasConfig>>) -> Vec<u8> {
+pub fn points_to_bytes(g: &Vec<G1Affine>) -> Vec<u8> {
     let packed_points: Vec<Fq> = g
         .into_iter()
-        .flat_map(|affine| [affine.x, affine.y, Fq::one()])
+        .flat_map(|affine| {
+            let coords = affine.coordinates().unwrap();
+            let x = coords.x();
+            let y = coords.y();
+            let z = Fq::one();
+            [*x, *y, z]
+        })
         .collect::<Vec<_>>();
     fields_to_u16_vec(&packed_points)
         .into_iter()
@@ -57,20 +61,23 @@ pub fn points_to_bytes(g: &Vec<Affine<PallasConfig>>) -> Vec<u8> {
         .collect::<Vec<_>>()
 }
 
-pub fn run_webgpu_msm(g: &Vec<Affine<PallasConfig>>, v: &Vec<Fr>) -> PallasProjective {
+pub fn run_webgpu_msm(g: &Vec<G1Affine>, v: &Vec<Fr>) -> G1 {
     let points_slice = points_to_bytes(g);
     let v_slice = scalars_to_bytes(v);
-    let shader_code = concat_files(vec!["src/wgsl/pallas.wgsl"]);
-    let result =
-        pollster::block_on(gpu::run_msm_compute(&shader_code, &points_slice, &v_slice));
+    let shader_code = concat_files(vec!["src/wgsl/bn254.wgsl"]);
+    let result = pollster::block_on(gpu::run_msm_compute(&shader_code, &points_slice, &v_slice));
     let result: Vec<Fq> = u16_vec_to_fields(&result);
-    PallasProjective::new_unchecked(result[0].clone(), result[1].clone(), result[2].clone())
+    G1::new_jacobian(result[0].clone(), result[1].clone(), result[2].clone()).unwrap()
 }
+
 #[cfg(test)]
 mod tests {
+    use std::time::Instant;
+
     use super::*;
+
     #[test]
-    fn test_pallas() {
+    fn test_bn254() {
         let sample_size = 5;
         let scalars = sample_scalars(sample_size);
         let points = sample_points(sample_size);
