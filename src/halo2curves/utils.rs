@@ -47,6 +47,20 @@ pub fn u16_vec_to_fields<F: PrimeField>(u16_array: &[u16]) -> Vec<F> {
         })
         .collect()
 }
+
+pub fn cast_u8_to_u16(u8_array: &[u8]) -> Vec<u16> {
+    let output_u32: Vec<u32> = bytemuck::cast_slice::<u8, u32>(u8_array).to_vec();
+    output_u32
+        .iter()
+        .map(|&x| {
+            if x > u16::MAX as u32 {
+                panic!("Value {} is too large for u16", x);
+            }
+            x as u16
+        })
+        .collect::<Vec<_>>()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

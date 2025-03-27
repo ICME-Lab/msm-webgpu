@@ -63,7 +63,7 @@ pub fn run_webgpu_msm(g: &Vec<Affine<PallasConfig>>, v: &Vec<Fr>) -> PallasProje
     let v_slice = scalars_to_bytes(v);
     let shader_code = load_shader_code_pallas();
     let result =
-        pollster::block_on(gpu::run_msm_compute(&shader_code, &points_slice, &v_slice));
+        pollster::block_on(gpu::msm::run_msm(&shader_code, &points_slice, &v_slice));
     let result: Vec<Fq> = u16_vec_to_fields(&result);
     PallasProjective::new_unchecked(result[0].clone(), result[1].clone(), result[2].clone())
 }

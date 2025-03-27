@@ -2,7 +2,7 @@ use crate::{
     gpu,
     halo2curves::utils::{fields_to_u16_vec, u16_vec_to_fields}, utils::load_shader_code_bn254,
 };
-use ff::Field;
+use ff::{Field, PrimeField};
 use group::Group;
 use halo2curves::{
     bn256::{Fq, Fr, G1Affine, G1},
@@ -37,7 +37,7 @@ pub fn fast_msm(g: &Vec<G1Affine>, v: &Vec<Fr>) -> G1 {
     best_multiexp(v, g)
 }
 
-pub fn scalars_to_bytes(v: &Vec<Fr>) -> Vec<u8> {
+pub fn scalars_to_bytes<F: PrimeField>(v: &Vec<F>) -> Vec<u8> {
     fields_to_u16_vec(&v)
         .into_iter()
         .flat_map(|x| (x as u32).to_le_bytes())
@@ -69,7 +69,7 @@ pub async fn run_webgpu_msm_async(g: &Vec<G1Affine>, v: &Vec<Fr>) -> G1 {
     let points_slice = points_to_bytes(g);
     let v_slice = scalars_to_bytes(v);
     let shader_code = load_shader_code_bn254();
-    let result = gpu::run_msm_compute(&shader_code, &points_slice, &v_slice).await;
+    let result = gpu::msm::run_msm(&shader_code, &points_slice, &v_slice).await;
     let result: Vec<Fq> = u16_vec_to_fields(&result);
     G1::new_jacobian(result[0].clone(), result[1].clone(), result[2].clone()).unwrap()
 }
@@ -77,6 +77,8 @@ pub async fn run_webgpu_msm_async(g: &Vec<G1Affine>, v: &Vec<Fr>) -> G1 {
 #[cfg(test)]
 mod tests {
     use std::time::Instant;
+
+    use crate::halo2curves::utils::cast_u8_to_u16;
 
     use super::*;
 
@@ -115,23 +117,68 @@ mod tests {
             .into_iter()
             .flat_map(|x| (x as u32).to_le_bytes())
             .collect::<Vec<_>>();
-        let casted_32 = bytemuck::cast_slice::<u8, u32>(&u16_vec_as_u8).to_vec();
-        let casted_16 = casted_32
-            .iter()
-            .map(|&x| {
-                if x > u16::MAX as u32 {
-                    panic!("Value {} is too large for u16", x);
-                }
-                x as u16
-            })
-            .collect::<Vec<_>>();
+        let casted_16 = cast_u8_to_u16(&u16_vec_as_u8);
         let new_fields = u16_vec_to_fields(&casted_16);
         assert_eq!(fields, new_fields);
+    }
+
+    fn load_field_shader_code() -> String {
+        let mut shader_code = String::new();
+        shader_code.push_str(include_str!("../../wgsl/bigint.wgsl"));
+        shader_code.push_str(include_str!("../../wgsl/bn254/field.wgsl"));
+        shader_code.push_str(include_str!("../../wgsl/test/ops.wgsl"));
+        shader_code
+    }
+
+    #[test]
+    fn test_field_mul() {
+        let a = Fq::random(&mut thread_rng());
+        let b = Fq::random(&mut thread_rng());
+        let c = a * b;
+
+        let a_bytes = scalars_to_bytes(&vec![a]);
+        let b_bytes = scalars_to_bytes(&vec![b]);
+
+        let shader_code = load_field_shader_code();
+
+        let result = pollster::block_on(gpu::ops::field_mul(&shader_code, &a_bytes, &b_bytes));
+        let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
+        assert_eq!(gpu_result[0], c);
+    }
+
+    #[test]
+    fn test_field_add() {
+        let a = Fq::random(&mut thread_rng());
+        let b = Fq::random(&mut thread_rng());
+        let c = a + b;
+
+        let a_bytes = scalars_to_bytes(&vec![a]);
+        let b_bytes = scalars_to_bytes(&vec![b]);
+
+        let shader_code = load_field_shader_code();
+        let result = pollster::block_on(gpu::ops::field_add(&shader_code, &a_bytes, &b_bytes));
+        let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
+        assert_eq!(gpu_result[0], c);
+    }
+
+    #[test]
+    fn test_field_sub() {
+        let a = Fq::random(&mut thread_rng());
+        let b = Fq::random(&mut thread_rng());  
+        let c = a - b;
+
+        let a_bytes = scalars_to_bytes(&vec![a]);
+        let b_bytes = scalars_to_bytes(&vec![b]);
+
+        let shader_code = load_field_shader_code();
+        let result = pollster::block_on(gpu::ops::field_sub(&shader_code, &a_bytes, &b_bytes));
+        let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
+        assert_eq!(gpu_result[0], c);
     }
 }
 
 #[cfg(test)]
-mod tests_webgpu {
+mod tests_wasm_pack {
     use super::*;
     use wasm_bindgen_test::*;
     use web_sys::console;
