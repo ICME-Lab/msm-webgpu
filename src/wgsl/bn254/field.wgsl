@@ -18,6 +18,12 @@ const BASE_M = BigInt256(
     array(2788u, 40460u, 53156u, 3965u, 54731u, 24120u, 21946u, 41466u, 40585u, 63994u, 59685u, 7870u, 32601u, 31545u, 50740u, 15982u)
 );
 
+// Since W = 16 and BASE_MODULUS.limbs[0] = 64839,
+//   we want n0' such that n0' * BASE_MODULUS.limbs[0] ≡ -1 mod 65536.
+//   i.e. (n0' * 64839) & 0xFFFF = 0xFFFF.
+// -(p^(-1)) % 2^16
+const MONTGOMERY_INV = 25481u;
+
 const ZERO: BigInt256 = BigInt256(
     array(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u)
 );
@@ -71,6 +77,9 @@ fn field_reduce_272(a: BigInt272, multi: u32) -> BaseField {
     return ZERO;
 }
 
+
+
+
 fn field_add(a: BaseField, b: BaseField) -> BaseField { 
     var res: BaseField;
     add(a, b, &res);
@@ -87,46 +96,126 @@ fn field_sub(a: BaseField, b: BaseField) -> BaseField {
     return res;
 }
 
-fn field_mul(a: BaseField, b: BaseField) -> BaseField {
-    var xy: BigInt512 = mul(a, b);
-    var xy_hi: BaseField = get_higher_with_slack(xy);
-    var l: BigInt512 = mul(xy_hi, BASE_M);
-    var l_hi: BaseField = get_higher_with_slack(l);
-    var lp: BigInt512 = mul(l_hi, BASE_MODULUS);
-    var r_wide: BigInt512;
-    sub_512(xy, lp, &r_wide);
+// This performs the "Montgomery reduce" on a 512-bit intermediate t.
+// It returns t * R^{-1} mod M, provided 0 <= t < 2^256 * M.
+fn montgomery_reduce(t: BigInt512) -> BaseField {
+    var ret: BigInt512;
+    // copy t into ret
+    for (var i = 0u; i < 2u*N; i = i + 1u) {
+        ret.limbs[i] = t.limbs[i];
+    }
 
-    var r_wide_reduced: BigInt512;
-    var underflow = sub_512(r_wide, BASE_MODULUS_WIDE, &r_wide_reduced);
-    if (underflow == 0u) {
-        r_wide = r_wide_reduced;
-    }
-    var r: BaseField;
+    // Outer loop: for each of the low 16 limbs
     for (var i = 0u; i < N; i = i + 1u) {
-        r.limbs[i] = r_wide.limbs[i];
+        let u = (ret.limbs[i] * MONTGOMERY_INV) & W_mask;
+
+        var carry: u32 = 0u;
+        for (var j = 0u; j < N; j = j + 1u) {
+            let sum = ret.limbs[i + j] + (u * BASE_MODULUS.limbs[j]) + carry;
+            ret.limbs[i + j] = sum & W_mask;
+            carry = sum >> W;
+        }
+        ret.limbs[i + N] = ret.limbs[i + N] + carry;
     }
-    return field_reduce(r);
+
+    // The result is in the high half ret.limbs[N..2N].
+    var out: BigInt256;
+    for (var i = 0u; i < N; i = i + 1u) {
+        out.limbs[i] = ret.limbs[i + N];
+    }
+
+    // Possibly subtract the modulus one time
+    var tmp: BigInt256;
+    let borrow = sub(out, BASE_MODULUS, &tmp);
+    if (borrow == 0u) {
+        // out >= M, so out = out - M
+        out = tmp;
+    }
+
+    return out;
 }
 
-// This is slow, probably don't want to use this
-// fn field_small_scalar_mul(a: u32, b: BaseField) -> BaseField {
-//     var constant: BaseField;
-//     constant.limbs[0] = a;
-//     return field_mul(constant, b);
+// Multiplies two 256-bit field elements (in normal form) using Montgomery reduction.
+// If you maintain your elements in Montgomery form, you would first convert them 
+// from Montgomery to “normal” or vice versa as needed. For a simple demonstration
+// where a and b are in normal form, we do a plain 256x256->512 multiply, then reduce.
+// fn field_mul(a: BaseField, b: BaseField) -> BaseField {
+//     // 1) Multiply into 512 bits:
+//     let t: BigInt512 = mul(a, b);
+
+//     // 2) Montgomery-reduce the 512-bit product down to 256 bits:
+//     let result = montgomery_reduce(t);
+
+//     return result;
 // }
 
-fn field_small_scalar_shift(l: u32, a: BaseField) -> BaseField { // max shift allowed is 16
-    // assert (l < 16u);
-    var res: BigInt272;
+fn is_zero(b: BaseField) -> bool {
     for (var i = 0u; i < N; i = i + 1u) {
-        let shift = a.limbs[i] << l;
-        res.limbs[i] = res.limbs[i] | (shift & W_mask);
-        res.limbs[i + 1] = (shift >> W);
+        if (b.limbs[i] != 0u) {
+            return false;
+        }
+    }
+    return true;
+}
+
+fn shift_right_by_1(b: BigInt256) -> BigInt256 {
+    var res: BigInt256;
+    var carry_in: u32 = 0;
+    for (var i = N; i > 0u; /* decrement i in a safe way */) {
+        i = i - 1u;
+        let cur = b.limbs[i] | (carry_in << W);
+        res.limbs[i] = cur >> 1;
+        carry_in = cur & 1u; 
+    }
+    return res;
+}
+
+fn double(a: BigInt256) -> BigInt256 {
+    // shift a by 1 bit.  Since each limb is 16 bits, do a 16-limb carry.
+    var res: BigInt256;
+    var carry: u32 = 0;
+    for (var i = 0u; i < N; i = i + 1u) {
+        let tmp = (a.limbs[i] << 1) + carry;
+        res.limbs[i] = tmp & W_mask;
+        carry = tmp >> W;
+    }
+    return res;
+}
+
+fn field_mul(a: BaseField, b: BaseField) -> BaseField {
+    var accumulator = ZERO;
+    var newA = a;
+    var newB = b;
+
+    while (!is_zero(newB)) {
+        // If newB is odd:
+        if ((newB.limbs[0] & 1u) == 1u) {
+            // accumulator += newA (mod M)
+            add(accumulator, newA, &accumulator);
+            // reduce if necessary
+            var tmp: BigInt256;
+            let borrow = sub(accumulator, BASE_MODULUS, &tmp);
+            if (borrow == 0u) {
+                accumulator = tmp;
+            }
+        }
+
+        // newA = 2 * newA (mod M)
+        newA = double(newA);
+        // reduce once if needed
+        var tmp2: BigInt256;
+        let borrow2 = sub(newA, BASE_MODULUS, &tmp2);
+        if (borrow2 == 0u) {
+            newA = tmp2;
+        }
+
+        // newB = newB >> 1
+        newB = shift_right_by_1(newB);
     }
 
-    var output = field_reduce_272(res, (1u << l)); // can probably be optimised
-    return output;
+    return accumulator;
 }
+
 
 fn field_pow(p: BaseField, e: u32) -> BaseField {
     var res: BaseField = p;
@@ -146,35 +235,6 @@ fn field_eq(a: BaseField, b: BaseField) -> bool {
 }
 
 fn field_sqr(a: BaseField) -> BaseField {
-    var xy: BigInt512 = sqr(a);
-    var xy_hi: BaseField = get_higher_with_slack(xy);
-    var l: BigInt512 = mul(xy_hi, BASE_M);
-    var l_hi: BaseField = get_higher_with_slack(l);
-    var lp: BigInt512 = mul(l_hi, BASE_MODULUS);
-    var r_wide: BigInt512;
-    sub_512(xy, lp, &r_wide);
-
-    var r_wide_reduced: BigInt512;
-    var underflow = sub_512(r_wide, BASE_MODULUS_WIDE, &r_wide_reduced);
-    if (underflow == 0u) {
-        r_wide = r_wide_reduced;
-    }
-    var r: BaseField;
-    for (var i = 0u; i < N; i = i + 1u) {
-        r.limbs[i] = r_wide.limbs[i];
-    }
-    return field_reduce(r);
+    var res = field_mul(a, a);
+    return res;
 }
-
-/*
-fn field_to_bits(a: BigInt256) -> array<bool, 256> {
-  let res: array<bool, 256> = array();
-  for (var i = 0u;i < N;i += 1) {
-    for (var j = 0u;j < 32u;j += 1) {
-      var bit = (a.limbs[i] >> j) & 1u;
-      res[i * 32u + j] = bit == 1u;
-    }
-  }
-  return res;
-}
-*/

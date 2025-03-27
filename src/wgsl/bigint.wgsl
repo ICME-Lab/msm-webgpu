@@ -7,7 +7,7 @@ const N1 = N + 1u;
 
 // No overflow
 struct BigInt256 {
-    limbs: array<u32,N>
+    limbs: array<u32,N> // each limb is a 16-bit value in the low half of the u32
 }
 
 struct BigInt512 {
