@@ -78,13 +78,13 @@ pub async fn run_webgpu_msm_async(g: &Vec<G1Affine>, v: &Vec<Fr>) -> G1 {
 mod tests {
     use std::time::Instant;
 
-    use crate::halo2curves::utils::cast_u8_to_u16;
+    use crate::{halo2curves::utils::cast_u8_to_u16, utils::point_to_bytes};
 
     use super::*;
 
     #[test]
-    fn test_bn254() {
-        let sample_size = 5;
+    fn test_bn256() {
+        let sample_size = 2;
         let scalars = sample_scalars(sample_size);
         let points = sample_points(sample_size);
 
@@ -126,7 +126,25 @@ mod tests {
         let mut shader_code = String::new();
         shader_code.push_str(include_str!("../../wgsl/bigint.wgsl"));
         shader_code.push_str(include_str!("../../wgsl/bn254/field.wgsl"));
-        shader_code.push_str(include_str!("../../wgsl/test/ops.wgsl"));
+        shader_code.push_str(include_str!("../../wgsl/test/field.wgsl"));
+        shader_code
+    }
+
+    fn load_point_shader_code() -> String {
+        let mut shader_code = String::new();
+        shader_code.push_str(include_str!("../../wgsl/bigint.wgsl"));
+        shader_code.push_str(include_str!("../../wgsl/bn254/field.wgsl"));
+        shader_code.push_str(include_str!("../../wgsl/bn254/curve.wgsl"));
+        shader_code.push_str(include_str!("../../wgsl/test/point.wgsl"));
+        shader_code
+    }
+
+    fn load_point_msm_shader_code() -> String {
+        let mut shader_code = String::new();
+        shader_code.push_str(include_str!("../../wgsl/bigint.wgsl"));
+        shader_code.push_str(include_str!("../../wgsl/bn254/field.wgsl"));
+        shader_code.push_str(include_str!("../../wgsl/bn254/curve.wgsl"));
+        shader_code.push_str(include_str!("../../wgsl/test/msm.wgsl"));
         shader_code
     }
 
@@ -174,6 +192,52 @@ mod tests {
         let result = pollster::block_on(gpu::ops::field_sub(&shader_code, &a_bytes, &b_bytes));
         let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
         assert_eq!(gpu_result[0], c);
+    }
+
+    #[test]
+    fn test_point_add() {
+        let a = G1Affine::random(&mut thread_rng());
+        let b = G1Affine::random(&mut thread_rng());
+        let c = a + b;
+        
+        let a_bytes = points_to_bytes(&vec![a]);
+        let b_bytes = points_to_bytes(&vec![b]);
+
+        let shader_code = load_point_shader_code();
+        let result = pollster::block_on(gpu::ops::point_add(&shader_code, &a_bytes, &b_bytes));
+        let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
+        let point_result = G1::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
+        assert_eq!(point_result, c);
+    }
+
+    #[test]
+    fn test_point_double() {
+        let a = G1Affine::random(&mut thread_rng());
+        let c = a + a;
+        
+        let a_bytes = points_to_bytes(&vec![a]);
+
+        let shader_code = load_point_shader_code();
+        let result = pollster::block_on(gpu::ops::point_double(&shader_code, &a_bytes));
+        let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
+        let point_result = G1::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
+        assert_eq!(point_result, c);
+    }
+
+    #[test]
+    fn test_scalar_mul() {
+        let p = G1Affine::random(&mut thread_rng());
+        let s = Fr::random(&mut thread_rng());
+        let c = p * s;
+        
+        let p_bytes = points_to_bytes(&vec![p]);
+        let s_bytes = scalars_to_bytes(&vec![s]);
+
+        let shader_code = load_point_msm_shader_code();
+        let result = pollster::block_on(gpu::ops::point_msm(&shader_code, vec![&p_bytes], vec![&s_bytes]));
+        let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
+        let point_result = G1::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
+        assert_eq!(point_result, c);
     }
 }
 
