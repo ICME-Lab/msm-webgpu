@@ -139,15 +139,15 @@ fn montgomery_reduce(t: BigInt512) -> BaseField {
 // If you maintain your elements in Montgomery form, you would first convert them 
 // from Montgomery to “normal” or vice versa as needed. For a simple demonstration
 // where a and b are in normal form, we do a plain 256x256->512 multiply, then reduce.
-// fn field_mul(a: BaseField, b: BaseField) -> BaseField {
-//     // 1) Multiply into 512 bits:
-//     let t: BigInt512 = mul(a, b);
+fn field_mul(a: BaseField, b: BaseField) -> BaseField {
+    // 1) Multiply into 512 bits:
+    let t: BigInt512 = mul(a, b);
 
-//     // 2) Montgomery-reduce the 512-bit product down to 256 bits:
-//     let result = montgomery_reduce(t);
+    // 2) Montgomery-reduce the 512-bit product down to 256 bits:
+    let result = montgomery_reduce(t);
 
-//     return result;
-// }
+    return result;
+}
 
 fn is_zero(b: BaseField) -> bool {
     for (var i = 0u; i < N; i = i + 1u) {
@@ -182,7 +182,7 @@ fn double(a: BigInt256) -> BigInt256 {
     return res;
 }
 
-fn field_mul(a: BaseField, b: BaseField) -> BaseField {
+fn field_mul_naive(a: BaseField, b: BaseField) -> BaseField {
     var accumulator = ZERO;
     var newA = a;
     var newB = b;

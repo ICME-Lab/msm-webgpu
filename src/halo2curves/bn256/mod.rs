@@ -5,12 +5,14 @@ use crate::{
 use ff::{Field, PrimeField};
 use group::Group;
 use halo2curves::{
-    bn256::{Fq, Fr, G1Affine, G1},
+    bn256::{Fq, Fr, G1Affine, MontgomeryRepr, G1},
     CurveExt,
 };
 use rand::thread_rng;
 
 use halo2curves::{msm::best_multiexp, CurveAffine};
+
+use super::utils::{fields_to_u16_vec_montgomery, u16_vec_to_fields_montgomery};
 
 
 pub fn sample_scalars(n: usize) -> Vec<Fr> {
@@ -44,6 +46,13 @@ pub fn scalars_to_bytes<F: PrimeField>(v: &Vec<F>) -> Vec<u8> {
         .collect::<Vec<_>>()
 }
 
+pub fn scalars_to_bytes_montgomery<F: MontgomeryRepr>(v: &Vec<F>) -> Vec<u8> {
+    fields_to_u16_vec_montgomery(&v)
+        .into_iter()
+        .flat_map(|x| (x as u32).to_le_bytes())
+        .collect::<Vec<_>>()
+}
+
 pub fn points_to_bytes(g: &Vec<G1Affine>) -> Vec<u8> {
     let packed_points: Vec<Fq> = g
         .into_iter()
@@ -55,7 +64,7 @@ pub fn points_to_bytes(g: &Vec<G1Affine>) -> Vec<u8> {
             [*x, *y, z]
         })
         .collect::<Vec<_>>();
-    fields_to_u16_vec(&packed_points)
+    fields_to_u16_vec_montgomery(&packed_points)
         .into_iter()
         .flat_map(|x| (x as u32).to_le_bytes())
         .collect::<Vec<_>>()
@@ -70,7 +79,7 @@ pub async fn run_webgpu_msm_async(g: &Vec<G1Affine>, v: &Vec<Fr>) -> G1 {
     let v_slice = scalars_to_bytes(v);
     let shader_code = load_shader_code_bn254();
     let result = gpu::msm::run_msm(&shader_code, &points_slice, &v_slice).await;
-    let result: Vec<Fq> = u16_vec_to_fields(&result);
+    let result: Vec<Fq> = u16_vec_to_fields_montgomery(&result);
     G1::new_jacobian(result[0].clone(), result[1].clone(), result[2].clone()).unwrap()
 }
 
@@ -78,13 +87,15 @@ pub async fn run_webgpu_msm_async(g: &Vec<G1Affine>, v: &Vec<Fr>) -> G1 {
 mod tests {
     use std::time::Instant;
 
+    use halo2curves::bn256::MontgomeryRepr;
+
     use crate::{halo2curves::utils::cast_u8_to_u16, utils::point_to_bytes};
 
     use super::*;
 
     #[test]
     fn test_bn256() {
-        let sample_size = 2;
+        let sample_size = 5;
         let scalars = sample_scalars(sample_size);
         let points = sample_points(sample_size);
 
@@ -154,13 +165,13 @@ mod tests {
         let b = Fq::random(&mut thread_rng());
         let c = a * b;
 
-        let a_bytes = scalars_to_bytes(&vec![a]);
-        let b_bytes = scalars_to_bytes(&vec![b]);
+        let a_bytes = scalars_to_bytes_montgomery(&vec![a]);
+        let b_bytes = scalars_to_bytes_montgomery(&vec![b]);
 
         let shader_code = load_field_shader_code();
 
         let result = pollster::block_on(gpu::ops::field_mul(&shader_code, &a_bytes, &b_bytes));
-        let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
+        let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
         assert_eq!(gpu_result[0], c);
     }
 
@@ -170,12 +181,12 @@ mod tests {
         let b = Fq::random(&mut thread_rng());
         let c = a + b;
 
-        let a_bytes = scalars_to_bytes(&vec![a]);
-        let b_bytes = scalars_to_bytes(&vec![b]);
+        let a_bytes = scalars_to_bytes_montgomery(&vec![a]);
+        let b_bytes = scalars_to_bytes_montgomery(&vec![b]);
 
         let shader_code = load_field_shader_code();
         let result = pollster::block_on(gpu::ops::field_add(&shader_code, &a_bytes, &b_bytes));
-        let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
+        let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
         assert_eq!(gpu_result[0], c);
     }
 
@@ -185,12 +196,12 @@ mod tests {
         let b = Fq::random(&mut thread_rng());  
         let c = a - b;
 
-        let a_bytes = scalars_to_bytes(&vec![a]);
-        let b_bytes = scalars_to_bytes(&vec![b]);
+        let a_bytes = scalars_to_bytes_montgomery(&vec![a]);
+        let b_bytes = scalars_to_bytes_montgomery(&vec![b]);
 
         let shader_code = load_field_shader_code();
         let result = pollster::block_on(gpu::ops::field_sub(&shader_code, &a_bytes, &b_bytes));
-        let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
+        let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
         assert_eq!(gpu_result[0], c);
     }
 
@@ -205,7 +216,7 @@ mod tests {
 
         let shader_code = load_point_shader_code();
         let result = pollster::block_on(gpu::ops::point_add(&shader_code, &a_bytes, &b_bytes));
-        let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
+        let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
         let point_result = G1::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
         assert_eq!(point_result, c);
     }
@@ -219,7 +230,7 @@ mod tests {
 
         let shader_code = load_point_shader_code();
         let result = pollster::block_on(gpu::ops::point_double(&shader_code, &a_bytes));
-        let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
+        let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
         let point_result = G1::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
         assert_eq!(point_result, c);
     }
@@ -235,9 +246,17 @@ mod tests {
 
         let shader_code = load_point_msm_shader_code();
         let result = pollster::block_on(gpu::ops::point_msm(&shader_code, vec![&p_bytes], vec![&s_bytes]));
-        let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
+        let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
         let point_result = G1::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
         assert_eq!(point_result, c);
+    }
+
+    #[test]
+    fn test_montgomery_repr() {
+        let a = Fq::random(&mut thread_rng());
+        let a_bytes = a.to_montgomery_repr();
+        let a_result = Fq::from_montgomery_repr(a_bytes).unwrap();
+        assert_eq!(a, a_result);
     }
 }
 
