@@ -1,18 +1,17 @@
 use crate::{
-    gpu,
-    halo2curves::utils::{fields_to_u16_vec, u16_vec_to_fields}, utils::load_shader_code_bn254,
+    gpu, halo2curves::utils::{fields_to_u16_vec, u16_vec_to_fields}, montgomery::MontgomeryRepr, utils::load_shader_code_bn254
 };
 use ff::{Field, PrimeField};
 use group::Group;
 use halo2curves::{
-    bn256::{Fq, Fr, G1Affine, MontgomeryRepr, G1},
+    bn256::{Fq, Fr, G1Affine, G1},
     CurveExt,
 };
 use rand::thread_rng;
 
 use halo2curves::{msm::best_multiexp, CurveAffine};
 
-use super::utils::{fields_to_u16_vec_montgomery, u16_vec_to_fields_montgomery};
+use crate::montgomery::utils::{fields_to_u16_vec_montgomery, u16_vec_to_fields_montgomery};
 
 
 pub fn sample_scalars(n: usize) -> Vec<Fr> {
@@ -46,7 +45,7 @@ pub fn scalars_to_bytes<F: PrimeField>(v: &Vec<F>) -> Vec<u8> {
         .collect::<Vec<_>>()
 }
 
-pub fn scalars_to_bytes_montgomery<F: MontgomeryRepr>(v: &Vec<F>) -> Vec<u8> {
+pub fn fields_to_bytes_montgomery<F: MontgomeryRepr>(v: &Vec<F>) -> Vec<u8> {
     fields_to_u16_vec_montgomery(&v)
         .into_iter()
         .flat_map(|x| (x as u32).to_le_bytes())
@@ -87,7 +86,7 @@ pub async fn run_webgpu_msm_async(g: &Vec<G1Affine>, v: &Vec<Fr>) -> G1 {
 mod tests {
     use std::time::Instant;
 
-    use halo2curves::bn256::MontgomeryRepr;
+    use crate::montgomery::MontgomeryRepr;
 
     use crate::{halo2curves::utils::cast_u8_to_u16, utils::point_to_bytes};
 
@@ -165,8 +164,8 @@ mod tests {
         let b = Fq::random(&mut thread_rng());
         let c = a * b;
 
-        let a_bytes = scalars_to_bytes_montgomery(&vec![a]);
-        let b_bytes = scalars_to_bytes_montgomery(&vec![b]);
+        let a_bytes = fields_to_bytes_montgomery(&vec![a]);
+        let b_bytes = fields_to_bytes_montgomery(&vec![b]);
 
         let shader_code = load_field_shader_code();
 
@@ -181,8 +180,8 @@ mod tests {
         let b = Fq::random(&mut thread_rng());
         let c = a + b;
 
-        let a_bytes = scalars_to_bytes_montgomery(&vec![a]);
-        let b_bytes = scalars_to_bytes_montgomery(&vec![b]);
+        let a_bytes = fields_to_bytes_montgomery(&vec![a]);
+        let b_bytes = fields_to_bytes_montgomery(&vec![b]);
 
         let shader_code = load_field_shader_code();
         let result = pollster::block_on(gpu::ops::field_add(&shader_code, &a_bytes, &b_bytes));
@@ -196,8 +195,8 @@ mod tests {
         let b = Fq::random(&mut thread_rng());  
         let c = a - b;
 
-        let a_bytes = scalars_to_bytes_montgomery(&vec![a]);
-        let b_bytes = scalars_to_bytes_montgomery(&vec![b]);
+        let a_bytes = fields_to_bytes_montgomery(&vec![a]);
+        let b_bytes = fields_to_bytes_montgomery(&vec![b]);
 
         let shader_code = load_field_shader_code();
         let result = pollster::block_on(gpu::ops::field_sub(&shader_code, &a_bytes, &b_bytes));
