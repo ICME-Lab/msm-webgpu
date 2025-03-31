@@ -1,90 +1,110 @@
-const POINTS_PER_INVOCATION = 64u; // Each invocation (workgroup) handles 64 points.
-const PARTITION_SIZE = 8u; // Each scalar is divided into 8-bit chunks (partitions).
-const POW_PART = (1u << PARTITION_SIZE); // 2^8 = 256; Number of possible values per 8-bit partition.
-const NUM_PARTITIONS = POINTS_PER_INVOCATION / PARTITION_SIZE; // 64 / 8 = 8; Partitions per workgroup.
-const PS_SZ = POW_PART; // 2^8 = 256; Size of power set (aka sum combinations) = 256 per partition.
-const BB_SIZE = 256; // Bucket size = 2^8 = 256.
-const PS_SZ_NUM_INVOCATIONS = PS_SZ * 1u; // 256 * 4096 = 1048576
-const BB_SIZE_NUM_INVOCATIONS = BB_SIZE * 1; // 256 * 4096 = 1048576
-const NUM_WINDOWS = 32u; // 256/8
 
+// Bit length of the scalar
+const B = 256u;
+// Window chunk size in bits
+const ChunkSize = 8u;
+// Number of windows (B/C)
+const NumWindows = 32u;
+const BucketsPerWindow = 2u << ChunkSize; // 256
+const TotalBuckets = BucketsPerWindow * NumWindows; // 256 * 32 = 8192
+const PointsPerInvocation = 64u;
 
-// For each workgroup, stores 256 precomputed combinations of points (i.e., all possible sums from 8 input points)
+// 2^C
+const TWO_POW_C: BigInt256 = BigInt256(
+    array(256u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u)
+);
+
+@group(0) @binding(3)
+var<storage, read_write> buckets: array<JacobianPoint, 256u * 32u>;
 @group(0) @binding(4)
-var<storage, read_write> powerset_sums: array<JacobianPoint, PS_SZ_NUM_INVOCATIONS>;
-// Stores 256 buckets for accumulation during Pippenger.
-@group(0) @binding(5)
-var<storage, read_write> cur_sum: array<JacobianPoint, BB_SIZE_NUM_INVOCATIONS>;
-@group(0) @binding(6)
 var<storage, read_write> msm_len: u32;
 
-fn get_window(scalar: ScalarField, j: u32) -> u32 {
-    let byte_idx = j; // j in 0..31 (NUM_WINDOWS)
-    let limb_idx = byte_idx / 4u;       // 4 bytes per u32
-    let byte_offset = (byte_idx % 4u) * 8u;
-    return (scalar.limbs[limb_idx] >> byte_offset) & 0xffu;
+// n - number of points/scalars
+// i - a point/scalar index, 1...n
+// j - a window index, 0...W-1
+// k - a bucket index, 0...2^C - 1
+// s_i[j] - value of the j-th chunk of the i-th scalar
+// B[j, k] - accumulator bucket
+
+fn field_to_bytes(s: ScalarField) -> array<u32, 2 * N> {
+    // Declare a local array of 32 elements
+    var res: array<u32, 2 * N>;
+
+    for (var i = 0u; i < 32u; i = i + 1u) {
+       res[i] = 0u;
+    }
+
+    // For each 16-bit limb, split into two 8-bit bytes
+    for (var i: u32 = 0u; i < N; i = i + 1u) {
+        let limb: u32 = s.limbs[i];
+
+        // Low 8 bits
+        let low_byte:  u32 = limb & 0xFFu;
+
+        // Next 8 bits
+        let next_byte: u32 = (limb >> 8u) & 0xFFu;
+
+        // Store the two bytes in consecutive array slots
+        res[2u * i] = low_byte;
+        res[2u * i + 1u] = next_byte;
+    }
+
+    return res;
 }
 
+// There will be NUM_INVOCATIONS invocations (workgroups) of this function, each with a different gidx
 fn pippenger(gidx: u32) -> JacobianPoint {
-    let ps_base = gidx * PS_SZ;            // Offset into powerset_sums
-    let sum_base = i32(gidx) * BB_SIZE;         // Offset into cur_sum
-    let point_base = gidx * POINTS_PER_INVOCATION;
-
-    // Initialize buckets
-    for(var bb = 0; bb < BB_SIZE; bb = bb + 1) {
-        cur_sum[sum_base + bb] = JACOBIAN_IDENTITY;
+    let base = gidx * PointsPerInvocation;
+    for (var b = 0u; b < PointsPerInvocation; b = b + 1u) {
+        buckets[base + b] = JACOBIAN_IDENTITY;
     }
 
-    for (var i = 0u; i < PS_SZ; i = i + 1u) {
-        powerset_sums[ps_base + i] = JACOBIAN_IDENTITY;
+    var windows: array<JacobianPoint, NumWindows>; 
+    for (var j: u32 = 0u; j < NumWindows; j = j + 1u) {
+        windows[j] = JACOBIAN_IDENTITY;
     }
 
-    // 8 partitions per workgroup, each with 8 points
-    for (var part = 0u; part < NUM_PARTITIONS; part = part + 1u) {
-        // Build all powerset combinations of 8 input points
-        var idx = 0u;
-        for (var j = 1u; j < POW_PART; j = j + 1u) {
-            if ((i32(j) & -i32(j)) == i32(j)) {
-                powerset_sums[ps_base + j] = points[point_base + part * PARTITION_SIZE + idx];
-                idx = idx + 1;
-            } else {
-                let mask = j & u32(j - 1);
-                let other_mask = j ^ mask;
-                powerset_sums[ps_base + j] = jacobian_add(
-                    powerset_sums[ps_base + mask],
-                    powerset_sums[ps_base + other_mask]
-                );
-            }
-        }
+    // Bucket accumulation
+    for (var i = 0u; i < msm_len; i = i + 1u) {
+        var scalar = scalars[base + i];
+        var u8_scalar = field_to_bytes(scalar);
 
-        // Accumulate into buckets
-        for (var w = 0u; w < NUM_WINDOWS; w = w + 1u) {
-        var powerset_idx = 0u;
-        for (var j = 0u; j < PARTITION_SIZE; j = j + 1u) {
-            let window = get_window(scalars[point_base + part * PARTITION_SIZE + j], w);
-            if (window != 0u) {
-                powerset_idx |= (1u << j);
-            }
-        }
-
-            // Skip empty powerset index = 0 (optional, since it's identity)
-            if (powerset_idx > 0u) {
-                cur_sum[u32(sum_base) + powerset_idx] = jacobian_add(
-                    cur_sum[u32(sum_base) + powerset_idx],
-                    powerset_sums[ps_base + powerset_idx]
-                );
+        var point = points[base + i];
+        for (var j = 0u; j < NumWindows; j = j + 1u) {
+            var s_j = u8_scalar[j];
+            if (s_j != 0u) {
+                let bucket_index = j * BucketsPerWindow + s_j;
+                buckets[bucket_index] = jacobian_add(buckets[bucket_index], point);
             }
         }
     }
 
-    // Final reduction: sum all buckets in reverse order
-    var running_total: JacobianPoint = JACOBIAN_IDENTITY;
-    for (var bb = i32(BB_SIZE) - 1; bb >= 0; bb = bb - 1) {
-        running_total = jacobian_add(
-            jacobian_double(running_total),
-            cur_sum[sum_base + bb]
+    // Bucket reduction
+    for (var j=0u; j < NumWindows; j = j+1u) {
+        var sum = JACOBIAN_IDENTITY;
+        var sum_of_sums = JACOBIAN_IDENTITY;
+        var k = BucketsPerWindow - 1u;
+        loop {
+            sum = jacobian_add(sum, buckets[j * BucketsPerWindow + k]);
+            sum_of_sums = jacobian_add(sum_of_sums, sum);
+
+            if (k == 1u) {
+                break;
+            }
+            k = k - 1u;
+        }
+
+        windows[j] = sum_of_sums;
+    }
+
+    var result: JacobianPoint = JACOBIAN_IDENTITY;
+    for (var j = NumWindows - 1; j >= 0; j = j - 1) {
+        var tmp = jacobian_mul(result, TWO_POW_C);
+        result = jacobian_add(
+            windows[j],
+            tmp
         );
-    }
+    } 
 
-    return running_total;
+    return result;
 }

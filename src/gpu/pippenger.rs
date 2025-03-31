@@ -15,7 +15,7 @@ const C: usize = 8;
 const W: usize = B / C; // 32
 
 
-const BUCKETS_PER_WINDOW: usize = 1 << C; // 8 bits per window
+const BUCKETS_PER_WINDOW: usize = 1 << C; // 2^8 bits per window
 const TOTAL_BUCKETS: usize = W * BUCKETS_PER_WINDOW;
 // i - a point/scalar index, 1...n
 // j - a window index, 0...W-1
@@ -35,8 +35,8 @@ pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], gidx: usize) -> G1
 
     // Bucket accumulation
     for (scalar, point) in scalars_and_points {
+        let u8_scalar = field_to_bytes(*scalar);
         for j in 0..W {
-            let u8_scalar = field_to_bytes(*scalar);
             let s_j = u8_scalar[j];
             if s_j != 0 {
                 buckets[j * BUCKETS_PER_WINDOW + s_j as usize] += point;
@@ -58,8 +58,9 @@ pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], gidx: usize) -> G1
 
     // Final reduction
     let mut result = G1::identity();
+    let two_pow_c = Fr::from(2u64.pow(C as u32));
     for j in (0..W).rev() {
-        result = windows[j] + result * Fr::from(2u64.pow(C as u32));
+        result = windows[j] + result * two_pow_c;
     }
 
     result

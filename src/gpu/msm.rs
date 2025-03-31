@@ -5,7 +5,7 @@ use wgpu::util::DeviceExt;
 
 
 pub const WORKGROUP_SIZE: usize = 64;
-pub const NUM_INVOCATIONS: usize = 1;
+pub const NUM_INVOCATIONS: usize = 512;
 pub const MSM_SIZE: usize = WORKGROUP_SIZE * NUM_INVOCATIONS;
 
 pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8]) -> Vec<u16> {
@@ -35,20 +35,8 @@ pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8
         mapped_at_creation: false,
     });
 
-    let mem = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("Memory Buffer"),
-        size: (MSM_SIZE * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress,
-        usage: wgpu::BufferUsages::STORAGE,
-        mapped_at_creation: false,
-    });
-    let pippenger_pow_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("Pippenger Powerset Sums Buffer"),
-        size: (256 * NUM_INVOCATIONS * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress,
-        usage: wgpu::BufferUsages::STORAGE,
-        mapped_at_creation: false,
-    });
-    let pippenger_sum_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("Pippenger Sum Buffer"),
+    let buckets = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Buckets Buffer"),
         size: (256 * NUM_INVOCATIONS * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress,
         usage: wgpu::BufferUsages::STORAGE,
         mapped_at_creation: false,
@@ -90,9 +78,7 @@ pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8
             points_buffer,
             scalars_buffer,
             result_buffer.clone(),
-            mem,
-            pippenger_pow_buffer,
-            pippenger_sum_buffer,
+            buckets,
             msm_len_buffer,
         ],
         vec![

@@ -126,8 +126,8 @@ mod tests {
         let mut points = sample_points(sample_size);
         // let mut points = vec![G1Affine::generator(); sample_size];
         println!("Points: {:?}", points);
-        points.resize(4096, G1Affine::identity());
-        scalars.resize(4096, Fr::from(1));
+        points.resize(512, G1Affine::identity());
+        scalars.resize(512, Fr::from(1));
         let now = Instant::now();
         let fast = fast_msm(&points, &scalars);
         println!("Fast Elapsed: {:.2?}", now.elapsed());

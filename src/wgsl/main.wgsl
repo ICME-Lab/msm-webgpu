@@ -23,19 +23,32 @@ fn aggregate(
     let gidx = global_id.x;
     let lidx = local_id.x;
 
-    const split = NUM_INVOCATIONS / 256u;
 
-    for (var j = 1u; j < split; j = j + 1u) {
-        result[lidx] = jacobian_add(result[lidx], result[lidx + j * 256]);
+    let split = NUM_INVOCATIONS / 256u; // Each thread handles this many entries
+
+    // Step 1: Each thread accumulates its vertical slice
+    for (var j = 0u; j < split; j = j + 1u) {
+        result[lidx] = jacobian_add(result[lidx], result[lidx + j * 256u]);
     }
 
-    // ensure that all threads have completed their memory operations before proceeding
+
+    // Make sure all partial results are written
     storageBarrier();
 
-    for (var offset: u32 = 256u / 2u; offset > 0u; offset = offset / 2u) {
-    if (lidx < offset) {
-            result[lidx] = jacobian_add(result[lidx], result[lidx + offset]);
+    var current_count = NUM_INVOCATIONS;
+
+    loop {
+        if (current_count <= 1u) {
+            break;
         }
-        storageBarrier();
+
+        let half = current_count / 2u;
+
+        for (var i = 0u; i < half; i = i + 1u) {
+            result[i] = jacobian_add(result[i], result[i + half]);
+            storageBarrier();
+        }
+
+        current_count = half;
     }
 }
