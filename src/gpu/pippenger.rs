@@ -38,7 +38,6 @@ pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], gidx: usize) -> G1
         for j in 0..W {
             let u8_scalar = field_to_bytes(*scalar);
             let s_j = u8_scalar[j];
-            println!("s_j: {:?}", s_j);
             if s_j != 0 {
                 buckets[j * BUCKETS_PER_WINDOW + s_j as usize] += point;
             }
@@ -56,7 +55,6 @@ pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], gidx: usize) -> G1
         windows[j] = sum_of_sums;
     }
 
-    println!("Windows: {:?}", windows);
 
     // Final reduction
     let mut result = G1::identity();
@@ -72,6 +70,7 @@ pub fn emulate_pippenger_gpu(points: &[G1Affine], scalars: &[Fr]) -> G1 {
     assert_eq!(points.len() % POINTS_PER_INVOCATION, 0);
 
     let num_invocations = points.len() / POINTS_PER_INVOCATION;
+    println!("num_invocations: {:?}", num_invocations);
     let mut partial_results = vec![G1::identity(); num_invocations];
 
     // === Simulate: @compute @workgroup_size(1) main() ===
@@ -79,8 +78,9 @@ pub fn emulate_pippenger_gpu(points: &[G1Affine], scalars: &[Fr]) -> G1 {
         partial_results[gidx] = emulate_pippenger(points, scalars, gidx);
     }
 
+
     // === Simulate: @compute @workgroup_size(256) aggregate() ===
-    let mut reduced = vec![G1::identity(); 256];
+    let mut reduced = partial_results.clone();
     let split = num_invocations / 256;
 
     // Step 1: Each thread (idx ∈ 0..255) reduces its vertical slice
@@ -91,13 +91,12 @@ pub fn emulate_pippenger_gpu(points: &[G1Affine], scalars: &[Fr]) -> G1 {
     }
 
     // Step 2: Binary tree reduction across threads
-    let mut offset = 256 / 2;
-    while offset > 0 {
-        for lidx in 0..offset {
-            let temp = reduced[lidx];
-            reduced[lidx] = temp + reduced[lidx + offset];
+    while reduced.len() > 1 {
+        let half = reduced.len() / 2;
+        for i in 0..half {
+            reduced[i] = reduced[i] + reduced[i + half];
         }
-        offset /= 2;
+        reduced.truncate(half);
     }
 
     reduced[0] // Final result
