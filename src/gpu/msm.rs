@@ -3,6 +3,11 @@ use crate::gpu::{run_webgpu, setup_webgpu};
 use crate::halo2curves::utils::cast_u8_to_u16;
 use wgpu::util::DeviceExt;
 
+
+pub const WORKGROUP_SIZE: usize = 64;
+pub const NUM_INVOCATIONS: usize = 1;
+pub const MSM_SIZE: usize = WORKGROUP_SIZE * NUM_INVOCATIONS;
+
 pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8]) -> Vec<u16> {
     let (device, queue) = setup_webgpu().await;
     let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -65,7 +70,7 @@ pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8
 
     let compute_pipeline_fn = |(entry_point, pipeline_layout): (String, PipelineLayout)| {
         device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("MSM Compute Pipeline (main)"),
+            label: Some("Compute Pipeline"),
             layout: Some(&pipeline_layout),
             module: &shader_module,
             entry_point: Some(&entry_point),
@@ -90,7 +95,10 @@ pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8
             pippenger_sum_buffer,
             msm_len_buffer,
         ],
-        vec!["main".to_string()], // TODO: add aggregate
+        vec![
+            ("main".to_string(), NUM_INVOCATIONS as u32),
+            ("aggregate".to_string(), 1),
+        ], 
         compute_pipeline_fn,
         readback_buffer.clone(),
         copy_results_to_encoder,

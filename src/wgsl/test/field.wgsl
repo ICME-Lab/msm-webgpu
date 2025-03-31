@@ -1,9 +1,9 @@
 @group(0) @binding(0)
-var<storage, read_write> a: ScalarField;
+var<storage, read_write> a: BaseField;
 @group(0) @binding(1)
-var<storage, read_write> b: ScalarField;
+var<storage, read_write> b: BaseField;
 @group(0) @binding(2)
-var<storage, read_write> result: ScalarField;
+var<storage, read_write> result: BaseField;
 
 @compute @workgroup_size(1)
 fn test_field_mul(

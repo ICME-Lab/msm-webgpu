@@ -23,7 +23,7 @@ pub fn load_shader_code_pallas() -> String {
     all.push_str(include_str!("./wgsl/pallas/field.wgsl"));
     all.push_str(include_str!("./wgsl/pallas/curve.wgsl"));
     all.push_str(include_str!("./wgsl/storage.wgsl"));
-    // all.push_str(include_str!("./wgsl/pallas/pippenger.wgsl"));
+    all.push_str(include_str!("./wgsl/pippenger.wgsl"));
     all.push_str(include_str!("./wgsl/main.wgsl"));
     all
 }
@@ -35,7 +35,7 @@ pub fn load_shader_code_bn254() -> String {
     all.push_str(include_str!("./wgsl/bn254/field.wgsl"));
     all.push_str(include_str!("./wgsl/bn254/curve.wgsl"));
     all.push_str(include_str!("./wgsl/storage.wgsl"));
-    // all.push_str(include_str!("./wgsl/bn254/pippenger.wgsl"));
+    all.push_str(include_str!("./wgsl/pippenger.wgsl"));
     all.push_str(include_str!("./wgsl/main.wgsl"));
     all
 }

@@ -3,13 +3,10 @@ use wgpu::{
 };
 pub mod msm;
 pub mod ops;
-
+pub mod pippenger;
 pub const LIMB_WIDTH: usize = 16;
 pub const BIGINT_SIZE: usize = 256;
 pub const NUM_LIMBS: usize = BIGINT_SIZE / LIMB_WIDTH;
-pub const WORKGROUP_SIZE: usize = 64;
-pub const NUM_INVOCATIONS: usize = 1;
-pub const MSM_SIZE: usize = WORKGROUP_SIZE * NUM_INVOCATIONS;
 
 pub async fn setup_webgpu() -> (Device, Queue) {
     let instance = wgpu::Instance::default();
@@ -55,7 +52,7 @@ pub async fn run_webgpu(
     device: &Device,
     queue: &Queue,
     buffers: Vec<Buffer>,
-    pipeline_entry_points: Vec<String>,
+    pipeline_entry_points: Vec<(String, u32)>,
     compute_pipeline: impl Fn((String, PipelineLayout)) -> ComputePipeline,
     readback_buffer: Buffer,
     copy_results_to_encoder: impl Fn(&mut CommandEncoder) -> (),
@@ -75,7 +72,7 @@ pub async fn run_webgpu(
     });
     let compute_pipelines = pipeline_entry_points
         .iter()
-        .map(|entry_point| compute_pipeline((entry_point.clone(), pipeline_layout.clone())))
+        .map(|(entry_point, workgroups)| (compute_pipeline((entry_point.clone(), pipeline_layout.clone())), *workgroups))
         .collect::<Vec<_>>();
 
     // Create the Bind Group
@@ -96,14 +93,14 @@ pub async fn run_webgpu(
         label: Some("MSM Encoder"),
     });
 
-    for (i, pipeline) in compute_pipelines.iter().enumerate() {
+    for (pipeline, workgroups) in compute_pipelines.iter() {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("Main compute pass"),
             timestamp_writes: None,
         });
         cpass.set_pipeline(&pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
-        cpass.dispatch_workgroups(NUM_INVOCATIONS as u32, 1, 1);
+        cpass.dispatch_workgroups(*workgroups, 1, 1);
     }
     // c) Copy GPU result buffer into readback buffer
     // encoder.copy_buffer_to_buffer(&result_buffer, 0, &readback_buffer, 0, result_buffer_size);

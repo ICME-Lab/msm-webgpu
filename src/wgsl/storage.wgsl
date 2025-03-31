@@ -1,5 +1,5 @@
 const WORKGROUP_SIZE = 64u;
-const NUM_INVOCATIONS = 1u; // 4096u;
+const NUM_INVOCATIONS = 1u;
 const MSM_SIZE = WORKGROUP_SIZE * NUM_INVOCATIONS;
 
 @group(0) @binding(0)

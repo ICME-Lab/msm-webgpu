@@ -2,7 +2,7 @@ use wgpu::util::DeviceExt;
 
 use crate::gpu::{setup_webgpu, run_webgpu};
 use crate::gpu::*;
-use crate::halo2curves::utils::cast_u8_to_u16;
+use crate::halo2curves::utils::{cast_u8_to_u16, cast_u8_to_u32};
 
 // ------------------------------------------------------------
 // Field operations
@@ -67,7 +67,7 @@ pub async fn field_op(wgsl_source: &str, a_bytes: &[u8], b_bytes: &[u8], op: &st
             scalar_b,
             result_buffer.clone(),
         ],
-        vec![op.to_string()], 
+        vec![(op.to_string(), 1)], 
         compute_pipeline_fn,
         readback_buffer.clone(),
         copy_results_to_encoder,
@@ -163,7 +163,7 @@ pub async fn point_op(wgsl_source: &str, a_bytes: &[u8], b_bytes: &[u8], op: &st
             point_b,
             result_buffer.clone(),
         ],
-        vec![op.to_string()], 
+        vec![(op.to_string(), 1)], 
         compute_pipeline_fn,
         readback_buffer.clone(),
         copy_results_to_encoder,
@@ -188,6 +188,10 @@ pub async fn point_add(wgsl_source: &str, a_bytes: &[u8], b_bytes: &[u8]) -> Vec
 
 pub async fn point_double(wgsl_source: &str, a_bytes: &[u8]) -> Vec<u16> {
     point_op(wgsl_source, a_bytes, a_bytes, "test_point_double").await
+}
+
+pub async fn point_identity(wgsl_source: &str, a_bytes: &[u8]) -> Vec<u16> {
+    point_op(wgsl_source, a_bytes, a_bytes, "test_point_identity").await
 }
 
 
@@ -257,7 +261,7 @@ pub async fn point_msm(wgsl_source: &str, point_bytes: Vec<&[u8]>, scalar_bytes:
             vec![result_buffer.clone()],
             vec![msm_len_buffer.clone()],
         ].concat(),
-        vec!["test_point_msm".to_string()], 
+        vec![("test_point_msm".to_string(), 1)], 
         compute_pipeline_fn,
         readback_buffer.clone(),
         copy_results_to_encoder,

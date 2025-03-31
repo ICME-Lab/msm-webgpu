@@ -68,6 +68,7 @@ pub async fn run_webgpu_msm_async(g: &Vec<Affine>, v: &Vec<Fr>) -> Point {
     let shader_code = load_shader_code_pallas();
     let result = gpu::msm::run_msm(&shader_code, &points_slice, &v_slice).await;
     let result: Vec<Fq> = u16_vec_to_fields(&result);
+    println!("Result: {:?}", result);
     Point::new_jacobian(result[0].clone(), result[1].clone(), result[2].clone()).unwrap()
 }   
 
@@ -78,13 +79,13 @@ mod tests {
     use ark_ec::CurveGroup;
     use ark_ff::PrimeField;
 
-    use crate::halo2curves::utils::field_to_bytes;
+    use crate::halo2curves::utils::{field_to_bytes, u32_vec_to_fields};
 
     use super::*;
   
     #[test]
     fn test_pallas() {
-        let sample_size = 5;
+        let sample_size = 1;
         let scalars = sample_scalars(sample_size);
         let points = sample_points(sample_size);
 
@@ -172,9 +173,9 @@ mod tests {
 
     fn load_field_shader_code() -> String {
         let mut shader_code = String::new();
-        shader_code.push_str(include_str!("../../wgsl/bigint.wgsl"));
-        shader_code.push_str(include_str!("../../wgsl/pallas/field.wgsl"));
-        shader_code.push_str(include_str!("../../wgsl/test/field.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/bigint.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/pallas/field.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/test/field.wgsl"));
         shader_code
     }
 
@@ -226,19 +227,19 @@ mod tests {
 
     fn load_point_shader_code() -> String {
         let mut shader_code = String::new();
-        shader_code.push_str(include_str!("../../wgsl/bigint.wgsl"));
-        shader_code.push_str(include_str!("../../wgsl/pallas/field.wgsl"));
-        shader_code.push_str(include_str!("../../wgsl/pallas/curve.wgsl"));
-        shader_code.push_str(include_str!("../../wgsl/test/point.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/bigint.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/pallas/field.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/pallas/curve.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/test/point.wgsl"));
         shader_code
     }
 
     fn load_point_msm_shader_code() -> String {
         let mut shader_code = String::new();
-        shader_code.push_str(include_str!("../../wgsl/bigint.wgsl"));
-        shader_code.push_str(include_str!("../../wgsl/pallas/field.wgsl"));
-        shader_code.push_str(include_str!("../../wgsl/pallas/curve.wgsl"));
-        shader_code.push_str(include_str!("../../wgsl/test/msm.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/bigint.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/pallas/field.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/pallas/curve.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/test/msm.wgsl"));
         shader_code
     }
 

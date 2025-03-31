@@ -77,23 +77,3 @@ fn jacobian_mul(p: JacobianPoint, k: ScalarField) -> JacobianPoint {
     return r;
 }
 
-// fn jacobian_mul(p: JacobianPoint, k: ScalarField) -> JacobianPoint {
-//     var r: JacobianPoint = JACOBIAN_IDENTITY;
-
-//     for (var i = N; i > 0u;) {
-//         i = i - 1u;
-//         var k_s = k.limbs[i];
-//         for (var j = W; j > 0u;) {
-//             j = j - 1u;
-
-//             r = jacobian_double(r);
-
-//             if (((k_s >> j) & 1u) == 1u) {
-//                 r = jacobian_add(r, p);
-//             }
-//         }
-//     }
-
-//     return r;
-
-// }
