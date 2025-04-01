@@ -22,8 +22,7 @@ const TOTAL_BUCKETS: usize = W * BUCKETS_PER_WINDOW;
 // s_i[j] - value of the j-th chunk of the i-th scalar
 // B[j, k] - accumulator bucket
 
-
-pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], buckets: &mut [G1], gidx: usize) -> G1 {
+pub fn emulate_bucket_accumulation(points: &[G1Affine], scalars: &[Fr], buckets: &mut [G1], gidx: usize)  {
     let base = gidx * POINTS_PER_INVOCATION;
     let mut points = points;
     let mut scalars = scalars;
@@ -36,7 +35,6 @@ pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], buckets: &mut [G1]
     }
     let scalars_and_points = scalars.iter().zip(points.iter()).collect::<Vec<_>>();
 
-    let mut windows = vec![G1::identity(); W];
 
     // Bucket accumulation
     for (scalar, point) in scalars_and_points {
@@ -48,6 +46,13 @@ pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], buckets: &mut [G1]
             }
         }
     }
+}
+
+pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], buckets: &mut [G1], gidx: usize) -> G1 {
+    emulate_bucket_accumulation(points, scalars, buckets, gidx);
+
+    let mut windows = vec![G1::identity(); W];
+
 
     // Bucket reduction
     for j in 0..W {

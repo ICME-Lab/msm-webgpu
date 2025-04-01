@@ -91,7 +91,7 @@ mod tests {
 
     use rand::Rng;
 
-    use crate::gpu::test::pippenger::{emulate_pippenger, emulate_pippenger_gpu};
+    use crate::gpu::test::pippenger::{emulate_bucket_accumulation, emulate_pippenger, emulate_pippenger_gpu};
     use crate::montgomery::utils::field_to_bytes_montgomery;
     use crate::montgomery::MontgomeryRepr;
 
@@ -220,6 +220,15 @@ mod tests {
         shader_code
     }
 
+    fn load_bucket_accumulation_shader_code() -> String {
+        let mut shader_code = String::new();
+        shader_code.push_str(include_str!("../wgsl/bigint.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/bn254/field.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/bn254/curve.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/test/bucket_accumulation.wgsl"));
+        shader_code
+    }
+
     #[test]
     fn test_field_to_bytes() {
         let field = Fq::random(&mut thread_rng());
@@ -244,6 +253,30 @@ mod tests {
         assert_eq!(result[1], num_invocations as u32);
     }
 
+    #[test]
+    fn test_bucket_accumulation() {
+        let sample_size = 64;
+        let points = sample_points(sample_size);
+        let scalars = sample_scalars(sample_size);
+        let points_bytes = points_to_bytes(&points);
+        let scalars_bytes = scalars_to_bytes(&scalars);
+        let shader_code = load_bucket_accumulation_shader_code();
+        let result = pollster::block_on(gpu::test::bucket_accumulation::run_bucket_accumulation(&shader_code, &points_bytes, &scalars_bytes));
+        let gpu_buckets_in_fields: Vec<Fq> = u16_vec_to_fields_montgomery(&result);
+        let gpu_buckets = gpu_buckets_in_fields.chunks_exact(3).map(|x| {
+            G1::new_jacobian(x[0].clone(), x[1].clone(), x[2].clone()).unwrap()
+        }).collect::<Vec<_>>();
+        println!("Buckets: {:?}", gpu_buckets.len());
+        let num_invocations = (points.len() + 64 - 1) / 64;
+        let mut emulated_buckets = vec![G1::identity(); 8192 * num_invocations];
+        emulate_bucket_accumulation(&points, &scalars, &mut emulated_buckets, 0);
+        println!("Emulated Buckets: {:?}", emulated_buckets.len());
+        for (gpu_bucket, emulated_bucket) in gpu_buckets.iter().zip(emulated_buckets.iter()) {
+            println!("GPU Bucket: {:?}", gpu_bucket);
+            println!("Emulated Bucket: {:?}", emulated_bucket);
+            assert_eq!(gpu_bucket, emulated_bucket);
+        }
+    }
 
     #[test]
     fn test_field_mul() {
@@ -259,7 +292,7 @@ mod tests {
         let result = pollster::block_on(gpu::test::ops::field_mul(&shader_code, &a_bytes, &b_bytes));
         let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
         assert_eq!(gpu_result[0], c);
-    }
+    } 
 
     #[test]
     fn test_field_add() {

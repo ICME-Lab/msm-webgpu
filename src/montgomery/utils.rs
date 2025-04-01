@@ -39,7 +39,7 @@ pub fn u16_vec_to_fields_montgomery<F: MontgomeryRepr>(u16_array: &[u16]) -> Vec
                 .iter()
                 .flat_map(|x| x.to_le_bytes())
                 .collect::<Vec<u8>>();
-            println!("bytes: {:?}", bytes);
+            // println!("bytes: {:?}", bytes);
             bytes_to_field_montgomery::<F>(&bytes)
         })
         .collect()

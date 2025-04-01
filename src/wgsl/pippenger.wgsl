@@ -35,8 +35,8 @@ fn bucket_accumulation_phase(gidx: u32) {
     for (var b = 0u; b < TotalBuckets; b = b + 1u) {
         buckets[gidx * TotalBuckets + b] = JACOBIAN_IDENTITY;
     }
+    let base = gidx * PointsPerInvocation;
     for (var i = 0u; i < PointsPerInvocation; i = i + 1u) {
-        let base = gidx * PointsPerInvocation;
         if (msm_len.val < base + i) {
             break;
         }

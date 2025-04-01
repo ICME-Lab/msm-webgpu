@@ -17,8 +17,6 @@ struct NumInvocations {
 var<uniform> num_invocations: NumInvocations;
 
 
-
-
 @compute @workgroup_size(1)
 fn test_constants(
     @builtin(global_invocation_id) global_id: vec3<u32>,
