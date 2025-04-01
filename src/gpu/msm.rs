@@ -5,10 +5,12 @@ use wgpu::util::DeviceExt;
 
 
 pub const WORKGROUP_SIZE: usize = 64;
-pub const NUM_INVOCATIONS: usize = 512;
-pub const MSM_SIZE: usize = WORKGROUP_SIZE * NUM_INVOCATIONS;
 
 pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8]) -> Vec<u16> {
+    let msm_len = scalars_bytes.len() / 64;
+    println!("msm_len: {:?}", msm_len);
+    let num_invocations = (msm_len + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
+    println!("num_invocations: {:?}", num_invocations);
     let (device, queue) = setup_webgpu().await;
     let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("MSM Shader"),
@@ -25,7 +27,7 @@ pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
     });
     // The result buffer must be large enough to hold final data
-    let result_buffer_size = (NUM_INVOCATIONS * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress;
+    let result_buffer_size = (4096 * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress;
     let result_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Result Buffer"),
         size: result_buffer_size,
@@ -37,16 +39,29 @@ pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8
 
     let buckets = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Buckets Buffer"),
-        size: (256 * NUM_INVOCATIONS * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress,
+        size: (64 * 4096 * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress,
+        // size: (32 * 256 * num_invocations * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress,
         usage: wgpu::BufferUsages::STORAGE,
         mapped_at_creation: false,
     });
 
-    let msm_len_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    let msm_len_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("MSM Length Buffer"),
-        contents: &((scalars_bytes.len() / 64) as u32).to_le_bytes(),
-        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        size: 4,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
     });
+
+    queue.write_buffer(&msm_len_buffer, 0, &(msm_len as u32).to_le_bytes());
+    let num_invocations_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Num Invocations Buffer"),
+        size: 4,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+
+    queue.write_buffer(&num_invocations_buffer, 0, &(num_invocations as u32).to_le_bytes());
+
 
     // Create a separate buffer for reading results back
     let readback_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -79,10 +94,13 @@ pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8
             scalars_buffer,
             result_buffer.clone(),
             buckets,
-            msm_len_buffer,
         ],
         vec![
-            ("main".to_string(), NUM_INVOCATIONS as u32),
+            msm_len_buffer,
+            num_invocations_buffer
+        ],
+        vec![
+            ("main".to_string(), num_invocations as u32),
             ("aggregate".to_string(), 1),
         ], 
         compute_pipeline_fn,

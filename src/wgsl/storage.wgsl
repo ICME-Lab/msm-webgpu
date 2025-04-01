@@ -1,6 +1,5 @@
 const WORKGROUP_SIZE = 64u;
-const NUM_INVOCATIONS = 512u;
-const MSM_SIZE = WORKGROUP_SIZE * NUM_INVOCATIONS;
+const NUM_INVOCATIONS = 4096u;
 
 @group(0) @binding(0)
 var<storage, read_write> points: array<JacobianPoint>;

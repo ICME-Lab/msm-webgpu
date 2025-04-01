@@ -5,7 +5,7 @@ const B = 256u;
 const ChunkSize = 8u;
 // Number of windows (B/C)
 const NumWindows = 32u;
-const BucketsPerWindow = 2u << ChunkSize; // 256
+const BucketsPerWindow = 1u << ChunkSize; // 256
 const TotalBuckets = BucketsPerWindow * NumWindows; // 256 * 32 = 8192
 const PointsPerInvocation = 64u;
 
@@ -15,9 +15,21 @@ const TWO_POW_C: BigInt256 = BigInt256(
 );
 
 @group(0) @binding(3)
-var<storage, read_write> buckets: array<JacobianPoint, 256u * 32u>;
+var<storage, read_write> buckets: array<JacobianPoint, NUM_INVOCATIONS * PointsPerInvocation>;
+
+struct MsmLen {
+    val: u32,
+}
+
 @group(0) @binding(4)
-var<storage, read_write> msm_len: u32;
+var<uniform> msm_len: MsmLen;
+
+struct NumInvocations {
+    val: u32,
+}
+
+@group(0) @binding(5)
+var<uniform> num_invocations: NumInvocations;
 
 // n - number of points/scalars
 // i - a point/scalar index, 1...n
@@ -26,37 +38,11 @@ var<storage, read_write> msm_len: u32;
 // s_i[j] - value of the j-th chunk of the i-th scalar
 // B[j, k] - accumulator bucket
 
-fn field_to_bytes(s: ScalarField) -> array<u32, 2 * N> {
-    // Declare a local array of 32 elements
-    var res: array<u32, 2 * N>;
-
-    for (var i = 0u; i < 32u; i = i + 1u) {
-       res[i] = 0u;
-    }
-
-    // For each 16-bit limb, split into two 8-bit bytes
-    for (var i: u32 = 0u; i < N; i = i + 1u) {
-        let limb: u32 = s.limbs[i];
-
-        // Low 8 bits
-        let low_byte:  u32 = limb & 0xFFu;
-
-        // Next 8 bits
-        let next_byte: u32 = (limb >> 8u) & 0xFFu;
-
-        // Store the two bytes in consecutive array slots
-        res[2u * i] = low_byte;
-        res[2u * i + 1u] = next_byte;
-    }
-
-    return res;
-}
-
 // There will be NUM_INVOCATIONS invocations (workgroups) of this function, each with a different gidx
 fn pippenger(gidx: u32) -> JacobianPoint {
     let base = gidx * PointsPerInvocation;
-    for (var b = 0u; b < PointsPerInvocation; b = b + 1u) {
-        buckets[base + b] = JACOBIAN_IDENTITY;
+    for (var b = 0u; b < TotalBuckets; b = b + 1u) {
+        buckets[gidx * TotalBuckets + b] = JACOBIAN_IDENTITY;
     }
 
     var windows: array<JacobianPoint, NumWindows>; 
@@ -65,15 +51,18 @@ fn pippenger(gidx: u32) -> JacobianPoint {
     }
 
     // Bucket accumulation
-    for (var i = 0u; i < msm_len; i = i + 1u) {
+    for (var i = 0u; i < PointsPerInvocation; i = i + 1u) {
+        if (msm_len.val < base + i) {
+            break;
+        }
         var scalar = scalars[base + i];
         var u8_scalar = field_to_bytes(scalar);
-
+    
         var point = points[base + i];
         for (var j = 0u; j < NumWindows; j = j + 1u) {
             var s_j = u8_scalar[j];
             if (s_j != 0u) {
-                let bucket_index = j * BucketsPerWindow + s_j;
+                let bucket_index = gidx * TotalBuckets + j * BucketsPerWindow + s_j;
                 buckets[bucket_index] = jacobian_add(buckets[bucket_index], point);
             }
         }
@@ -85,7 +74,8 @@ fn pippenger(gidx: u32) -> JacobianPoint {
         var sum_of_sums = JACOBIAN_IDENTITY;
         var k = BucketsPerWindow - 1u;
         loop {
-            sum = jacobian_add(sum, buckets[j * BucketsPerWindow + k]);
+            let bucket_index = gidx * TotalBuckets + j * BucketsPerWindow + k;
+            sum = jacobian_add(sum, buckets[bucket_index]);
             sum_of_sums = jacobian_add(sum_of_sums, sum);
 
             if (k == 1u) {
@@ -98,13 +88,19 @@ fn pippenger(gidx: u32) -> JacobianPoint {
     }
 
     var result: JacobianPoint = JACOBIAN_IDENTITY;
-    for (var j = NumWindows - 1; j >= 0; j = j - 1) {
+
+    var j = NumWindows - 1u;
+    loop {
         var tmp = jacobian_mul(result, TWO_POW_C);
         result = jacobian_add(
             windows[j],
             tmp
         );
-    } 
+        if (j == 0u) {
+            break;
+        }
+        j = j - 1u;
+    }
 
     return result;
 }

@@ -81,15 +81,13 @@ pub async fn run_webgpu_msm_async(g: &Vec<G1Affine>, v: &Vec<Fr>) -> G1 {
     let shader_code = load_shader_code_bn254();
     let result = gpu::msm::run_msm(&shader_code, &points_slice, &v_slice).await;
     let result: Vec<Fq> = u16_vec_to_fields_montgomery(&result);
-    println!("Result: {:?}", result);
+    println!("Result: {:?}", (result[0], result[1], result[2], result[3], result[4], result[5], result[6], result[7]));
     G1::new_jacobian(result[0].clone(), result[1].clone(), result[2].clone()).unwrap()
 }
 
 #[cfg(test)]
 mod tests {
     use std::time::Instant;
-
-    use group::cofactor::CofactorCurveAffine;
 
     use crate::gpu::pippenger::{emulate_pippenger, emulate_pippenger_gpu};
     use crate::montgomery::MontgomeryRepr;
@@ -100,9 +98,8 @@ mod tests {
 
     #[test]
     fn test_bn256() {
-        let sample_size = 1;
-        // let scalars = sample_scalars(sample_size);
-        let scalars = vec![Fr::from(1); sample_size];
+        let sample_size = 64;
+        let scalars = sample_scalars(sample_size);
         let points = sample_points(sample_size);
 
         let now = Instant::now();
@@ -119,15 +116,10 @@ mod tests {
     }
 
     #[test]
-    fn test_pippenger() {
-        let sample_size = 1;
-        let mut scalars = sample_scalars(sample_size);
-        // let mut scalars = vec![Fr::from(1); sample_size];
-        let mut points = sample_points(sample_size);
-        // let mut points = vec![G1Affine::generator(); sample_size];
-        println!("Points: {:?}", points);
-        points.resize(512, G1Affine::identity());
-        scalars.resize(512, Fr::from(1));
+    fn test_pippenger_emul() {
+        let sample_size = 1000;
+        let scalars = sample_scalars(sample_size);
+        let points = sample_points(sample_size);
         let now = Instant::now();
         let fast = fast_msm(&points, &scalars);
         println!("Fast Elapsed: {:.2?}", now.elapsed());
@@ -137,6 +129,7 @@ mod tests {
 
         assert_eq!(result, fast);
     }
+
 
     #[test]
     fn test_fields_to_u16_vec() {
@@ -205,6 +198,25 @@ mod tests {
         shader_code.push_str(include_str!("../wgsl/bn254/curve.wgsl"));
         shader_code.push_str(include_str!("../wgsl/test/msm.wgsl"));
         shader_code
+    }
+
+    fn load_field_to_bytes_shader_code() -> String {
+        let mut shader_code = String::new();
+        shader_code.push_str(include_str!("../wgsl/bigint.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/bn254/field.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/test/field_to_bytes.wgsl"));
+        shader_code
+    }
+
+    #[test]
+    fn test_field_to_bytes() {
+        let field = Fq::random(&mut thread_rng());
+        let bytes = fields_to_bytes_montgomery(&vec![field]);
+        // assert_eq!(bytes.len(), 32);
+        let shader_code = load_field_to_bytes_shader_code();
+        let gpu_bytes = pollster::block_on(gpu::ops::field_to_bytes(&shader_code, &bytes));
+        println!("GPU Bytes: {:?}", gpu_bytes);
+        assert_eq!(bytes, gpu_bytes);
     }
 
     #[test]

@@ -67,6 +67,7 @@ pub async fn field_op(wgsl_source: &str, a_bytes: &[u8], b_bytes: &[u8], op: &st
             scalar_b,
             result_buffer.clone(),
         ],
+        vec![],
         vec![(op.to_string(), 1)], 
         compute_pipeline_fn,
         readback_buffer.clone(),
@@ -163,6 +164,7 @@ pub async fn point_op(wgsl_source: &str, a_bytes: &[u8], b_bytes: &[u8], op: &st
             point_b,
             result_buffer.clone(),
         ],
+        vec![],
         vec![(op.to_string(), 1)], 
         compute_pipeline_fn,
         readback_buffer.clone(),
@@ -261,6 +263,7 @@ pub async fn point_msm(wgsl_source: &str, point_bytes: Vec<&[u8]>, scalar_bytes:
             vec![result_buffer.clone()],
             vec![msm_len_buffer.clone()],
         ].concat(),
+        vec![],
         vec![("test_point_msm".to_string(), 1)], 
         compute_pipeline_fn,
         readback_buffer.clone(),
@@ -278,4 +281,81 @@ pub async fn point_msm(wgsl_source: &str, point_bytes: Vec<&[u8]>, scalar_bytes:
     result.unmap();
 
     output_u16
+}
+
+
+// ------------------------------------------------------------
+
+
+pub async fn field_to_bytes(wgsl_source: &str, a_bytes: &[u8]) -> Vec<u8> {
+    let (device, queue) = setup_webgpu().await;
+    let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Field Op Shader"),
+        source: wgpu::ShaderSource::Wgsl(wgsl_source.into()),
+    });
+
+    let scalar_a = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Scalar a Buffer"),
+        contents: a_bytes,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+    });
+
+
+    let result_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Result Buffer"),
+        size: (128) as wgpu::BufferAddress,
+        usage: wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_DST
+            | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });        
+
+    let readback_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Readback Buffer"),
+        size: (128) as wgpu::BufferAddress,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+
+    let compute_pipeline_fn = |(entry_point, pipeline_layout): (String, PipelineLayout)| {
+        device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Field Mul Compute Pipeline (main)"),
+            layout: Some(&pipeline_layout),
+            module: &shader_module,
+            entry_point: Some(&entry_point),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        })
+    };
+
+    let copy_results_to_encoder = |encoder: &mut CommandEncoder| {
+        encoder.copy_buffer_to_buffer(&result_buffer, 0, &readback_buffer, 0,  (128) as wgpu::BufferAddress);
+    };
+
+    let result = run_webgpu(
+        &device,
+        &queue,
+        vec![
+            scalar_a,
+            result_buffer.clone(),
+        ],
+        vec![],
+        vec![("test_field_to_bytes".to_string(), 1)], 
+        compute_pipeline_fn,
+        readback_buffer.clone(),
+        copy_results_to_encoder,
+    )
+    .await;
+
+    let buffer_slice = result.slice(..);
+    let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
+    device.poll(wgpu::Maintain::Wait);
+    let data = buffer_slice.get_mapped_range();
+
+    let output = data.to_vec();
+    drop(data);
+    result.unmap();
+
+    output
 }

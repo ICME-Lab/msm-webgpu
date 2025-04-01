@@ -77,34 +77,33 @@ pub fn emulate_pippenger_gpu(points: &[G1Affine], scalars: &[Fr]) -> G1 {
 
     let num_invocations = (points.len() + POINTS_PER_INVOCATION - 1) / POINTS_PER_INVOCATION;
     println!("num_invocations: {:?}", num_invocations);
-    let mut partial_results = vec![G1::identity(); num_invocations];
+    let mut result = vec![G1::identity(); num_invocations];
     let mut buckets = vec![G1::identity(); TOTAL_BUCKETS * num_invocations];
 
     // === Simulate: @compute @workgroup_size(1) main() ===
     for gidx in 0..num_invocations {
-        partial_results[gidx] = emulate_pippenger(points, scalars, &mut buckets, gidx);
+        result[gidx] = emulate_pippenger(points, scalars, &mut buckets, gidx);
     }
 
 
     // === Simulate: @compute @workgroup_size(256) aggregate() ===
-    let mut reduced = partial_results.clone();
     let split = num_invocations / 256;
 
     // Step 1: Each thread (idx ∈ 0..255) reduces its vertical slice
     for lidx in 0..256 {
         for j in 0..split {
-            reduced[lidx] += partial_results[lidx + j * 256];
+            result[lidx] = result[lidx] + result[lidx + j * 256];
         }
     }
 
     // Step 2: Binary tree reduction across threads
-    while reduced.len() > 1 {
-        let half = reduced.len() / 2;
+    while result.len() > 1 {
+        let half = result.len() / 2;
         for i in 0..half {
-            reduced[i] = reduced[i] + reduced[i + half];
+            result[i] = result[i] + result[i + half];
         }
-        reduced.truncate(half);
+        result.truncate(half);
     }
 
-    reduced[0] // Final result
+    result[0] // Final result
 }

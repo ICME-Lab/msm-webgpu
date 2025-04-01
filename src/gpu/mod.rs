@@ -51,18 +51,26 @@ pub async fn setup_webgpu() -> (Device, Queue) {
 pub async fn run_webgpu(
     device: &Device,
     queue: &Queue,
-    buffers: Vec<Buffer>,
+    storage_buffers: Vec<Buffer>,
+    uniform_buffers: Vec<Buffer>,
     pipeline_entry_points: Vec<(String, u32)>,
     compute_pipeline: impl Fn((String, PipelineLayout)) -> ComputePipeline,
     readback_buffer: Buffer,
     copy_results_to_encoder: impl Fn(&mut CommandEncoder) -> (),
 ) -> Buffer {
+
+    let storage_buffer_entries =(0..storage_buffers.len())
+        .map(|i| default_storage_buffer_entry(i as u32))
+        .collect::<Vec<_>>();
+    let uniform_buffer_entries =(0..uniform_buffers.len())
+        .map(|i| default_uniform_buffer_entry((i + storage_buffers.len()) as u32))
+        .collect::<Vec<_>>();
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("Bind Group Layout"),
-        entries: &(0..buffers.len())
-            .map(|i| default_bind_group_layout_entry(i as u32))
-            .collect::<Vec<_>>(),
+        entries: &vec![storage_buffer_entries, uniform_buffer_entries].concat(),
     });
+
+    let buffers = vec![storage_buffers, uniform_buffers].concat();
 
     // Create the pipeline layout and compute pipelines (`main` and `aggregate`)
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -132,12 +140,24 @@ pub fn map_buffer_async(
     }
 }
 
-pub fn default_bind_group_layout_entry(idx: u32) -> BindGroupLayoutEntry {
+pub fn default_storage_buffer_entry(idx: u32) -> BindGroupLayoutEntry {
     BindGroupLayoutEntry {
         binding: idx,
         visibility: wgpu::ShaderStages::COMPUTE,
         ty: wgpu::BindingType::Buffer {
             ty: wgpu::BufferBindingType::Storage { read_only: false },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    }
+}
+pub fn default_uniform_buffer_entry(idx: u32) -> BindGroupLayoutEntry {
+    BindGroupLayoutEntry {
+        binding: idx,
+        visibility: wgpu::ShaderStages::COMPUTE,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Uniform,
             has_dynamic_offset: false,
             min_binding_size: None,
         },
