@@ -92,6 +92,7 @@ mod tests {
     use rand::Rng;
 
     use crate::gpu::test::pippenger::{emulate_pippenger, emulate_pippenger_gpu};
+    use crate::montgomery::utils::field_to_bytes_montgomery;
     use crate::montgomery::MontgomeryRepr;
 
     use crate::halo2curves::utils::{cast_u8_to_u16, cast_u8_to_u32, u32_vec_to_fields};
@@ -223,10 +224,10 @@ mod tests {
     fn test_field_to_bytes() {
         let field = Fq::random(&mut thread_rng());
         let bytes = fields_to_bytes_montgomery(&vec![field]);
-        // assert_eq!(bytes.len(), 32);
         let shader_code = load_field_to_bytes_shader_code();
         let gpu_bytes = pollster::block_on(gpu::test::ops::field_to_bytes(&shader_code, &bytes));
-        println!("GPU Bytes: {:?}", gpu_bytes);
+        let bytes = field_to_bytes_montgomery(field);
+        let gpu_bytes = cast_u8_to_u32(&gpu_bytes).iter().map(|x| *x as u8).collect::<Vec<_>>();
         assert_eq!(bytes, gpu_bytes);
     }
 
