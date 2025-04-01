@@ -24,13 +24,19 @@ const TOTAL_BUCKETS: usize = W * BUCKETS_PER_WINDOW;
 // B[j, k] - accumulator bucket
 
 
-pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], gidx: usize) -> G1 {
+pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], buckets: &mut [G1], gidx: usize) -> G1 {
     let base = gidx * POINTS_PER_INVOCATION;
-    let points = &points[base..base + POINTS_PER_INVOCATION];
-    let scalars = &scalars[base..base + POINTS_PER_INVOCATION];
+    let mut points = points;
+    let mut scalars = scalars;
+    if points.len() < base + POINTS_PER_INVOCATION {
+        points = &points[base..points.len()];
+        scalars = &scalars[base..scalars.len()];
+    } else {
+        points = &points[base..base + POINTS_PER_INVOCATION];
+        scalars = &scalars[base..base + POINTS_PER_INVOCATION];
+    }
     let scalars_and_points = scalars.iter().zip(points.iter()).collect::<Vec<_>>();
 
-    let mut buckets = vec![G1::identity(); TOTAL_BUCKETS];
     let mut windows = vec![G1::identity(); W];
 
     // Bucket accumulation
@@ -39,7 +45,7 @@ pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], gidx: usize) -> G1
         for j in 0..W {
             let s_j = u8_scalar[j];
             if s_j != 0 {
-                buckets[j * BUCKETS_PER_WINDOW + s_j as usize] += point;
+                buckets[gidx * TOTAL_BUCKETS + j * BUCKETS_PER_WINDOW + s_j as usize] += point;
             }
         }
     }
@@ -49,7 +55,7 @@ pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], gidx: usize) -> G1
         let mut sum = G1::identity();
         let mut sum_of_sums = G1::identity();
         for k in (1..BUCKETS_PER_WINDOW).rev() {
-            sum += buckets[j * BUCKETS_PER_WINDOW + k];
+            sum += buckets[gidx * TOTAL_BUCKETS + j * BUCKETS_PER_WINDOW + k];
             sum_of_sums += sum;
         }
         windows[j] = sum_of_sums;
@@ -68,15 +74,15 @@ pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], gidx: usize) -> G1
 
 pub fn emulate_pippenger_gpu(points: &[G1Affine], scalars: &[Fr]) -> G1 {
     assert_eq!(points.len(), scalars.len());
-    assert_eq!(points.len() % POINTS_PER_INVOCATION, 0);
 
-    let num_invocations = points.len() / POINTS_PER_INVOCATION;
+    let num_invocations = (points.len() + POINTS_PER_INVOCATION - 1) / POINTS_PER_INVOCATION;
     println!("num_invocations: {:?}", num_invocations);
     let mut partial_results = vec![G1::identity(); num_invocations];
+    let mut buckets = vec![G1::identity(); TOTAL_BUCKETS * num_invocations];
 
     // === Simulate: @compute @workgroup_size(1) main() ===
     for gidx in 0..num_invocations {
-        partial_results[gidx] = emulate_pippenger(points, scalars, gidx);
+        partial_results[gidx] = emulate_pippenger(points, scalars, &mut buckets, gidx);
     }
 
 
