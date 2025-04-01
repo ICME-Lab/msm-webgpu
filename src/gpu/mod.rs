@@ -2,8 +2,7 @@ use wgpu::{
     Adapter, BindGroupLayoutEntry, Buffer, BufferAsyncError, BufferSlice, BufferView, CommandEncoder, ComputePipeline, Device, Instance, MapMode, PipelineLayout, Queue
 };
 pub mod msm;
-pub mod ops;
-pub mod pippenger;
+pub mod test;
 pub const LIMB_WIDTH: usize = 16;
 pub const BIGINT_SIZE: usize = 256;
 pub const NUM_LIMBS: usize = BIGINT_SIZE / LIMB_WIDTH;
@@ -65,6 +64,7 @@ pub async fn run_webgpu(
     let uniform_buffer_entries =(0..uniform_buffers.len())
         .map(|i| default_uniform_buffer_entry((i + storage_buffers.len()) as u32))
         .collect::<Vec<_>>();
+
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("Bind Group Layout"),
         entries: &vec![storage_buffer_entries, uniform_buffer_entries].concat(),

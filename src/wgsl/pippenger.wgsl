@@ -31,27 +31,12 @@ struct NumInvocations {
 @group(0) @binding(5)
 var<uniform> num_invocations: NumInvocations;
 
-// n - number of points/scalars
-// i - a point/scalar index, 1...n
-// j - a window index, 0...W-1
-// k - a bucket index, 0...2^C - 1
-// s_i[j] - value of the j-th chunk of the i-th scalar
-// B[j, k] - accumulator bucket
-
-// There will be NUM_INVOCATIONS invocations (workgroups) of this function, each with a different gidx
-fn pippenger(gidx: u32) -> JacobianPoint {
-    let base = gidx * PointsPerInvocation;
+fn bucket_accumulation_phase(gidx: u32) {
     for (var b = 0u; b < TotalBuckets; b = b + 1u) {
         buckets[gidx * TotalBuckets + b] = JACOBIAN_IDENTITY;
     }
-
-    var windows: array<JacobianPoint, NumWindows>; 
-    for (var j: u32 = 0u; j < NumWindows; j = j + 1u) {
-        windows[j] = JACOBIAN_IDENTITY;
-    }
-
-    // Bucket accumulation
     for (var i = 0u; i < PointsPerInvocation; i = i + 1u) {
+        let base = gidx * PointsPerInvocation;
         if (msm_len.val < base + i) {
             break;
         }
@@ -67,6 +52,24 @@ fn pippenger(gidx: u32) -> JacobianPoint {
             }
         }
     }
+}
+
+// n - number of points/scalars
+// i - a point/scalar index, 1...n
+// j - a window index, 0...W-1
+// k - a bucket index, 0...2^C - 1
+// s_i[j] - value of the j-th chunk of the i-th scalar
+// B[j, k] - accumulator bucket
+
+// There will be NUM_INVOCATIONS invocations (workgroups) of this function, each with a different gidx
+fn pippenger(gidx: u32) -> JacobianPoint {
+    var windows: array<JacobianPoint, NumWindows>; 
+    for (var j: u32 = 0u; j < NumWindows; j = j + 1u) {
+        windows[j] = JACOBIAN_IDENTITY;
+    }
+
+    // Bucket accumulation
+    bucket_accumulation_phase(gidx);
 
     // Bucket reduction
     for (var j=0u; j < NumWindows; j = j+1u) {

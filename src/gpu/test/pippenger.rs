@@ -1,8 +1,7 @@
 use halo2curves::bn256::{G1Affine, G1, Fr};
 use group::{Curve, Group};
-use ff::{Field, PrimeField, PrimeFieldBits};
 
-use crate::halo2curves::utils::{field_to_bytes, field_to_u16_vec};
+use crate::halo2curves::utils::field_to_bytes;
 
 const POINTS_PER_INVOCATION: usize = 64;
 

@@ -81,7 +81,7 @@ pub async fn run_webgpu_msm_async(g: &Vec<G1Affine>, v: &Vec<Fr>) -> G1 {
     let shader_code = load_shader_code_bn254();
     let result = gpu::msm::run_msm(&shader_code, &points_slice, &v_slice).await;
     let result: Vec<Fq> = u16_vec_to_fields_montgomery(&result);
-    println!("Result: {:?}", (result[0], result[1], result[2], result[3], result[4], result[5], result[6], result[7]));
+    println!("Result: {:?}", (result[0], result[1], result[2]));
     G1::new_jacobian(result[0].clone(), result[1].clone(), result[2].clone()).unwrap()
 }
 
@@ -89,7 +89,9 @@ pub async fn run_webgpu_msm_async(g: &Vec<G1Affine>, v: &Vec<Fr>) -> G1 {
 mod tests {
     use std::time::Instant;
 
-    use crate::gpu::pippenger::{emulate_pippenger, emulate_pippenger_gpu};
+    use rand::Rng;
+
+    use crate::gpu::test::pippenger::{emulate_pippenger, emulate_pippenger_gpu};
     use crate::montgomery::MontgomeryRepr;
 
     use crate::halo2curves::utils::{cast_u8_to_u16, cast_u8_to_u32, u32_vec_to_fields};
@@ -129,6 +131,7 @@ mod tests {
 
         assert_eq!(result, fast);
     }
+
 
 
     #[test]
@@ -208,16 +211,38 @@ mod tests {
         shader_code
     }
 
+    fn load_constants_shader_code() -> String {
+        let mut shader_code = String::new();
+        shader_code.push_str(include_str!("../wgsl/bigint.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/bn254/field.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/test/constants.wgsl"));
+        shader_code
+    }
+
     #[test]
     fn test_field_to_bytes() {
         let field = Fq::random(&mut thread_rng());
         let bytes = fields_to_bytes_montgomery(&vec![field]);
         // assert_eq!(bytes.len(), 32);
         let shader_code = load_field_to_bytes_shader_code();
-        let gpu_bytes = pollster::block_on(gpu::ops::field_to_bytes(&shader_code, &bytes));
+        let gpu_bytes = pollster::block_on(gpu::test::ops::field_to_bytes(&shader_code, &bytes));
         println!("GPU Bytes: {:?}", gpu_bytes);
         assert_eq!(bytes, gpu_bytes);
     }
+
+    #[test]
+    fn test_constants() {
+        let random_size = thread_rng().gen_range(1..1000);
+        let fields = sample_scalars(random_size);
+        let bytes = scalars_to_bytes(&fields);
+        let shader_code = load_constants_shader_code();
+        let result = pollster::block_on(gpu::test::constants::run_constants(&shader_code, &bytes));
+        println!("Result: {:?}", result);
+        assert_eq!(result[0], fields.len() as u32);
+        let num_invocations = (fields.len() + 64 - 1) / 64;
+        assert_eq!(result[1], num_invocations as u32);
+    }
+
 
     #[test]
     fn test_field_mul() {
@@ -230,7 +255,7 @@ mod tests {
 
         let shader_code = load_field_shader_code();
 
-        let result = pollster::block_on(gpu::ops::field_mul(&shader_code, &a_bytes, &b_bytes));
+        let result = pollster::block_on(gpu::test::ops::field_mul(&shader_code, &a_bytes, &b_bytes));
         let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
         assert_eq!(gpu_result[0], c);
     }
@@ -245,7 +270,7 @@ mod tests {
         let b_bytes = fields_to_bytes_montgomery(&vec![b]);
 
         let shader_code = load_field_shader_code();
-        let result = pollster::block_on(gpu::ops::field_add(&shader_code, &a_bytes, &b_bytes));
+        let result = pollster::block_on(gpu::test::ops::field_add(&shader_code, &a_bytes, &b_bytes));
         let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
         assert_eq!(gpu_result[0], c);
     }
@@ -260,7 +285,7 @@ mod tests {
         let b_bytes = fields_to_bytes_montgomery(&vec![b]);
 
         let shader_code = load_field_shader_code();
-        let result = pollster::block_on(gpu::ops::field_sub(&shader_code, &a_bytes, &b_bytes));
+        let result = pollster::block_on(gpu::test::ops::field_sub(&shader_code, &a_bytes, &b_bytes));
         let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
         assert_eq!(gpu_result[0], c);
     }
@@ -275,7 +300,7 @@ mod tests {
         let b_bytes = points_to_bytes(&vec![b]);
 
         let shader_code = load_point_shader_code();
-        let result = pollster::block_on(gpu::ops::point_add(&shader_code, &a_bytes, &b_bytes));
+        let result = pollster::block_on(gpu::test::ops::point_add(&shader_code, &a_bytes, &b_bytes));
         let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
         let point_result = G1::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
         assert_eq!(point_result, c);
@@ -289,7 +314,7 @@ mod tests {
         let a_bytes = points_to_bytes(&vec![a]);
 
         let shader_code = load_point_shader_code();
-        let result = pollster::block_on(gpu::ops::point_double(&shader_code, &a_bytes));
+        let result = pollster::block_on(gpu::test::ops::point_double(&shader_code, &a_bytes));
         let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
         let point_result = G1::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
         assert_eq!(point_result, c);
@@ -300,7 +325,7 @@ mod tests {
         let a = G1Affine::random(&mut thread_rng());
         let a_bytes = points_to_bytes(&vec![a]);
         let shader_code = load_point_shader_code();
-        let result = pollster::block_on(gpu::ops::point_identity(&shader_code, &a_bytes));
+        let result = pollster::block_on(gpu::test::ops::point_identity(&shader_code, &a_bytes));
         let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
         let point_result = G1::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
         assert_eq!(point_result.to_affine(), a);
@@ -316,7 +341,7 @@ mod tests {
         let s_bytes = scalars_to_bytes(&vec![s]);
 
         let shader_code = load_point_msm_shader_code();
-        let result = pollster::block_on(gpu::ops::point_msm(&shader_code, vec![&p_bytes], vec![&s_bytes]));
+        let result = pollster::block_on(gpu::test::ops::point_msm(&shader_code, vec![&p_bytes], vec![&s_bytes]));
         let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
         let point_result = G1::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
         assert_eq!(point_result, c);
