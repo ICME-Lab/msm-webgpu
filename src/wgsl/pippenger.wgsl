@@ -14,23 +14,6 @@ const TWO_POW_C: BigInt256 = BigInt256(
     array(256u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u)
 );
 
-@group(0) @binding(3)
-var<storage, read_write> buckets: array<JacobianPoint, NUM_INVOCATIONS * PointsPerInvocation>;
-
-struct MsmLen {
-    val: u32,
-}
-
-@group(0) @binding(4)
-var<uniform> msm_len: MsmLen;
-
-struct NumInvocations {
-    val: u32,
-}
-
-@group(0) @binding(5)
-var<uniform> num_invocations: NumInvocations;
-
 fn bucket_accumulation_phase(gidx: u32) {
     for (var b = 0u; b < TotalBuckets; b = b + 1u) {
         buckets[gidx * TotalBuckets + b] = JACOBIAN_IDENTITY;

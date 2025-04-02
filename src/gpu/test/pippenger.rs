@@ -42,7 +42,8 @@ pub fn emulate_bucket_accumulation(points: &[G1Affine], scalars: &[Fr], buckets:
         for j in 0..W {
             let s_j = u8_scalar[j];
             if s_j != 0 {
-                buckets[gidx * TOTAL_BUCKETS + j * BUCKETS_PER_WINDOW + s_j as usize] += point;
+                let bucket_index = gidx * TOTAL_BUCKETS + j * BUCKETS_PER_WINDOW + s_j as usize;
+                buckets[bucket_index] += point;
             }
         }
     }

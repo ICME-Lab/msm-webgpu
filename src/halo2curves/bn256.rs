@@ -225,6 +225,7 @@ mod tests {
         shader_code.push_str(include_str!("../wgsl/bigint.wgsl"));
         shader_code.push_str(include_str!("../wgsl/bn254/field.wgsl"));
         shader_code.push_str(include_str!("../wgsl/bn254/curve.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/pippenger.wgsl"));
         shader_code.push_str(include_str!("../wgsl/test/bucket_accumulation.wgsl"));
         shader_code
     }
@@ -266,12 +267,12 @@ mod tests {
         let gpu_buckets = gpu_buckets_in_fields.chunks_exact(3).map(|x| {
             G1::new_jacobian(x[0].clone(), x[1].clone(), x[2].clone()).unwrap()
         }).collect::<Vec<_>>();
-        println!("Buckets: {:?}", gpu_buckets.len());
         let num_invocations = (points.len() + 64 - 1) / 64;
-        let mut emulated_buckets = vec![G1::identity(); 8192 * num_invocations];
+        let total_buckets = 8192;
+        let mut emulated_buckets = vec![G1::identity(); total_buckets * num_invocations];
         emulate_bucket_accumulation(&points, &scalars, &mut emulated_buckets, 0);
-        println!("Emulated Buckets: {:?}", emulated_buckets.len());
-        for (gpu_bucket, emulated_bucket) in gpu_buckets.iter().zip(emulated_buckets.iter()) {
+        for (i, (gpu_bucket, emulated_bucket)) in gpu_buckets.iter().zip(emulated_buckets.iter()).enumerate() {
+            println!("Index: {:?}", i);
             println!("GPU Bucket: {:?}", gpu_bucket);
             println!("Emulated Bucket: {:?}", emulated_bucket);
             assert_eq!(gpu_bucket, emulated_bucket);
