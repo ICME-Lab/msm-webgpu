@@ -91,7 +91,7 @@ mod tests {
 
     use rand::Rng;
 
-    use crate::gpu::test::pippenger::{emulate_bucket_accumulation, emulate_pippenger, emulate_pippenger_gpu};
+    use crate::gpu::test::pippenger::{emulate_bucket_accumulation, emulate_bucket_reduction, emulate_pippenger, emulate_pippenger_gpu};
     use crate::montgomery::utils::field_to_bytes_montgomery;
     use crate::montgomery::MontgomeryRepr;
 
@@ -220,13 +220,13 @@ mod tests {
         shader_code
     }
 
-    fn load_bucket_accumulation_shader_code() -> String {
+    fn load_pippenger_phases_shader_code() -> String {
         let mut shader_code = String::new();
         shader_code.push_str(include_str!("../wgsl/bigint.wgsl"));
         shader_code.push_str(include_str!("../wgsl/bn254/field.wgsl"));
         shader_code.push_str(include_str!("../wgsl/bn254/curve.wgsl"));
         shader_code.push_str(include_str!("../wgsl/pippenger.wgsl"));
-        shader_code.push_str(include_str!("../wgsl/test/bucket_accumulation.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/test/pippenger_phases.wgsl"));
         shader_code
     }
 
@@ -256,13 +256,13 @@ mod tests {
 
     #[test]
     fn test_bucket_accumulation() {
-        let sample_size = 64;
+        let sample_size = 1024;
         let points = sample_points(sample_size);
         let scalars = sample_scalars(sample_size);
         let points_bytes = points_to_bytes(&points);
         let scalars_bytes = scalars_to_bytes(&scalars);
-        let shader_code = load_bucket_accumulation_shader_code();
-        let result = pollster::block_on(gpu::test::bucket_accumulation::run_bucket_accumulation(&shader_code, &points_bytes, &scalars_bytes));
+        let shader_code = load_pippenger_phases_shader_code();
+        let result = pollster::block_on(gpu::test::pippenger_phases::run_bucket_accumulation(&shader_code, &points_bytes, &scalars_bytes));
         let gpu_buckets_in_fields: Vec<Fq> = u16_vec_to_fields_montgomery(&result);
         let gpu_buckets = gpu_buckets_in_fields.chunks_exact(3).map(|x| {
             G1::new_jacobian(x[0].clone(), x[1].clone(), x[2].clone()).unwrap()
@@ -270,14 +270,55 @@ mod tests {
         let num_invocations = (points.len() + 64 - 1) / 64;
         let total_buckets = 8192;
         let mut emulated_buckets = vec![G1::identity(); total_buckets * num_invocations];
-        emulate_bucket_accumulation(&points, &scalars, &mut emulated_buckets, 0);
+        for i in 0..num_invocations {
+            emulate_bucket_accumulation(&points, &scalars, &mut emulated_buckets, i);
+        }
         for (i, (gpu_bucket, emulated_bucket)) in gpu_buckets.iter().zip(emulated_buckets.iter()).enumerate() {
-            println!("Index: {:?}", i);
-            println!("GPU Bucket: {:?}", gpu_bucket);
-            println!("Emulated Bucket: {:?}", emulated_bucket);
-            assert_eq!(gpu_bucket, emulated_bucket);
+            if gpu_bucket.is_identity().unwrap_u8() == 0 || emulated_bucket.is_identity().unwrap_u8() == 0 {
+                println!("Index: {:?}", i);
+                println!("GPU Bucket: {:?}", gpu_bucket);
+                println!("Emulated Bucket: {:?}", emulated_bucket);
+                assert_eq!(gpu_bucket, emulated_bucket);
+            }
         }
     }
+
+    #[test]
+    fn test_bucket_reduction() {
+        let sample_size = 64;
+        let points = sample_points(sample_size);
+        let scalars = sample_scalars(sample_size);
+        let points_bytes = points_to_bytes(&points);
+        let scalars_bytes = scalars_to_bytes(&scalars);
+
+        let num_invocations = (points.len() + 64 - 1) / 64;
+        let total_buckets = 8192;
+        let total_windows = 32;
+        let mut emulated_buckets = vec![G1::identity(); total_buckets * num_invocations];
+        let mut emulated_windows = vec![G1::identity(); num_invocations * total_windows];
+        emulate_bucket_accumulation(&points, &scalars, &mut emulated_buckets, 0);
+        emulate_bucket_reduction(&mut emulated_buckets, &mut emulated_windows, 0);
+        let shader_code = load_pippenger_phases_shader_code();
+        let result = pollster::block_on(gpu::test::pippenger_phases::run_bucket_reduction(&shader_code, &points_bytes, &scalars_bytes));
+        let gpu_windows_in_fields: Vec<Fq> = u16_vec_to_fields_montgomery(&result);
+        let gpu_windows = gpu_windows_in_fields.chunks_exact(3).enumerate().map(|(i, x)| {
+            let p = G1::new_jacobian(x[0].clone(), x[1].clone(), x[2].clone()).unwrap();
+            if p.is_identity().unwrap_u8() == 0 {
+                println!("Index: {:?}", i);
+                println!("GPU Window: {:?}", p);
+            }
+            p
+        }).collect::<Vec<_>>();
+        for (i, (gpu_window, emulated_window)) in gpu_windows.iter().zip(emulated_windows.iter()).enumerate() {
+            if gpu_window.is_identity().unwrap_u8() == 0 || emulated_window.is_identity().unwrap_u8() == 0 {
+                println!("Index: {:?}", i);
+                println!("GPU Window: {:?}", gpu_window);
+                println!("Emulated Window: {:?}", emulated_window);
+                assert_eq!(gpu_window, emulated_window);
+            }
+        }
+    }
+
 
     #[test]
     fn test_field_mul() {

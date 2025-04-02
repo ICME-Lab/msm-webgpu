@@ -5,6 +5,7 @@ use wgpu::util::DeviceExt;
 
 
 pub const WORKGROUP_SIZE: usize = 64;
+pub const MAX_NUM_INVOCATIONS: usize = 2048;
 
 pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8]) -> Vec<u16> {
     let msm_len = scalars_bytes.len() / 64;
@@ -27,7 +28,7 @@ pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
     });
     // The result buffer must be large enough to hold final data
-    let result_buffer_size = (4096 * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress;
+    let result_buffer_size = (MAX_NUM_INVOCATIONS * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress;
     let result_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Result Buffer"),
         size: result_buffer_size,
@@ -39,8 +40,15 @@ pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8
 
     let buckets = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Buckets Buffer"),
-        size: (64 * 4096 * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress,
-        // size: (32 * 256 * num_invocations * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress,
+        // size: (64 * 4096 * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress,
+        size: (32 * 256 * MAX_NUM_INVOCATIONS * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress,
+        usage: wgpu::BufferUsages::STORAGE,
+        mapped_at_creation: false,
+    });
+
+    let windows = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Windows Buffer"),
+        size: (32 * MAX_NUM_INVOCATIONS * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress,
         usage: wgpu::BufferUsages::STORAGE,
         mapped_at_creation: false,
     });
@@ -94,6 +102,7 @@ pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8
             scalars_buffer,
             result_buffer.clone(),
             buckets,
+            windows,
         ],
         vec![
             msm_len_buffer,

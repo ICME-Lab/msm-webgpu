@@ -7,6 +7,7 @@ struct JacobianPoint {
 };
 
 const JACOBIAN_IDENTITY: JacobianPoint = JacobianPoint(ZERO, ZERO, ZERO);
+const JACOBIAN_GENERATOR: JacobianPoint = JacobianPoint(ONE, TWO, ONE);
 
 fn is_inf(p: JacobianPoint) -> bool {
     return field_eq(p.z, ZERO);

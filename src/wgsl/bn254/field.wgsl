@@ -32,6 +32,10 @@ const ONE: BigInt256 = BigInt256(
     array(1u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u)
 );
 
+const TWO: BigInt256 = BigInt256(
+    array(2u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u)
+);
+
 fn get_higher_with_slack(a: BigInt512) -> BaseField {
     var out: BaseField;
     const slack = 2u; // 256 - 254

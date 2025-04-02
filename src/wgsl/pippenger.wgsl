@@ -20,6 +20,7 @@ fn bucket_accumulation_phase(gidx: u32) {
     }
     let base = gidx * PointsPerInvocation;
     for (var i = 0u; i < PointsPerInvocation; i = i + 1u) {
+        // TODO: Revise this. Maybe pad with identity points
         if (msm_len.val < base + i) {
             break;
         }
@@ -37,6 +38,42 @@ fn bucket_accumulation_phase(gidx: u32) {
     }
 }
 
+
+fn bucket_reduction_phase(gidx: u32) {
+    for (var j=0u; j < NumWindows; j = j+1u) {
+        var sum = JACOBIAN_IDENTITY;
+        var sum_of_sums = JACOBIAN_IDENTITY;
+        // var k = BucketsPerWindow - 1u;
+        // for (var offset: u32 = 0u; offset < BucketsPerWindow - 1u; offset = offset + 1u) {
+        //     let k = BucketsPerWindow - 1u - offset;
+        //     let bucket_index = gidx * TotalBuckets + j * BucketsPerWindow + k;
+        //     var tmp_sum = jacobian_add(sum, buckets[bucket_index]);
+        //     var tmp_sum_of_sums = jacobian_add(sum_of_sums, tmp_sum);
+        //     sum = tmp_sum;
+        //     sum_of_sums = tmp_sum_of_sums;
+        // }
+        for (var k: i32 = i32(BucketsPerWindow - 1u); k >= 1; k = k - 1) {
+            let bucket_index = gidx * TotalBuckets + j * BucketsPerWindow + u32(k);
+            sum = jacobian_add(sum, buckets[bucket_index]);
+            sum_of_sums = jacobian_add(sum_of_sums, sum);
+        }
+        // loop {
+        //     let bucket_index = gidx * TotalBuckets + j * BucketsPerWindow + k;
+        //     sum = jacobian_add(sum, buckets[bucket_index]);
+        //     sum_of_sums = jacobian_add(sum_of_sums, sum);
+
+        //     if (k == 1u) {
+        //         break;
+        //     }
+        //     k = k - 1u;
+        // }
+
+        windows[gidx * NumWindows + j] = sum_of_sums;
+    }
+
+    windows[65535u] = JACOBIAN_IDENTITY;
+}
+
 // n - number of points/scalars
 // i - a point/scalar index, 1...n
 // j - a window index, 0...W-1
@@ -46,32 +83,14 @@ fn bucket_accumulation_phase(gidx: u32) {
 
 // There will be NUM_INVOCATIONS invocations (workgroups) of this function, each with a different gidx
 fn pippenger(gidx: u32) -> JacobianPoint {
-    var windows: array<JacobianPoint, NumWindows>; 
-    for (var j: u32 = 0u; j < NumWindows; j = j + 1u) {
-        windows[j] = JACOBIAN_IDENTITY;
-    }
+    // var windows: array<JacobianPoint, NumWindows>; 
+
 
     // Bucket accumulation
     bucket_accumulation_phase(gidx);
 
     // Bucket reduction
-    for (var j=0u; j < NumWindows; j = j+1u) {
-        var sum = JACOBIAN_IDENTITY;
-        var sum_of_sums = JACOBIAN_IDENTITY;
-        var k = BucketsPerWindow - 1u;
-        loop {
-            let bucket_index = gidx * TotalBuckets + j * BucketsPerWindow + k;
-            sum = jacobian_add(sum, buckets[bucket_index]);
-            sum_of_sums = jacobian_add(sum_of_sums, sum);
-
-            if (k == 1u) {
-                break;
-            }
-            k = k - 1u;
-        }
-
-        windows[j] = sum_of_sums;
-    }
+    bucket_reduction_phase(gidx);
 
     var result: JacobianPoint = JACOBIAN_IDENTITY;
 
@@ -79,7 +98,7 @@ fn pippenger(gidx: u32) -> JacobianPoint {
     loop {
         var tmp = jacobian_mul(result, TWO_POW_C);
         result = jacobian_add(
-            windows[j],
+            windows[gidx * NumWindows + j],
             tmp
         );
         if (j == 0u) {

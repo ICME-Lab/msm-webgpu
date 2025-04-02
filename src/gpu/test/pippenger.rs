@@ -49,12 +49,7 @@ pub fn emulate_bucket_accumulation(points: &[G1Affine], scalars: &[Fr], buckets:
     }
 }
 
-pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], buckets: &mut [G1], gidx: usize) -> G1 {
-    emulate_bucket_accumulation(points, scalars, buckets, gidx);
-
-    let mut windows = vec![G1::identity(); W];
-
-
+pub fn emulate_bucket_reduction(buckets: &mut [G1], windows: &mut [G1], gidx: usize) {
     // Bucket reduction
     for j in 0..W {
         let mut sum = G1::identity();
@@ -62,16 +57,23 @@ pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], buckets: &mut [G1]
         for k in (1..BUCKETS_PER_WINDOW).rev() {
             sum += buckets[gidx * TOTAL_BUCKETS + j * BUCKETS_PER_WINDOW + k];
             sum_of_sums += sum;
-        }
-        windows[j] = sum_of_sums;
+        }   
+        windows[gidx * W + j] = sum_of_sums;
     }
+}
+
+pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], buckets: &mut [G1], windows: &mut [G1], gidx: usize) -> G1 {
+    emulate_bucket_accumulation(points, scalars, buckets, gidx);
+
+    // Bucket reduction
+    emulate_bucket_reduction(buckets, windows, gidx);
 
 
     // Final reduction
     let mut result = G1::identity();
     let two_pow_c = Fr::from(2u64.pow(C as u32));
     for j in (0..W).rev() {
-        result = windows[j] + result * two_pow_c;
+        result = windows[gidx * W + j] + result * two_pow_c;
     }
 
     result
@@ -84,10 +86,10 @@ pub fn emulate_pippenger_gpu(points: &[G1Affine], scalars: &[Fr]) -> G1 {
     println!("num_invocations: {:?}", num_invocations);
     let mut result = vec![G1::identity(); num_invocations];
     let mut buckets = vec![G1::identity(); TOTAL_BUCKETS * num_invocations];
-
+    let mut windows = vec![G1::identity(); W * num_invocations];
     // === Simulate: @compute @workgroup_size(1) main() ===
     for gidx in 0..num_invocations {
-        result[gidx] = emulate_pippenger(points, scalars, &mut buckets, gidx);
+        result[gidx] = emulate_pippenger(points, scalars, &mut buckets, &mut windows, gidx);
     }
 
 
