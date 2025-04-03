@@ -1,5 +1,5 @@
 const WORKGROUP_SIZE = 64u;
-const MAX_NUM_INVOCATIONS = 2048u;
+const MAX_NUM_INVOCATIONS = 1024u;
 
 struct MsmLen {
     val: u32,

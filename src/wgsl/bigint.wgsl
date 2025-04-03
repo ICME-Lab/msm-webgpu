@@ -122,3 +122,29 @@ fn sqr(a: BigInt256) -> BigInt512 {
     }
     return res;
 }
+
+fn to_bytes(s: BigInt256) -> array<u32, 2 * N> {
+    // Declare a local array of 32 elements
+    var res: array<u32, 2 * N>;
+
+    for (var i = 0u; i < 2 * N; i = i + 1u) {
+       res[i] = 0u;
+    }
+
+    // For each 16-bit limb, split into two 8-bit bytes
+    for (var i: u32 = 0u; i < N; i = i + 1u) {
+        let limb: u32 = s.limbs[i];
+
+        // Low 8 bits
+        let low_byte:  u32 = limb & 0xFFu;
+
+        // Next 8 bits
+        let next_byte: u32 = (limb >> 8u) & 0xFFu;
+
+        // Store the two bytes in consecutive array slots
+        res[2u * i] = low_byte;
+        res[2u * i + 1u] = next_byte;
+    }
+
+    return res;
+}

@@ -17,9 +17,7 @@ const TotalBuckets = BucketsPerWindow * NumWindows; // 256 * 32 = 8192
 const PointsPerInvocation = 64u;
 
 // 2^C
-const TWO_POW_C: BigInt256 = BigInt256(
-    array(256u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u)
-);
+const TWO_POW_C = 1u << ChunkSize;
 
 fn bucket_accumulation_phase(gidx: u32) {
     let base = gidx * PointsPerInvocation;
@@ -27,7 +25,7 @@ fn bucket_accumulation_phase(gidx: u32) {
         // TODO: Revise this. Maybe pad with identity points
         if (msm_len.val > base + i) {
             var scalar = scalars[base + i];
-            var u8_scalar = field_to_bytes(scalar);
+            var u8_scalar = to_bytes(scalar);
     
             var point = points[base + i];
             for (var j = 0u; j < NumWindows; j = j + 1u) {
@@ -64,7 +62,7 @@ fn final_reduction_phase(gidx: u32) -> JacobianPoint {
     loop {
         result = jacobian_add(
             windows[gidx * NumWindows + j],
-            jacobian_mul(result, TWO_POW_C)
+            small_jacobian_mul(result, TWO_POW_C)
         );
         if (j == 0u) {
             break;
@@ -76,4 +74,3 @@ fn final_reduction_phase(gidx: u32) -> JacobianPoint {
 }
 
 
-// There will be NUM_INVOCATIONS invocations (workgroups) of this function, each with a different gidx

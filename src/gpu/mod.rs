@@ -124,21 +124,7 @@ pub async fn run_webgpu(
     readback_buffer
 }
 
-pub fn map_buffer_async(
-    slice: BufferSlice<'_>,
-    mode: MapMode,
-) -> impl std::future::Future<Output = Result<(), BufferAsyncError>> {
-    let (sender, receiver) = oneshot::channel();
-    slice.map_async(mode, move |res| {
-        let _ = sender.send(res);
-    });
-    async move {
-        match receiver.await {
-            Ok(result) => result,
-            Err(_) => Err(BufferAsyncError {}),
-        }
-    }
-}
+
 
 pub fn default_storage_buffer_entry(idx: u32) -> BindGroupLayoutEntry {
     BindGroupLayoutEntry {

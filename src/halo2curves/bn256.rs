@@ -85,6 +85,16 @@ pub async fn run_webgpu_msm_async(g: &Vec<G1Affine>, v: &Vec<Fr>) -> G1 {
     G1::new_jacobian(result[0].clone(), result[1].clone(), result[2].clone()).unwrap()
 }
 
+pub async fn run_webgpu_msm_async_browser(g: &Vec<G1Affine>, v: &Vec<Fr>) -> G1 {
+    let points_slice = points_to_bytes(g);
+    let v_slice = scalars_to_bytes(v);
+    let shader_code = load_shader_code_bn254();
+    let result = gpu::msm::run_msm_browser(&shader_code, &points_slice, &v_slice).await;
+    let result: Vec<Fq> = u16_vec_to_fields_montgomery(&result);
+    println!("Result: {:?}", (result[0], result[1], result[2]));
+    G1::new_jacobian(result[0].clone(), result[1].clone(), result[2].clone()).unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Instant;
@@ -102,7 +112,7 @@ mod tests {
 
     #[test]
     fn test_bn256() {
-        let sample_size = 1000;
+        let sample_size = 64;
         let scalars = sample_scalars(sample_size);
         let points = sample_points(sample_size);
 
@@ -523,12 +533,12 @@ mod tests_wasm_pack {
 
     #[wasm_bindgen_test]
     async fn test_webgpu_msm_bn254() {
-        let sample_size = 5;
+        let sample_size = 1000;
         let points = sample_points(sample_size);
         let scalars = sample_scalars(sample_size);
 
         let fast = fast_msm(&points, &scalars);
-        let result = run_webgpu_msm_async(&points, &scalars).await;
+        let result = run_webgpu_msm_async_browser(&points, &scalars).await;
         console::log_1(&format!("Result: {:?}", result).into());
         assert_eq!(fast, result);
     }

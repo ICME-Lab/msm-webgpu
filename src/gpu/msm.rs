@@ -1,3 +1,5 @@
+use std::future::Future;
+
 use crate::gpu::*;
 use crate::gpu::{run_webgpu, setup_webgpu};
 use crate::halo2curves::utils::cast_u8_to_u16;
@@ -5,14 +7,13 @@ use wgpu::util::DeviceExt;
 
 
 pub const WORKGROUP_SIZE: usize = 64;
-pub const MAX_NUM_INVOCATIONS: usize = 2048;
+pub const MAX_NUM_INVOCATIONS: usize = 1024;
 
-pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8]) -> Vec<u16> {
+pub async fn run_msm_inner(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8], device: &Device, queue: &Queue) -> Buffer {
     let msm_len = scalars_bytes.len() / 64;
     println!("msm_len: {:?}", msm_len);
     let num_invocations = (msm_len + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
     println!("num_invocations: {:?}", num_invocations);
-    let (device, queue) = setup_webgpu().await;
     let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("MSM Shader"),
         source: wgpu::ShaderSource::Wgsl(wgsl_source.into()),
@@ -92,7 +93,7 @@ pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8
         encoder.copy_buffer_to_buffer(&result_buffer, 0, &readback_buffer, 0, result_buffer_size);
     };
 
-    let result = run_webgpu(
+    run_webgpu(
         &device,
         &queue,
         vec![
@@ -116,7 +117,12 @@ pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8
         readback_buffer.clone(),
         copy_results_to_encoder,
     )
-    .await;
+    .await
+}
+
+pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8]) -> Vec<u16> {
+    let (device, queue) = setup_webgpu().await;
+    let result = run_msm_inner(wgsl_source, points_bytes, scalars_bytes, &device, &queue).await;
 
     let buffer_slice = result.slice(..);
     let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
@@ -128,4 +134,46 @@ pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8
     result.unmap();
 
     output_u16
+}
+
+
+pub async fn run_msm_browser(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8]) -> Vec<u16> {
+    let (device, queue) = setup_webgpu().await;
+    let result = run_msm_inner(wgsl_source, points_bytes, scalars_bytes, &device, &queue).await;
+
+    let buffer_slice = result.slice(..);
+    // let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
+    let _ = map_buffer_async_browser(buffer_slice, wgpu::MapMode::Read).await;
+    device.poll(wgpu::Maintain::Wait);
+    let data = buffer_slice.get_mapped_range();
+
+    let output_u16 = cast_u8_to_u16(&data);
+    drop(data);
+    result.unmap();
+
+    output_u16 
+}
+
+pub async fn map_buffer_async_test(
+    slice: BufferSlice<'_>,
+    mode: MapMode,
+) -> Result<(), BufferAsyncError> {
+    let _buffer_future = slice.map_async(mode, |x| x.unwrap());
+    Ok(())
+}
+
+pub fn map_buffer_async_browser(
+    slice: BufferSlice<'_>,
+    mode: MapMode,
+) -> impl std::future::Future<Output = Result<(), BufferAsyncError>> {
+    let (sender, receiver) = oneshot::channel();
+    slice.map_async(mode, move |res| {
+        let _ = sender.send(res);
+    });
+    async move {
+        match receiver.await {
+            Ok(result) => result,
+            Err(_) => Err(BufferAsyncError {}),
+        }
+    }
 }

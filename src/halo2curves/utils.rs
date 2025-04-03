@@ -46,7 +46,6 @@ pub fn u16_vec_to_fields<F: PrimeField>(u16_array: &[u16]) -> Vec<F> {
                 .iter()
                 .flat_map(|x| x.to_le_bytes())
                 .collect::<Vec<u8>>();
-            println!("bytes: {:?}", bytes);
             bytes_to_field::<F>(&bytes)
         })
         .collect()
