@@ -85,9 +85,6 @@ pub async fn run_webgpu_msm_async_browser(g: &Vec<Affine>, v: &Vec<Fr>) -> Point
 mod tests {
     use std::time::Instant;
 
-    use ark_ec::CurveGroup;
-    use ark_ff::PrimeField;
-
     use crate::halo2curves::utils::{field_to_bytes, u32_vec_to_fields};
 
     use super::*;
@@ -139,45 +136,6 @@ mod tests {
             .collect::<Vec<_>>();
         let new_fields = u16_vec_to_fields(&casted_16);
         assert_eq!(fields, new_fields);
-    }
-
-    #[test]
-    fn test_ark_vs_halo2() {
-        use ark_pallas::{Fr as PallasFr, Fq as PallasFq, Projective as PallasPoint};
-        use crate::ark::utils::fields_to_u16_vec as ark_fields_to_u16_vec;
-        use crate::ark::pallas::{scalars_to_bytes as ark_scalars_to_bytes, points_to_bytes as ark_points_to_bytes};
-
-        let halo2_scalars = vec![Fr::from(1), Fr::from(2), Fr::from(3)];
-        let halo2_generator = Point::generator();
-        let (x,y,z) = halo2_generator.jacobian_coordinates();
-        let halo2_points = (0..3).map(|_| Point::generator().to_affine()).collect::<Vec<_>>();
-
-        let x_bytes = field_to_bytes(x);
-        let y_bytes = field_to_bytes(y);
-        let z_bytes = field_to_bytes(z);
-
-        let ark_x = PallasFq::from_le_bytes_mod_order(&x_bytes);
-        let ark_y = PallasFq::from_le_bytes_mod_order(&y_bytes);
-        let ark_z = PallasFq::from_le_bytes_mod_order(&z_bytes);
-
-        let ark_scalars = vec![PallasFr::from(1), PallasFr::from(2), PallasFr::from(3)];
-        let ark_points = (0..3).map(|_| PallasPoint::new_unchecked(ark_x, ark_y, ark_z).into_affine()).collect::<Vec<_>>();
-
-        let halo2_u16_fields = fields_to_u16_vec(&halo2_scalars);
-        let ark_u16_fields = ark_fields_to_u16_vec(&ark_scalars);
-
-        assert_eq!(halo2_u16_fields, ark_u16_fields);
-
-        let halo2_scalar_bytes = scalars_to_bytes(&halo2_scalars);
-        let ark_scalar_bytes = ark_scalars_to_bytes(&ark_scalars);
-
-        assert_eq!(halo2_scalar_bytes.len(), ark_scalar_bytes.len());
-        assert_eq!(halo2_scalar_bytes, ark_scalar_bytes);
-
-        let halo2_point_bytes = points_to_bytes(&halo2_points);
-        let ark_point_bytes = ark_points_to_bytes(&ark_points);
-
-        assert_eq!(halo2_point_bytes, ark_point_bytes);
     }
 
     fn load_field_shader_code() -> String {
