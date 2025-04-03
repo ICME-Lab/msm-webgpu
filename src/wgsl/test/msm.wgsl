@@ -1,11 +1,15 @@
 @group(0) @binding(0)
 var<storage, read_write> points: array<JacobianPoint>;
 @group(0) @binding(1)
-var<storage, read_write> scalars: array<BaseField>;
+var<storage, read_write> scalars: array<ScalarField>;
 @group(0) @binding(2)
 var<storage, read_write> result: JacobianPoint;
+struct MsmLen {
+    val: u32,
+}
+
 @group(0) @binding(3)
-var<storage, read_write> msm_len: u32;
+var<uniform> msm_len: MsmLen;
 
 @compute @workgroup_size(1)
 fn test_point_msm(
@@ -16,7 +20,7 @@ fn test_point_msm(
     let lidx = local_id.x;
 
     var running: JacobianPoint = JACOBIAN_IDENTITY;
-    for (var i = 0u; i < msm_len; i = i + 1u) {
+    for (var i = 0u; i < msm_len.val; i = i + 1u) {
         let p = points[i];
         let s = scalars[i];
         let tmp = jacobian_mul(p, s);
@@ -25,3 +29,4 @@ fn test_point_msm(
 
     result = running;
 }
+

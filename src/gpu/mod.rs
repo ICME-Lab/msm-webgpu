@@ -2,14 +2,10 @@ use wgpu::{
     Adapter, BindGroupLayoutEntry, Buffer, BufferAsyncError, BufferSlice, BufferView, CommandEncoder, ComputePipeline, Device, Instance, MapMode, PipelineLayout, Queue
 };
 pub mod msm;
-pub mod ops;
-
+pub mod test;
 pub const LIMB_WIDTH: usize = 16;
 pub const BIGINT_SIZE: usize = 256;
 pub const NUM_LIMBS: usize = BIGINT_SIZE / LIMB_WIDTH;
-pub const WORKGROUP_SIZE: usize = 64;
-pub const NUM_INVOCATIONS: usize = 1;
-pub const MSM_SIZE: usize = WORKGROUP_SIZE * NUM_INVOCATIONS;
 
 pub async fn setup_webgpu() -> (Device, Queue) {
     let instance = wgpu::Instance::default();
@@ -54,18 +50,27 @@ pub async fn setup_webgpu() -> (Device, Queue) {
 pub async fn run_webgpu(
     device: &Device,
     queue: &Queue,
-    buffers: Vec<Buffer>,
-    pipeline_entry_points: Vec<String>,
+    storage_buffers: Vec<Buffer>,
+    uniform_buffers: Vec<Buffer>,
+    pipeline_entry_points: Vec<(String, u32)>,
     compute_pipeline: impl Fn((String, PipelineLayout)) -> ComputePipeline,
     readback_buffer: Buffer,
     copy_results_to_encoder: impl Fn(&mut CommandEncoder) -> (),
 ) -> Buffer {
+
+    let storage_buffer_entries =(0..storage_buffers.len())
+        .map(|i| default_storage_buffer_entry(i as u32))
+        .collect::<Vec<_>>();
+    let uniform_buffer_entries =(0..uniform_buffers.len())
+        .map(|i| default_uniform_buffer_entry((i + storage_buffers.len()) as u32))
+        .collect::<Vec<_>>();
+
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("Bind Group Layout"),
-        entries: &(0..buffers.len())
-            .map(|i| default_bind_group_layout_entry(i as u32))
-            .collect::<Vec<_>>(),
+        entries: &vec![storage_buffer_entries, uniform_buffer_entries].concat(),
     });
+
+    let buffers = vec![storage_buffers, uniform_buffers].concat();
 
     // Create the pipeline layout and compute pipelines (`main` and `aggregate`)
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -75,7 +80,7 @@ pub async fn run_webgpu(
     });
     let compute_pipelines = pipeline_entry_points
         .iter()
-        .map(|entry_point| compute_pipeline((entry_point.clone(), pipeline_layout.clone())))
+        .map(|(entry_point, workgroups)| (compute_pipeline((entry_point.clone(), pipeline_layout.clone())), *workgroups))
         .collect::<Vec<_>>();
 
     // Create the Bind Group
@@ -96,14 +101,14 @@ pub async fn run_webgpu(
         label: Some("MSM Encoder"),
     });
 
-    for (i, pipeline) in compute_pipelines.iter().enumerate() {
+    for (pipeline, workgroups) in compute_pipelines.iter() {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("Main compute pass"),
             timestamp_writes: None,
         });
         cpass.set_pipeline(&pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
-        cpass.dispatch_workgroups(NUM_INVOCATIONS as u32, 1, 1);
+        cpass.dispatch_workgroups(*workgroups, 1, 1);
     }
     // c) Copy GPU result buffer into readback buffer
     // encoder.copy_buffer_to_buffer(&result_buffer, 0, &readback_buffer, 0, result_buffer_size);
@@ -135,12 +140,24 @@ pub fn map_buffer_async(
     }
 }
 
-pub fn default_bind_group_layout_entry(idx: u32) -> BindGroupLayoutEntry {
+pub fn default_storage_buffer_entry(idx: u32) -> BindGroupLayoutEntry {
     BindGroupLayoutEntry {
         binding: idx,
         visibility: wgpu::ShaderStages::COMPUTE,
         ty: wgpu::BindingType::Buffer {
             ty: wgpu::BufferBindingType::Storage { read_only: false },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    }
+}
+pub fn default_uniform_buffer_entry(idx: u32) -> BindGroupLayoutEntry {
+    BindGroupLayoutEntry {
+        binding: idx,
+        visibility: wgpu::ShaderStages::COMPUTE,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Uniform,
             has_dynamic_offset: false,
             min_binding_size: None,
         },

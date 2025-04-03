@@ -658,6 +658,7 @@ dependencies = [
 [[package]]
 name = "halo2curves"
 version = "0.6.0"
+source = "git+https://github.com/ICME-Lab/halo2curves?branch=main#b24cb42ff44f48bc5487a025e61ec0b2c73c9803"
 dependencies = [
  "blake2b_simd",
  "ff",

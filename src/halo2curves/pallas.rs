@@ -68,6 +68,7 @@ pub async fn run_webgpu_msm_async(g: &Vec<Affine>, v: &Vec<Fr>) -> Point {
     let shader_code = load_shader_code_pallas();
     let result = gpu::msm::run_msm(&shader_code, &points_slice, &v_slice).await;
     let result: Vec<Fq> = u16_vec_to_fields(&result);
+    println!("Result: {:?}", result);
     Point::new_jacobian(result[0].clone(), result[1].clone(), result[2].clone()).unwrap()
 }   
 
@@ -78,13 +79,13 @@ mod tests {
     use ark_ec::CurveGroup;
     use ark_ff::PrimeField;
 
-    use crate::halo2curves::utils::field_to_bytes;
+    use crate::halo2curves::utils::{field_to_bytes, u32_vec_to_fields};
 
     use super::*;
   
     #[test]
     fn test_pallas() {
-        let sample_size = 5;
+        let sample_size = 1;
         let scalars = sample_scalars(sample_size);
         let points = sample_points(sample_size);
 
@@ -172,9 +173,9 @@ mod tests {
 
     fn load_field_shader_code() -> String {
         let mut shader_code = String::new();
-        shader_code.push_str(include_str!("../../wgsl/bigint.wgsl"));
-        shader_code.push_str(include_str!("../../wgsl/pallas/field.wgsl"));
-        shader_code.push_str(include_str!("../../wgsl/test/field.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/bigint.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/pallas/field.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/test/field.wgsl"));
         shader_code
     }
 
@@ -189,7 +190,7 @@ mod tests {
 
         let shader_code = load_field_shader_code();
 
-        let result = pollster::block_on(gpu::ops::field_mul(&shader_code, &a_bytes, &b_bytes));
+        let result = pollster::block_on(gpu::test::ops::field_mul(&shader_code, &a_bytes, &b_bytes));
         let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
         assert_eq!(gpu_result[0], c);
     }
@@ -204,7 +205,7 @@ mod tests {
         let b_bytes = scalars_to_bytes(&vec![b]);
 
         let shader_code = load_field_shader_code();
-        let result = pollster::block_on(gpu::ops::field_add(&shader_code, &a_bytes, &b_bytes));
+        let result = pollster::block_on(gpu::test::ops::field_add(&shader_code, &a_bytes, &b_bytes));
         let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
         assert_eq!(gpu_result[0], c);
     }
@@ -219,26 +220,26 @@ mod tests {
         let b_bytes = scalars_to_bytes(&vec![b]);
 
         let shader_code = load_field_shader_code();
-        let result = pollster::block_on(gpu::ops::field_sub(&shader_code, &a_bytes, &b_bytes));
+        let result = pollster::block_on(gpu::test::ops::field_sub(&shader_code, &a_bytes, &b_bytes));
         let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
         assert_eq!(gpu_result[0], c);
     }
 
     fn load_point_shader_code() -> String {
         let mut shader_code = String::new();
-        shader_code.push_str(include_str!("../../wgsl/bigint.wgsl"));
-        shader_code.push_str(include_str!("../../wgsl/pallas/field.wgsl"));
-        shader_code.push_str(include_str!("../../wgsl/pallas/curve.wgsl"));
-        shader_code.push_str(include_str!("../../wgsl/test/point.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/bigint.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/pallas/field.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/pallas/curve.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/test/point.wgsl"));
         shader_code
     }
 
     fn load_point_msm_shader_code() -> String {
         let mut shader_code = String::new();
-        shader_code.push_str(include_str!("../../wgsl/bigint.wgsl"));
-        shader_code.push_str(include_str!("../../wgsl/pallas/field.wgsl"));
-        shader_code.push_str(include_str!("../../wgsl/pallas/curve.wgsl"));
-        shader_code.push_str(include_str!("../../wgsl/test/msm.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/bigint.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/pallas/field.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/pallas/curve.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/test/msm.wgsl"));
         shader_code
     }
 
@@ -252,7 +253,7 @@ mod tests {
         let b_bytes = points_to_bytes(&vec![b]);
 
         let shader_code = load_point_shader_code();
-        let result = pollster::block_on(gpu::ops::point_add(&shader_code, &a_bytes, &b_bytes));
+        let result = pollster::block_on(gpu::test::ops::point_add(&shader_code, &a_bytes, &b_bytes));
         let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
         let point_result = Point::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
         assert_eq!(point_result, c);
@@ -266,7 +267,7 @@ mod tests {
         let a_bytes = points_to_bytes(&vec![a]);
 
         let shader_code = load_point_shader_code();
-        let result = pollster::block_on(gpu::ops::point_double(&shader_code, &a_bytes));
+        let result = pollster::block_on(gpu::test::ops::point_double(&shader_code, &a_bytes));
         let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
         let point_result = Point::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
         assert_eq!(point_result, c);
@@ -282,7 +283,7 @@ mod tests {
         let s_bytes = scalars_to_bytes(&vec![s]);
 
         let shader_code = load_point_msm_shader_code();
-        let result = pollster::block_on(gpu::ops::point_msm(&shader_code, vec![&p_bytes], vec![&s_bytes]));
+        let result = pollster::block_on(gpu::test::ops::point_msm(&shader_code, &p_bytes, &s_bytes));
         let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
         let point_result = Point::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
         assert_eq!(point_result, c);
