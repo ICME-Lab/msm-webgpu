@@ -205,6 +205,15 @@ mod tests {
         shader_code
     }
 
+    fn load_sum_of_sums_shader_code() -> String {
+        let mut shader_code = String::new();
+        shader_code.push_str(include_str!("../wgsl/bigint.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/bn254/field.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/bn254/curve.wgsl"));
+        shader_code.push_str(include_str!("../wgsl/test/sum_of_sums.wgsl"));
+        shader_code
+    }
+
     fn load_field_to_bytes_shader_code() -> String {
         let mut shader_code = String::new();
         shader_code.push_str(include_str!("../wgsl/bigint.wgsl"));
@@ -394,6 +403,7 @@ mod tests {
         let shader_code = load_point_shader_code();
         let result = pollster::block_on(gpu::test::ops::point_add(&shader_code, &a_bytes, &b_bytes));
         let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
+        println!("GPU Result: {:?}", gpu_result);
         let point_result = G1::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
         assert_eq!(point_result, G1::from(a));
     }
@@ -441,18 +451,55 @@ mod tests {
 
     #[test]
     fn test_scalar_mul() {
-        let p = G1Affine::random(&mut thread_rng());
-        let s = Fr::random(&mut thread_rng());
-        let c = p * s;
+        let sample_size = 100;
+        let points = sample_points(sample_size);
+        let scalars = sample_scalars(sample_size);
+        let fast = fast_msm(&points, &scalars);
         
-        let p_bytes = points_to_bytes(&vec![p]);
-        let s_bytes = scalars_to_bytes(&vec![s]);
+        let p_bytes = points_to_bytes(&points);
+        let s_bytes = scalars_to_bytes(&scalars);
 
         let shader_code = load_point_msm_shader_code();
-        let result = pollster::block_on(gpu::test::ops::point_msm(&shader_code, vec![&p_bytes], vec![&s_bytes]));
+        let result = pollster::block_on(gpu::test::ops::point_msm(&shader_code, &p_bytes, &s_bytes));
         let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
         let point_result = G1::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
-        assert_eq!(point_result, c);
+        assert_eq!(point_result, fast);
+    }
+
+    #[test]
+    fn test_sum_of_sums_simple() {
+        let sample_size = 32;
+        let points = sample_points(sample_size);
+        let scalars = sample_scalars(sample_size);
+        
+        let p_bytes = points_to_bytes(&points);
+        let s_bytes = scalars_to_bytes(&scalars);
+
+        let shader_code = load_sum_of_sums_shader_code();
+        let result = pollster::block_on(gpu::test::ops::sum_of_sums_simple(&shader_code, &p_bytes, &s_bytes));
+        let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
+        let point_result = G1::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
+        println!("GPU Result: {:?}", point_result);
+    }
+
+    #[test]
+    fn test_sum_of_sums() {
+        let sample_size = 256;
+        let points = sample_points(sample_size);
+        let scalars = sample_scalars(sample_size);
+        
+        let p_bytes = points_to_bytes(&points);
+        let s_bytes = scalars_to_bytes(&scalars);
+
+        let shader_code = load_sum_of_sums_shader_code();
+        let result = pollster::block_on(gpu::test::ops::sum_of_sums(&shader_code, &p_bytes, &s_bytes));
+        let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
+
+        let _ = gpu_result.chunks_exact(3).map(|x| {
+            let p = G1::new_jacobian(x[0].clone(), x[1].clone(), x[2].clone()).unwrap();
+            println!("GPU Result: {:?}", p);
+            p
+        }).collect::<Vec<_>>();
     }
 
     #[test]

@@ -283,7 +283,7 @@ mod tests {
         let s_bytes = scalars_to_bytes(&vec![s]);
 
         let shader_code = load_point_msm_shader_code();
-        let result = pollster::block_on(gpu::test::ops::point_msm(&shader_code, vec![&p_bytes], vec![&s_bytes]));
+        let result = pollster::block_on(gpu::test::ops::point_msm(&shader_code, &p_bytes, &s_bytes));
         let gpu_result : Vec<Fq> = u16_vec_to_fields(&result);
         let point_result = Point::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
         assert_eq!(point_result, c);

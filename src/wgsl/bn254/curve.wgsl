@@ -7,7 +7,6 @@ struct JacobianPoint {
 };
 
 const JACOBIAN_IDENTITY: JacobianPoint = JacobianPoint(ZERO, ZERO, ZERO);
-const JACOBIAN_GENERATOR: JacobianPoint = JacobianPoint(ONE, TWO, ONE);
 
 fn is_inf(p: JacobianPoint) -> bool {
     return field_eq(p.z, ZERO);
@@ -74,6 +73,20 @@ fn jacobian_mul(p: JacobianPoint, k: ScalarField) -> JacobianPoint {
             t = jacobian_double(t);
             k_s = k_s >> 1;
         }
+    }
+    return r;
+}
+
+fn small_jacobian_mul(p: JacobianPoint, k: u32) -> JacobianPoint {
+    var r: JacobianPoint = JACOBIAN_IDENTITY;
+    var t: JacobianPoint = p;
+    var k_s = k;
+    for (var j = 0u; j < W; j = j + 1u) {
+        if ((k_s & 1) == 1u) {
+            r = jacobian_add(r, t);
+        }
+        t = jacobian_double(t);
+        k_s = k_s >> 1;
     }
     return r;
 }
