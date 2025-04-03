@@ -38,19 +38,17 @@ pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8
         mapped_at_creation: false,
     });
 
-    let buckets = device.create_buffer(&wgpu::BufferDescriptor {
+    let buckets = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Buckets Buffer"),
         // size: (64 * 4096 * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress,
-        size: (32 * 256 * MAX_NUM_INVOCATIONS * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress,
+        contents: &vec![0u8; 32 * 256 * MAX_NUM_INVOCATIONS * 3 * NUM_LIMBS * 4],
         usage: wgpu::BufferUsages::STORAGE,
-        mapped_at_creation: false,
     });
 
-    let windows = device.create_buffer(&wgpu::BufferDescriptor {
+    let windows = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Windows Buffer"),
-        size: (32 * MAX_NUM_INVOCATIONS * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress,
+        contents: &vec![0u8; 32 * MAX_NUM_INVOCATIONS * 3 * NUM_LIMBS * 4],
         usage: wgpu::BufferUsages::STORAGE,
-        mapped_at_creation: false,
     });
 
     let msm_len_buffer = device.create_buffer(&wgpu::BufferDescriptor {

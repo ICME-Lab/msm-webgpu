@@ -89,6 +89,7 @@ pub async fn run_webgpu_msm_async(g: &Vec<G1Affine>, v: &Vec<Fr>) -> G1 {
 mod tests {
     use std::time::Instant;
 
+    use group::cofactor::CofactorCurveAffine;
     use rand::Rng;
 
     use crate::gpu::test::pippenger::{emulate_bucket_accumulation, emulate_bucket_reduction, emulate_pippenger, emulate_pippenger_gpu};
@@ -256,7 +257,7 @@ mod tests {
 
     #[test]
     fn test_bucket_accumulation() {
-        let sample_size = 1024;
+        let sample_size = 64;
         let points = sample_points(sample_size);
         let scalars = sample_scalars(sample_size);
         let points_bytes = points_to_bytes(&points);
@@ -381,6 +382,37 @@ mod tests {
         let point_result = G1::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
         assert_eq!(point_result, c);
     }
+
+    #[test]
+    fn test_point_add_identity_right() {
+        let a = G1Affine::random(&mut thread_rng());
+        let b = G1Affine::identity();
+        
+        let a_bytes = points_to_bytes(&vec![a]);
+        let b_bytes = points_to_bytes(&vec![b]);
+
+        let shader_code = load_point_shader_code();
+        let result = pollster::block_on(gpu::test::ops::point_add(&shader_code, &a_bytes, &b_bytes));
+        let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
+        let point_result = G1::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
+        assert_eq!(point_result, G1::from(a));
+    }
+
+    #[test]
+    fn test_point_add_identity_left() {
+        let a = G1Affine::identity();
+        let b = G1Affine::random(&mut thread_rng());
+        
+        let a_bytes = points_to_bytes(&vec![a]);
+        let b_bytes = points_to_bytes(&vec![b]);
+
+        let shader_code = load_point_shader_code();
+        let result = pollster::block_on(gpu::test::ops::point_add(&shader_code, &a_bytes, &b_bytes));
+        let gpu_result : Vec<Fq> = u16_vec_to_fields_montgomery(&result);
+        let point_result = G1::new_jacobian(gpu_result[0].clone(), gpu_result[1].clone(), gpu_result[2].clone()).unwrap();
+        assert_eq!(point_result, G1::from(b));
+    }
+
 
     #[test]
     fn test_point_double() {

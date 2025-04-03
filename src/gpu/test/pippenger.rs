@@ -62,14 +62,7 @@ pub fn emulate_bucket_reduction(buckets: &mut [G1], windows: &mut [G1], gidx: us
     }
 }
 
-pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], buckets: &mut [G1], windows: &mut [G1], gidx: usize) -> G1 {
-    emulate_bucket_accumulation(points, scalars, buckets, gidx);
-
-    // Bucket reduction
-    emulate_bucket_reduction(buckets, windows, gidx);
-
-
-    // Final reduction
+pub fn emulate_final_reduction(windows: &[G1], gidx: usize) -> G1 {
     let mut result = G1::identity();
     let two_pow_c = Fr::from(2u64.pow(C as u32));
     for j in (0..W).rev() {
@@ -77,6 +70,16 @@ pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], buckets: &mut [G1]
     }
 
     result
+}
+
+pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], buckets: &mut [G1], windows: &mut [G1], gidx: usize) -> G1 {
+    emulate_bucket_accumulation(points, scalars, buckets, gidx);
+
+    // Bucket reduction
+    emulate_bucket_reduction(buckets, windows, gidx);
+
+    // Final reduction
+    emulate_final_reduction(windows, gidx)
 }
 
 pub fn emulate_pippenger_gpu(points: &[G1Affine], scalars: &[Fr]) -> G1 {

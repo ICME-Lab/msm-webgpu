@@ -15,9 +15,9 @@ const TWO_POW_C: BigInt256 = BigInt256(
 );
 
 fn bucket_accumulation_phase(gidx: u32) {
-    for (var b = 0u; b < TotalBuckets; b = b + 1u) {
-        buckets[gidx * TotalBuckets + b] = JACOBIAN_IDENTITY;
-    }
+    // for (var b = 0u; b < TotalBuckets; b = b + 1u) {
+    //     buckets[gidx * TotalBuckets + b] = JACOBIAN_IDENTITY;
+    // }
     let base = gidx * PointsPerInvocation;
     for (var i = 0u; i < PointsPerInvocation; i = i + 1u) {
         // TODO: Revise this. Maybe pad with identity points
@@ -33,14 +33,14 @@ fn bucket_accumulation_phase(gidx: u32) {
             if (s_j != 0u) {
                 let bucket_index = gidx * TotalBuckets + j * BucketsPerWindow + s_j;
                 buckets[bucket_index] = jacobian_add(buckets[bucket_index], point);
-            }
+            } 
         }
     }
 }
 
 
 fn bucket_reduction_phase(gidx: u32) {
-    for (var j=0u; j < NumWindows; j = j+1u) {
+    for (var j: u32 = 0u; j < NumWindows; j = j + 1u) {    
         var sum = JACOBIAN_IDENTITY;
         var sum_of_sums = JACOBIAN_IDENTITY;
         // var k = BucketsPerWindow - 1u;
@@ -54,13 +54,19 @@ fn bucket_reduction_phase(gidx: u32) {
         // }
         for (var k: i32 = i32(BucketsPerWindow - 1u); k >= 1; k = k - 1) {
             let bucket_index = gidx * TotalBuckets + j * BucketsPerWindow + u32(k);
-            sum = jacobian_add(sum, buckets[bucket_index]);
-            sum_of_sums = jacobian_add(sum_of_sums, sum);
+            var bucket = buckets[bucket_index];
+            sum = jacobian_add(bucket, sum);
+            sum_of_sums = jacobian_add(sum, sum_of_sums);
         }
         // loop {
         //     let bucket_index = gidx * TotalBuckets + j * BucketsPerWindow + k;
+        //     let b = buckets[bucket_index];
+
         //     sum = jacobian_add(sum, buckets[bucket_index]);
-        //     sum_of_sums = jacobian_add(sum_of_sums, sum);
+        //     workgroupBarrier();
+        //     // sum_of_sums = jacobian_add(sum_of_sums, sum);
+        //     sum_of_sums = sum; //jacobian_add(sum_of_sums, sum);
+        //     workgroupBarrier();
 
         //     if (k == 1u) {
         //         break;
@@ -68,10 +74,23 @@ fn bucket_reduction_phase(gidx: u32) {
         //     k = k - 1u;
         // }
 
+        // var sum_of_sums = JACOBIAN_IDENTITY;
+        // for (var k: u32 = 1u; k < BucketsPerWindow; k = k + 1u) {
+        //     let bucket_index = gidx * TotalBuckets + j * BucketsPerWindow + k;
+        //     var bucket = buckets[bucket_index];
+        //     var scalar = BigInt256(
+        //         array(k, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u)
+        //     );
+        //     var tmp = small_jacobian_mul(bucket, scalar);
+        //     sum_of_sums = jacobian_add(
+        //         sum_of_sums, 
+        //         tmp
+        //     );
+        // }
+
         windows[gidx * NumWindows + j] = sum_of_sums;
     }
 
-    windows[65535u] = JACOBIAN_IDENTITY;
 }
 
 // n - number of points/scalars

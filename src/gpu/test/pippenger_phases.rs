@@ -31,20 +31,18 @@ pub async fn run_bucket_accumulation(wgsl_source: &str, points_bytes: &[u8], sca
 
     // The result buffer must be large enough to hold final data
     let result_buffer_size = (32 * 256 * MAX_NUM_INVOCATIONS * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress;
-    let buckets = device.create_buffer(&wgpu::BufferDescriptor {
+    let buckets = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Buckets Buffer"),
-        size: result_buffer_size,
+        contents: &vec![0u8; 32 * 256 * MAX_NUM_INVOCATIONS * 3 * NUM_LIMBS * 4],
         usage: wgpu::BufferUsages::STORAGE
             | wgpu::BufferUsages::COPY_DST
             | wgpu::BufferUsages::COPY_SRC,
-        mapped_at_creation: false,
     });
 
-    let windows = device.create_buffer(&wgpu::BufferDescriptor {
+    let windows = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Windows Buffer"),
-        size: (32 * MAX_NUM_INVOCATIONS * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress,
+        contents: &vec![0u8; 32 * MAX_NUM_INVOCATIONS * 3 * NUM_LIMBS * 4],
         usage: wgpu::BufferUsages::STORAGE,
-        mapped_at_creation: false,
     });
     let msm_len_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("MSM Length Buffer"),
@@ -134,23 +132,22 @@ pub async fn run_bucket_reduction(wgsl_source: &str, points_bytes: &[u8], scalar
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
     });
 
-    // The result buffer must be large enough to hold final data
-    let buckets = device.create_buffer(&wgpu::BufferDescriptor {
+    let buckets = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Buckets Buffer"),
-        size: (32 * 256 * MAX_NUM_INVOCATIONS * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress,
-        usage: wgpu::BufferUsages::STORAGE,
-        mapped_at_creation: false,
+        contents: &vec![0u8; 32 * 256 * MAX_NUM_INVOCATIONS * 3 * NUM_LIMBS * 4],
+        usage: wgpu::BufferUsages::STORAGE
+        | wgpu::BufferUsages::COPY_DST
+        | wgpu::BufferUsages::COPY_SRC,
     });
 
     let result_buffer_size = (32 * MAX_NUM_INVOCATIONS * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress;
 
     // TODO: Use create_buffer_init
-    let windows = device.create_buffer(&wgpu::BufferDescriptor {
+    let windows = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Windows Buffer"),
-        size: result_buffer_size,
+        contents: &vec![0u8; 32 * MAX_NUM_INVOCATIONS * 3 * NUM_LIMBS * 4],
         usage: wgpu::BufferUsages::STORAGE
         | wgpu::BufferUsages::COPY_SRC,
-        mapped_at_creation: false,
     });
 
     let msm_len_buffer = device.create_buffer(&wgpu::BufferDescriptor {
