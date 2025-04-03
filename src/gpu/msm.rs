@@ -107,7 +107,9 @@ pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8
             num_invocations_buffer
         ],
         vec![
-            ("main".to_string(), num_invocations as u32),
+            ("run_bucket_accumulation_phase".to_string(), num_invocations as u32),
+            ("run_bucket_reduction_phase".to_string(), num_invocations as u32),
+            ("run_final_reduction_phase".to_string(), num_invocations as u32),
             ("aggregate".to_string(), 1),
         ], 
         compute_pipeline_fn,

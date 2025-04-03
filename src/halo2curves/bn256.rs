@@ -102,7 +102,7 @@ mod tests {
 
     #[test]
     fn test_bn256() {
-        let sample_size = 64;
+        let sample_size = 1000;
         let scalars = sample_scalars(sample_size);
         let points = sample_points(sample_size);
 
@@ -127,7 +127,7 @@ mod tests {
         let now = Instant::now();
         let fast = fast_msm(&points, &scalars);
         println!("Fast Elapsed: {:.2?}", now.elapsed());
-        let now = Instant::now();
+        let now = Instant::now()    ;
         let result = emulate_pippenger_gpu(&points, &scalars);
         println!("WebGPU Elapsed: {:.2?}", now.elapsed());
 
@@ -306,8 +306,10 @@ mod tests {
         let total_windows = 32;
         let mut emulated_buckets = vec![G1::identity(); total_buckets * num_invocations];
         let mut emulated_windows = vec![G1::identity(); num_invocations * total_windows];
-        emulate_bucket_accumulation(&points, &scalars, &mut emulated_buckets, 0);
-        emulate_bucket_reduction(&mut emulated_buckets, &mut emulated_windows, 0);
+        for i in 0..num_invocations {
+            emulate_bucket_accumulation(&points, &scalars, &mut emulated_buckets, i);
+            emulate_bucket_reduction(&mut emulated_buckets, &mut emulated_windows, 0);
+        }
         let shader_code = load_pippenger_phases_shader_code();
         let result = pollster::block_on(gpu::test::pippenger_phases::run_bucket_reduction(&shader_code, &points_bytes, &scalars_bytes));
         let gpu_windows_in_fields: Vec<Fq> = u16_vec_to_fields_montgomery(&result);

@@ -35,6 +35,5 @@ fn test_bucket_reduction(
 ) {
     let gidx = global_id.x;
     let lidx = local_id.x;
-    // bucket_accumulation_phase(gidx);
     bucket_reduction_phase(gidx);
 }

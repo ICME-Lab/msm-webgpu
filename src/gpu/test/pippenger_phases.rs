@@ -195,6 +195,7 @@ pub async fn run_bucket_reduction(wgsl_source: &str, points_bytes: &[u8], scalar
             msm_len_buffer,
         ],
         vec![
+            ("test_bucket_accumulation".to_string(), num_invocations as u32),
             ("test_bucket_reduction".to_string(), num_invocations as u32),
         ], 
         compute_pipeline_fn,

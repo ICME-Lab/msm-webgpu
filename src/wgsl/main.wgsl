@@ -4,14 +4,36 @@
 
 // NUM_INVOCATIONS workgroups of 1 thread each
 @compute @workgroup_size(1)
-fn main(
+fn run_bucket_accumulation_phase(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(local_invocation_id) local_id: vec3<u32>
 ) {
     let gidx = global_id.x;
     let lidx = local_id.x;
 
-    result[gidx] = pippenger(gidx);
+    bucket_accumulation_phase(gidx);
+}
+
+@compute @workgroup_size(1)
+fn run_bucket_reduction_phase(
+    @builtin(global_invocation_id) global_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>
+) {
+    let gidx = global_id.x;
+    let lidx = local_id.x;
+
+    bucket_reduction_phase(gidx);
+}
+
+@compute @workgroup_size(1)
+fn run_final_reduction_phase(
+    @builtin(global_invocation_id) global_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>
+) {
+    let gidx = global_id.x;
+    let lidx = local_id.x;
+
+    result[gidx] = final_reduction_phase(gidx);
 }
 
 // Only one workgroup of 256 threads
