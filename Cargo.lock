@@ -248,19 +248,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 [[package]]
 name = "ff"
 version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0b50bfb653653f9ca9095b427bed08ab8d75a137839d9ad64eb11810d5b6393"
-dependencies = [
- "bitvec",
- "rand_core",
- "subtle",
-]
-
-[[package]]
-name = "ff"
-version = "0.13.1"
 source = "git+https://github.com/ICME-Lab/ff?branch=montgomery-repr#1aceeafa1394d8407902148bccdf3a3b83e0c9ab"
 dependencies = [
+ "bitvec",
  "rand_core",
  "subtle",
 ]
@@ -406,7 +396,7 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0f9ef7462f7c099f518d754361858f86d8a07af53ba9af0fe635bbccb151a63"
 dependencies = [
- "ff 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ff",
  "rand_core",
  "subtle",
 ]
@@ -414,10 +404,10 @@ dependencies = [
 [[package]]
 name = "halo2curves"
 version = "0.6.0"
-source = "git+https://github.com/ICME-Lab/halo2curves?branch=main#b24cb42ff44f48bc5487a025e61ec0b2c73c9803"
+source = "git+https://github.com/ICME-Lab/halo2curves?branch=montgomery#f6175cbd70e6f1c9b4f7d714ec3eed3f9d85e77d"
 dependencies = [
  "blake2b_simd",
- "ff 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ff",
  "group",
  "hex",
  "lazy_static",
@@ -604,7 +594,7 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "bytemuck",
- "ff 0.13.1 (git+https://github.com/ICME-Lab/ff?branch=montgomery-repr)",
+ "ff",
  "getrandom",
  "group",
  "halo2curves",
@@ -751,7 +741,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3e57598f73cc7e1b2ac63c79c517b31a0877cd7c402cdcaa311b5208de7a095"
 dependencies = [
  "blake2b_simd",
- "ff 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ff",
  "group",
  "lazy_static",
  "rand",

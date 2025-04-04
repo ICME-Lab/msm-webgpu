@@ -33,3 +33,5 @@ wasm-bindgen-test = "0.3.50"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2.0", default-features = false, features = ["js"] }
 
+[patch.crates-io]
+ff = { git = "https://github.com/ICME-Lab/ff", branch = "montgomery-repr", default-features = false, features = ["std"] }
