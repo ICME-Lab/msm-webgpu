@@ -2,7 +2,7 @@ use wgpu::util::DeviceExt;
 
 use crate::gpu::{setup_webgpu, run_webgpu};
 use crate::gpu::*;
-use crate::halo2curves::utils::{cast_u8_to_u16, cast_u8_to_u32};
+use crate::halo2curves::utils::cast_u8_to_u16;
 
 // ------------------------------------------------------------
 // Field operations

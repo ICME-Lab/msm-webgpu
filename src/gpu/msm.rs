@@ -1,5 +1,3 @@
-use std::future::Future;
-
 use crate::gpu::*;
 use crate::gpu::{run_webgpu, setup_webgpu};
 use crate::halo2curves::utils::cast_u8_to_u16;
@@ -41,7 +39,6 @@ pub async fn run_msm_inner(wgsl_source: &str, points_bytes: &[u8], scalars_bytes
 
     let buckets = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Buckets Buffer"),
-        // size: (64 * 4096 * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress,
         contents: &vec![0u8; 32 * 256 * MAX_NUM_INVOCATIONS * 3 * NUM_LIMBS * 4],
         usage: wgpu::BufferUsages::STORAGE,
     });

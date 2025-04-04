@@ -1,5 +1,4 @@
 use ff::PrimeField;
-use num_bigint::BigUint;
 
 
 pub fn field_to_bytes<F: PrimeField>(value: F) -> Vec<u8> {

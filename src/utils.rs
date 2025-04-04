@@ -140,7 +140,7 @@ pub fn bigint_to_u16s(a: &BigUint) -> Vec<u16> {
 
 #[cfg(test)]
 mod tests {
-    use ff::PrimeField;
+    
     use num_integer::Integer;
     use num_traits::Num;
 

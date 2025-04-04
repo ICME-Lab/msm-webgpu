@@ -1,5 +1,5 @@
 use halo2curves::bn256::{G1Affine, G1, Fr};
-use group::{Curve, Group};
+use group::Group;
 
 use crate::halo2curves::utils::field_to_bytes;
 

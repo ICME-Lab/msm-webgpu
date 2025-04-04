@@ -1,7 +1,6 @@
 use ff::{Field, PrimeField};
 use group::{Group, Curve};
 use halo2curves::{pasta::pallas::{Affine, Base as Fq, Point, Scalar as Fr}, CurveExt};
-use num_traits::One;
 use rand::thread_rng;
 use crate::{ gpu, halo2curves::utils::{fields_to_u16_vec, u16_vec_to_fields}, utils::load_shader_code_pallas
 };
@@ -85,7 +84,7 @@ pub async fn run_webgpu_msm_async_browser(g: &Vec<Affine>, v: &Vec<Fr>) -> Point
 mod tests {
     use std::time::Instant;
 
-    use crate::halo2curves::utils::{field_to_bytes, u32_vec_to_fields};
+    
 
     use super::*;
   

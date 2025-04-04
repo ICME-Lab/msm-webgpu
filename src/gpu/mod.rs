@@ -1,5 +1,5 @@
 use wgpu::{
-    Adapter, BindGroupLayoutEntry, Buffer, BufferAsyncError, BufferSlice, BufferView, CommandEncoder, ComputePipeline, Device, Instance, MapMode, PipelineLayout, Queue
+    BindGroupLayoutEntry, Buffer, BufferAsyncError, BufferSlice, CommandEncoder, ComputePipeline, Device, MapMode, PipelineLayout, Queue
 };
 pub mod msm;
 pub mod test;

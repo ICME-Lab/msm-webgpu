@@ -1,5 +1,5 @@
 use crate::{
-    gpu, halo2curves::utils::{fields_to_u16_vec, u16_vec_to_fields}, montgomery::{utils::{fields_to_u32_vec_montgomery, u32_vec_to_fields_montgomery}, MontgomeryRepr}, utils::load_shader_code_bn254
+    gpu, halo2curves::utils::fields_to_u16_vec, montgomery::MontgomeryRepr, utils::load_shader_code_bn254
 };
 use ff::{Field, PrimeField};
 use group::{Group, Curve};
@@ -13,7 +13,6 @@ use halo2curves::{msm::best_multiexp, CurveAffine};
 
 use crate::montgomery::utils::{fields_to_u16_vec_montgomery, u16_vec_to_fields_montgomery};
 
-use super::utils::fields_to_u32_vec;
 
 
 pub fn sample_scalars(n: usize) -> Vec<Fr> {
@@ -102,11 +101,11 @@ mod tests {
     use group::cofactor::CofactorCurveAffine;
     use rand::Rng;
 
-    use crate::gpu::test::pippenger::{emulate_bucket_accumulation, emulate_bucket_reduction, emulate_pippenger, emulate_pippenger_gpu};
+    use crate::gpu::test::pippenger::{emulate_bucket_accumulation, emulate_bucket_reduction, emulate_pippenger_gpu};
     use crate::montgomery::utils::field_to_bytes_montgomery;
     use crate::montgomery::MontgomeryRepr;
 
-    use crate::halo2curves::utils::{cast_u8_to_u16, cast_u8_to_u32, u32_vec_to_fields};
+    use crate::halo2curves::utils::{cast_u8_to_u16, cast_u8_to_u32, fields_to_u32_vec, u16_vec_to_fields, u32_vec_to_fields};
 
     use super::*;
 
