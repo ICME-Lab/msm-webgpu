@@ -1,18 +1,18 @@
-use super::MontgomeryRepr;
+use ff::PrimeField;
 
-pub fn field_to_bytes_montgomery<F: MontgomeryRepr>(value: F) -> Vec<u8> {
+pub fn field_to_bytes_montgomery<F: PrimeField>(value: F) -> Vec<u8> {
     let s_bytes = value.to_montgomery_repr();
     let s_bytes_ref = s_bytes.as_ref();
     s_bytes_ref.to_vec()
 }
 
-pub fn bytes_to_field_montgomery<F: MontgomeryRepr>(bytes: &[u8]) -> F {
+pub fn bytes_to_field_montgomery<F: PrimeField>(bytes: &[u8]) -> F {
     let mut repr = F::Repr::default();
     repr.as_mut()[..bytes.len()].copy_from_slice(bytes);
     F::from_montgomery_repr(repr).unwrap()
 }
 
-pub fn fields_to_u16_vec_montgomery<F: MontgomeryRepr>(fields: &[F]) -> Vec<u16> {
+pub fn fields_to_u16_vec_montgomery<F: PrimeField>(fields: &[F]) -> Vec<u16> {
     fields
         .iter()
         .map(|field| field_to_u16_vec_montgomery(field))
@@ -20,7 +20,7 @@ pub fn fields_to_u16_vec_montgomery<F: MontgomeryRepr>(fields: &[F]) -> Vec<u16>
         .collect()
 }
 
-pub fn field_to_u16_vec_montgomery<F: MontgomeryRepr>(field: &F) -> Vec<u16> {
+pub fn field_to_u16_vec_montgomery<F: PrimeField>(field: &F) -> Vec<u16> {
     let bytes = field_to_bytes_montgomery(field.clone());
     let mut u16_vec = Vec::new();
 
@@ -31,7 +31,7 @@ pub fn field_to_u16_vec_montgomery<F: MontgomeryRepr>(field: &F) -> Vec<u16> {
     u16_vec
 }
 
-pub fn u16_vec_to_fields_montgomery<F: MontgomeryRepr>(u16_array: &[u16]) -> Vec<F> {
+pub fn u16_vec_to_fields_montgomery<F: PrimeField>(u16_array: &[u16]) -> Vec<F> {
     u16_array
         .chunks_exact(16) // Each field element is 16 u16s (16 * 16 bits)
         .map(|chunk| {
@@ -45,7 +45,7 @@ pub fn u16_vec_to_fields_montgomery<F: MontgomeryRepr>(u16_array: &[u16]) -> Vec
         .collect()
 }
 
-pub fn fields_to_u32_vec_montgomery<F: MontgomeryRepr>(fields: &[F]) -> Vec<u32> {
+pub fn fields_to_u32_vec_montgomery<F: PrimeField>(fields: &[F]) -> Vec<u32> {
     fields
         .iter()
         .map(|field| field_to_u32_vec_montgomery(field))
@@ -53,7 +53,7 @@ pub fn fields_to_u32_vec_montgomery<F: MontgomeryRepr>(fields: &[F]) -> Vec<u32>
         .collect()
 }
 
-pub fn field_to_u32_vec_montgomery<F: MontgomeryRepr>(field: &F) -> Vec<u32> {
+pub fn field_to_u32_vec_montgomery<F: PrimeField>(field: &F) -> Vec<u32> {
     let bytes = field_to_bytes_montgomery(field.clone());
     let mut u32_vec = Vec::new();
 
@@ -64,7 +64,7 @@ pub fn field_to_u32_vec_montgomery<F: MontgomeryRepr>(field: &F) -> Vec<u32> {
     u32_vec
 }
 
-pub fn u32_vec_to_fields_montgomery<F: MontgomeryRepr>(u32_array: &[u32]) -> Vec<F> {
+pub fn u32_vec_to_fields_montgomery<F: PrimeField>(u32_array: &[u32]) -> Vec<F> {
     u32_array
         .chunks_exact(8) // Each field element is 8 u32s (8 * 32 bits)
         .map(|chunk| {

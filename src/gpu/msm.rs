@@ -5,7 +5,7 @@ use wgpu::util::DeviceExt;
 
 
 pub const WORKGROUP_SIZE: usize = 64;
-pub const MAX_NUM_INVOCATIONS: usize = 1024;
+pub const MAX_NUM_INVOCATIONS: usize = 1280;
 
 pub async fn run_msm_inner(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8], device: &Device, queue: &Queue) -> Buffer {
     let msm_len = scalars_bytes.len() / 64;
@@ -139,7 +139,6 @@ pub async fn run_msm_browser(wgsl_source: &str, points_bytes: &[u8], scalars_byt
     let result = run_msm_inner(wgsl_source, points_bytes, scalars_bytes, &device, &queue).await;
 
     let buffer_slice = result.slice(..);
-    // let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
     let _ = map_buffer_async_browser(buffer_slice, wgpu::MapMode::Read).await;
     device.poll(wgpu::Maintain::Wait);
     let data = buffer_slice.get_mapped_range();
