@@ -14,8 +14,6 @@ num-integer = "0.1.46"
 itertools = "0.12.0"
 num-traits = "0.2.17"
 ahash = { version = "0.8.11", default-features = false }
-js-sys = "0.3.77"
-web-sys = { version = "0.3", features = ["console"] }
 halo2curves = { git = "https://github.com/ICME-Lab/halo2curves", branch = "main", features = ["bits", "derive_serde"] }
 group = "0.13.0"
 ff = { git = "https://github.com/ICME-Lab/ff", branch = "main", default-features = false, features = ["std"] }
@@ -29,6 +27,8 @@ wasm-bindgen-test = "0.3.50"
 getrandom = { version = "0.2.0", default-features = false, features = ["js"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
+js-sys = "0.3.77"
+web-sys = { version = "0.3", features = ["console"] }
 
 [patch.crates-io]
 ff = { git = "https://github.com/ICME-Lab/ff", branch = "main" }
