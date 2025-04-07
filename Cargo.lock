@@ -248,7 +248,7 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 [[package]]
 name = "ff"
 version = "0.13.1"
-source = "git+https://github.com/ICME-Lab/ff?branch=montgomery-repr#1aceeafa1394d8407902148bccdf3a3b83e0c9ab"
+source = "git+https://github.com/ICME-Lab/ff?branch=main#19733c03ff95f27950bff9a44aaedf83c63ccff8"
 dependencies = [
  "bitvec",
  "rand_core",
@@ -404,7 +404,7 @@ dependencies = [
 [[package]]
 name = "halo2curves"
 version = "0.6.0"
-source = "git+https://github.com/ICME-Lab/halo2curves?branch=montgomery#f6175cbd70e6f1c9b4f7d714ec3eed3f9d85e77d"
+source = "git+https://github.com/ICME-Lab/halo2curves?branch=main#b606565198df9dfd7626011dfc5ee0a6bdafe643"
 dependencies = [
  "blake2b_simd",
  "ff",
