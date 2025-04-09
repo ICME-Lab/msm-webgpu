@@ -32,7 +32,7 @@ mod tests {
 
     #[test]
     fn test_bn256() {
-        let sample_size = 64000;
+        let sample_size = 16385;
         let scalars = sample_scalars::<Fr>(sample_size);
         let points = sample_points::<G1Affine>(sample_size);
 
@@ -47,7 +47,7 @@ mod tests {
 
     #[test]
     fn test_pippenger_emul() {
-        let sample_size = 1000;
+        let sample_size = 16385;
         let scalars = sample_scalars::<Fr>(sample_size);
         let points = sample_points::<G1Affine>(sample_size);
         let now = Instant::now();

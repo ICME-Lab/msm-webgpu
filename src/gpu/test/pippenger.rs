@@ -82,6 +82,29 @@ pub fn emulate_pippenger(points: &[G1Affine], scalars: &[Fr], buckets: &mut [G1]
     emulate_final_reduction(windows, gidx)
 }
 
+fn emulate_reduction(mut result: Vec<G1>) -> G1 {
+    let mut n = result.len();
+    while n > 1 {
+        // Create a new vector for the next level. If n is odd, one leftover element
+        // will be carried down.
+        let mut next_level = Vec::with_capacity((n + 1) / 2);
+        let pairs = n / 2;
+        for i in 0..pairs {
+            // Reduce pairs: add the two elements together.
+            let reduced = result[2 * i] + result[2 * i + 1];
+            next_level.push(reduced);
+        }
+        if n % 2 == 1 {
+            // If odd, carry down the last element.
+            next_level.push(result[n - 1]);
+        }
+        // Prepare for the next iteration.
+        result = next_level;
+        n = result.len();
+    }
+    result[0].clone()
+}
+
 pub fn emulate_pippenger_gpu(points: &[G1Affine], scalars: &[Fr]) -> G1 {
     assert_eq!(points.len(), scalars.len());
 
@@ -95,25 +118,5 @@ pub fn emulate_pippenger_gpu(points: &[G1Affine], scalars: &[Fr]) -> G1 {
         result[gidx] = emulate_pippenger(points, scalars, &mut buckets, &mut windows, gidx);
     }
 
-
-    // === Simulate: @compute @workgroup_size(256) aggregate() ===
-    let split = num_invocations / 256;
-
-    // Step 1: Each thread (idx ∈ 0..255) reduces its vertical slice
-    for lidx in 0..256 {
-        for j in 0..split {
-            result[lidx] = result[lidx] + result[lidx + j * 256];
-        }
-    }
-
-    // Step 2: Binary tree reduction across threads
-    while result.len() > 1 {
-        let half = result.len() / 2;
-        for i in 0..half {
-            result[i] = result[i] + result[i + half];
-        }
-        result.truncate(half);
-    }
-
-    result[0] // Final result
+    emulate_reduction(result)
 }
