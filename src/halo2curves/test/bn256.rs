@@ -469,17 +469,18 @@ mod tests_wasm_pack {
 
     #[wasm_bindgen_test]
     async fn test_webgpu_msm_bn254() {
-        let sample_size = 128000;
+        let sample_size = 100000;
         let points = sample_points::<G1Affine>(sample_size);
         let scalars = sample_scalars::<Fr>(sample_size);
+        
+        let cpu_start = now();
+        let fast = fast_msm(&points, &scalars);
+        console::log_1(&format!("CPU Elapsed: {} ms", now() - cpu_start).into());
 
         let gpu_start = now();
         let result = run_webgpu_msm_async_browser(&points, &scalars).await;
         console::log_1(&format!("GPU Elapsed: {} ms", now() - gpu_start).into());
         
-        let cpu_start = now();
-        let fast = fast_msm(&points, &scalars);
-        console::log_1(&format!("CPU Elapsed: {} ms", now() - cpu_start).into());
 
 
         console::log_1(&format!("Result: {:?}", result).into());

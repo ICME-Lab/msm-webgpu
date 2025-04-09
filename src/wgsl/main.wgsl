@@ -11,6 +11,10 @@ fn run_bucket_accumulation_phase(
     let gidx = global_id.x;
     let lidx = local_id.x;
 
+    if (gidx >= msm_len.val) {
+        return;
+    }
+
     bucket_accumulation_phase(gidx);
 }
 
@@ -21,7 +25,9 @@ fn run_bucket_reduction_phase(
 ) {
     let gidx = global_id.x;
     let lidx = local_id.x;
-
+    if (gidx >= msm_len.val) {
+        return;
+    }
     bucket_reduction_phase(gidx);
 }
 
@@ -32,7 +38,9 @@ fn run_final_reduction_phase(
 ) {
     let gidx = global_id.x;
     let lidx = local_id.x;
-
+    if (gidx >= msm_len.val) {
+        return;
+    }
     result[gidx] = final_reduction_phase(gidx);
 }
 
@@ -49,28 +57,18 @@ fn aggregate(
     let split = num_invocations.val / 256u; // Each thread handles this many entries
 
     // Step 1: Each thread accumulates its vertical slice
-    for (var j = 0u; j < split; j = j + 1u) {
-        result[lidx] = jacobian_add(result[lidx], result[lidx + j * 256u]);
+    for (var j = 1u; j < split; j = j + 1u) {
+        result[lidx] = jacobian_add(result[lidx], result[lidx + split * 256u]);
     }
 
 
     // Make sure all partial results are written
     storageBarrier();
-    if (lidx == 0u) {
-        var current_count = num_invocations.val;
 
-        loop {
-            if (current_count <= 1u) {
-                break;
-            }
-
-            let half = current_count / 2u;
-
-            for (var i = 0u; i < half; i = i + 1u) {
-                result[i] = jacobian_add(result[i], result[i + half]);
-            }
-
-            current_count = half;
+    for (var offset: u32 = 256 / 2u; offset > 0u; offset = offset / 2u) {
+        if (lidx < offset) {
+            result[gidx] = jacobian_add(result[gidx], result[gidx + offset]);
         }
+        storageBarrier();
     }
 }

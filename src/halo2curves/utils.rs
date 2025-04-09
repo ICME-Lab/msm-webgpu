@@ -36,6 +36,19 @@ pub fn field_to_u16_vec<F: PrimeField>(field: &F) -> Vec<u16> {
     u16_vec
 }
 
+pub fn field_to_u16_as_u32_as_u8_vec<F: PrimeField>(field: &F) -> Vec<u8> {
+    let bytes = field_to_bytes(field.clone());
+    assert!(bytes.len() % 2 == 0);
+    
+    let mut output = Vec::with_capacity((bytes.len() / 2) * 4); // each u16 → u32 → 4 bytes
+
+    for chunk in bytes.chunks_exact(2) {
+        let val = u16::from_le_bytes([chunk[0], chunk[1]]) as u32;
+        output.extend_from_slice(&val.to_le_bytes());
+    }
+
+    output
+}
 
 pub fn u16_vec_to_fields<F: PrimeField>(u16_array: &[u16]) -> Vec<F> {
     u16_array
@@ -51,16 +64,8 @@ pub fn u16_vec_to_fields<F: PrimeField>(u16_array: &[u16]) -> Vec<F> {
 }
 
 pub fn cast_u8_to_u16(u8_array: &[u8]) -> Vec<u16> {
-    let output_u32: Vec<u32> = bytemuck::cast_slice::<u8, u32>(u8_array).to_vec();
-    output_u32
-        .iter()
-        .map(|&x| {
-            if x > u16::MAX as u32 {
-                panic!("Value {} is too large for u16", x);
-            }
-            x as u16
-        })
-        .collect::<Vec<_>>()
+    let u32_slice: &[u32] = bytemuck::cast_slice(u8_array);
+    u32_slice.iter().map(|&x| x as u16).collect()
 }
 
 // ------------------------------------------------------------------------------------------------

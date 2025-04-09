@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use crate::gpu::*;
 use crate::gpu::{run_webgpu, setup_webgpu};
 use crate::halo2curves::utils::cast_u8_to_u16;
@@ -119,14 +121,20 @@ pub async fn run_msm_inner(wgsl_source: &str, points_bytes: &[u8], scalars_bytes
 
 pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8]) -> Vec<u16> {
     let (device, queue) = setup_webgpu().await;
+    let now = Instant::now();
     let result = run_msm_inner(wgsl_source, points_bytes, scalars_bytes, &device, &queue).await;
+    println!("MSM time: {:?}", now.elapsed());
 
+    let now = Instant::now();
     let buffer_slice = result.slice(..);
     let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
     device.poll(wgpu::Maintain::Wait);
     let data = buffer_slice.get_mapped_range();
+    println!("Mapping time: {:?}", now.elapsed());
 
+    let now = Instant::now();
     let output_u16 = cast_u8_to_u16(&data);
+    println!("Casting time: {:?}", now.elapsed());
     drop(data);
     result.unmap();
 

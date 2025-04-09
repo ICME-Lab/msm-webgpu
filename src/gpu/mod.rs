@@ -28,8 +28,14 @@ pub async fn setup_webgpu() -> (Device, Queue) {
         max_compute_workgroup_size_x: 1024,
         max_compute_invocations_per_workgroup: 1024,
         max_compute_workgroups_per_dimension: adapter.limits().max_compute_workgroups_per_dimension,
+        max_storage_buffers_per_shader_stage: adapter.limits().max_storage_buffers_per_shader_stage,
+        max_bind_groups: adapter.limits().max_bind_groups,
+        max_bindings_per_bind_group: adapter.limits().max_bindings_per_bind_group,
         ..Default::default()
     };
+    // let required_limits = adapter.limits();
+    // let required_limits = wgpu::Limits { ..Default::default() };
+    println!("Required limits: {:?}", required_limits);
 
     let (device, queue) = adapter
         .request_device(

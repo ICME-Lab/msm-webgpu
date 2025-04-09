@@ -22,7 +22,6 @@ const TWO_POW_C = 1u << ChunkSize;
 fn bucket_accumulation_phase(gidx: u32) {
     let base = gidx * PointsPerInvocation;
     for (var i = 0u; i < PointsPerInvocation; i = i + 1u) {
-        // TODO: Revise this. Maybe pad with identity points
         if (msm_len.val > base + i) {
             var scalar = scalars[base + i];
             var u8_scalar = to_bytes(scalar);
