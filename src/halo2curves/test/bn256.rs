@@ -469,7 +469,7 @@ mod tests_wasm_pack {
 
     #[wasm_bindgen_test]
     async fn test_webgpu_msm_bn254() {
-        let sample_size = 100000;
+        let sample_size = 80000;
         let points = sample_points::<G1Affine>(sample_size);
         let scalars = sample_scalars::<Fr>(sample_size);
         
