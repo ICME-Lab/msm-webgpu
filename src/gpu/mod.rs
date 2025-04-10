@@ -60,9 +60,8 @@ pub async fn run_webgpu(
     uniform_buffers: Vec<Buffer>,
     pipeline_entry_points: Vec<(String, u32)>,
     compute_pipeline: impl Fn((String, PipelineLayout)) -> ComputePipeline,
-    readback_buffer: Buffer,
     copy_results_to_encoder: impl Fn(&mut CommandEncoder) -> (),
-) -> Buffer {
+) {
 
     let storage_buffer_entries =(0..storage_buffers.len())
         .map(|i| default_storage_buffer_entry(i as u32))
@@ -124,10 +123,7 @@ pub async fn run_webgpu(
     queue.submit(Some(encoder.finish()));
 
     // Await the GPU queue to finish
-    device.poll(wgpu::Maintain::Wait);
-
-
-    readback_buffer
+    // device.poll(wgpu::Maintain::Wait);
 }
 
 

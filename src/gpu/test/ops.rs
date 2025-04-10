@@ -59,7 +59,7 @@ pub async fn field_op(wgsl_source: &str, a_bytes: &[u8], b_bytes: &[u8], op: &st
         encoder.copy_buffer_to_buffer(&result_buffer, 0, &readback_buffer, 0,  (NUM_LIMBS * 4) as wgpu::BufferAddress);
     };
 
-    let result = run_webgpu(
+    run_webgpu(
         &device,
         &queue,
         vec![
@@ -70,19 +70,18 @@ pub async fn field_op(wgsl_source: &str, a_bytes: &[u8], b_bytes: &[u8], op: &st
         vec![],
         vec![(op.to_string(), 1)], 
         compute_pipeline_fn,
-        readback_buffer.clone(),
         copy_results_to_encoder,
     )
     .await;
 
-    let buffer_slice = result.slice(..);
+    let buffer_slice = readback_buffer.slice(..);
     let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
     device.poll(wgpu::Maintain::Wait);
     let data = buffer_slice.get_mapped_range();
 
     let output_u16 = cast_u8_to_u16(&data);
     drop(data);
-    result.unmap();
+    readback_buffer.unmap();
 
     output_u16
 }
@@ -156,7 +155,7 @@ pub async fn point_op(wgsl_source: &str, a_bytes: &[u8], b_bytes: &[u8], op: &st
         encoder.copy_buffer_to_buffer(&result_buffer, 0, &readback_buffer, 0, (3 * NUM_LIMBS * 4) as wgpu::BufferAddress);
     };
 
-    let result = run_webgpu(
+    run_webgpu(
         &device,
         &queue,
         vec![
@@ -167,19 +166,18 @@ pub async fn point_op(wgsl_source: &str, a_bytes: &[u8], b_bytes: &[u8], op: &st
         vec![],
         vec![(op.to_string(), 1)], 
         compute_pipeline_fn,
-        readback_buffer.clone(),
         copy_results_to_encoder,
     )
     .await;
 
-    let buffer_slice = result.slice(..);
+    let buffer_slice = readback_buffer.slice(..);
     let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
     device.poll(wgpu::Maintain::Wait);
     let data = buffer_slice.get_mapped_range();
 
     let output_u16 = cast_u8_to_u16(&data);
     drop(data);
-    result.unmap();
+    readback_buffer.unmap();
 
     output_u16
 }
@@ -255,7 +253,7 @@ pub async fn point_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[
         encoder.copy_buffer_to_buffer(&result_buffer, 0, &readback_buffer, 0, (3 * NUM_LIMBS * 4) as wgpu::BufferAddress);
     };
 
-    let result = run_webgpu(
+    run_webgpu(
         &device,
         &queue,
         vec![
@@ -268,19 +266,18 @@ pub async fn point_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[
         ],
         vec![("test_point_msm".to_string(), 1)], 
         compute_pipeline_fn,
-        readback_buffer.clone(),
         copy_results_to_encoder,
     )
     .await;
 
-    let buffer_slice = result.slice(..);
+    let buffer_slice = readback_buffer.slice(..);
     let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
     device.poll(wgpu::Maintain::Wait);
     let data = buffer_slice.get_mapped_range();
 
     let output_u16 = cast_u8_to_u16(&data);
     drop(data);
-    result.unmap();
+    readback_buffer.unmap();
 
     output_u16
 }
@@ -335,7 +332,7 @@ pub async fn field_to_bytes(wgsl_source: &str, a_bytes: &[u8]) -> Vec<u8> {
         encoder.copy_buffer_to_buffer(&result_buffer, 0, &readback_buffer, 0,  (128) as wgpu::BufferAddress);
     };
 
-    let result = run_webgpu(
+    run_webgpu(
         &device,
         &queue,
         vec![
@@ -345,19 +342,18 @@ pub async fn field_to_bytes(wgsl_source: &str, a_bytes: &[u8]) -> Vec<u8> {
         vec![],
         vec![("test_field_to_bytes".to_string(), 1)], 
         compute_pipeline_fn,
-        readback_buffer.clone(),
         copy_results_to_encoder,
     )
     .await;
 
-    let buffer_slice = result.slice(..);
+    let buffer_slice = readback_buffer.slice(..);
     let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
     device.poll(wgpu::Maintain::Wait);
     let data = buffer_slice.get_mapped_range();
 
     let output = data.to_vec();
     drop(data);
-    result.unmap();
+    readback_buffer.unmap();
 
     output
 }
@@ -431,7 +427,7 @@ pub async fn sum_of_sums_simple(wgsl_source: &str, points_bytes: &[u8], scalars_
         encoder.copy_buffer_to_buffer(&result_buffer, 0, &readback_buffer, 0, (3 * NUM_LIMBS * 4) as wgpu::BufferAddress);
     };
 
-    let result = run_webgpu(
+    run_webgpu(
         &device,
         &queue,
         vec![
@@ -445,19 +441,18 @@ pub async fn sum_of_sums_simple(wgsl_source: &str, points_bytes: &[u8], scalars_
         ],
         vec![("test_sum_of_sums_simple".to_string(), 1)], 
         compute_pipeline_fn,
-        readback_buffer.clone(),
         copy_results_to_encoder,
     )
     .await;
 
-    let buffer_slice = result.slice(..);
+    let buffer_slice = readback_buffer.slice(..);
     let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
     device.poll(wgpu::Maintain::Wait);
     let data = buffer_slice.get_mapped_range();
 
     let output_u16 = cast_u8_to_u16(&data);
     drop(data);
-    result.unmap();
+    readback_buffer.unmap();
 
     output_u16
 }
@@ -529,7 +524,7 @@ pub async fn sum_of_sums(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: 
         encoder.copy_buffer_to_buffer(&windows, 0, &readback_buffer, 0, (32 * 3 * NUM_LIMBS * 4) as wgpu::BufferAddress);
     };
 
-    let result = run_webgpu(
+    run_webgpu(
         &device,
         &queue,
         vec![
@@ -543,19 +538,18 @@ pub async fn sum_of_sums(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: 
         ],
         vec![("test_sum_of_sums".to_string(), 1)], 
         compute_pipeline_fn,
-        readback_buffer.clone(),
         copy_results_to_encoder,
     )
     .await;
 
-    let buffer_slice = result.slice(..);
+    let buffer_slice = readback_buffer.slice(..);
     let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
     device.poll(wgpu::Maintain::Wait);
     let data = buffer_slice.get_mapped_range();
 
     let output_u16 = cast_u8_to_u16(&data);
     drop(data);
-    result.unmap();
+    readback_buffer.unmap();
 
     output_u16
 }

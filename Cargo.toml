@@ -19,11 +19,13 @@ group = "0.13.0"
 ff = { git = "https://github.com/ICME-Lab/ff", branch = "main", default-features = false, features = ["std"] }
 rand = "0.8.5"
 oneshot = "0.1.11"
+web-sys = { version = "0.3", features = ["console"] }
+wasm-bindgen = "0.2"
+gloo-timers = { version = "0.3.0", features = ["futures"] }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.50"
-web-sys = { version = "0.3", features = ["console"] }
-wasm-bindgen = "0.2"
+
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2.0", default-features = false, features = ["js"] }

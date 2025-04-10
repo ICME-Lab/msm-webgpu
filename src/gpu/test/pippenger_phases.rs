@@ -76,7 +76,7 @@ pub async fn run_bucket_accumulation(wgsl_source: &str, points_bytes: &[u8], sca
         encoder.copy_buffer_to_buffer(&buckets, 0, &readback_buffer, 0, result_buffer_size);
     };
 
-    let result = run_webgpu(
+    run_webgpu(
         &device,
         &queue,
         vec![
@@ -92,19 +92,18 @@ pub async fn run_bucket_accumulation(wgsl_source: &str, points_bytes: &[u8], sca
             ("test_bucket_accumulation".to_string(), num_invocations as u32),
         ], 
         compute_pipeline_fn,
-        readback_buffer.clone(),
         copy_results_to_encoder,
     )
     .await;
 
-    let buffer_slice = result.slice(..);
+    let buffer_slice = readback_buffer.slice(..);
     let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
     device.poll(wgpu::Maintain::Wait);
     let data = buffer_slice.get_mapped_range();
 
     let output_u16 = cast_u8_to_u16(&data);
     drop(data);
-    result.unmap();
+    readback_buffer.unmap();
 
     output_u16
 }
@@ -182,7 +181,7 @@ pub async fn run_bucket_reduction(wgsl_source: &str, points_bytes: &[u8], scalar
         encoder.copy_buffer_to_buffer(&windows, 0, &readback_buffer, 0, result_buffer_size);
     };
 
-    let result = run_webgpu(
+    run_webgpu(
         &device,
         &queue,
         vec![
@@ -199,19 +198,18 @@ pub async fn run_bucket_reduction(wgsl_source: &str, points_bytes: &[u8], scalar
             ("test_bucket_reduction".to_string(), num_invocations as u32),
         ], 
         compute_pipeline_fn,
-        readback_buffer.clone(),
         copy_results_to_encoder,
     )
     .await;
 
-    let buffer_slice = result.slice(..);
+    let buffer_slice = readback_buffer.slice(..);
     let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
     device.poll(wgpu::Maintain::Wait);
     let data = buffer_slice.get_mapped_range();
 
     let output_u16 = cast_u8_to_u16(&data);
     drop(data);
-    result.unmap();
+    readback_buffer.unmap();
 
     output_u16
 }

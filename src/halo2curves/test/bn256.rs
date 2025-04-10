@@ -32,7 +32,7 @@ mod tests {
 
     #[test]
     fn test_bn256() {
-        let sample_size = 16385;
+        let sample_size = 80000;
         let scalars = sample_scalars::<Fr>(sample_size);
         let points = sample_points::<G1Affine>(sample_size);
 
@@ -47,7 +47,7 @@ mod tests {
 
     #[test]
     fn test_pippenger_emul() {
-        let sample_size = 16385;
+        let sample_size = 100000;
         let scalars = sample_scalars::<Fr>(sample_size);
         let points = sample_points::<G1Affine>(sample_size);
         let now = Instant::now();
@@ -454,7 +454,7 @@ mod tests {
 mod tests_wasm_pack {
     use crate::halo2curves::*;
 
-    use halo2curves::bn256::{Fr, G1Affine};
+    use halo2curves::bn256::{Fq, Fr, G1Affine, G1};
     use wasm_bindgen_test::*;
     use wasm_bindgen::prelude::*;
     use web_sys::console;
@@ -478,13 +478,31 @@ mod tests_wasm_pack {
         console::log_1(&format!("CPU Elapsed: {} ms", now() - cpu_start).into());
 
         let gpu_start = now();
-        let result = run_webgpu_msm_async_browser(&points, &scalars).await;
+        // let result = run_webgpu_msm_async_browser(&points, &scalars).await;
+        let points_slice = points_to_bytes(&points);
+        console::log_1(&format!("points_to_bytes: {} ms", now() - gpu_start).into());
+
+        let vector_start = now();
+        let v_slice = scalars_to_bytes(&scalars);
+        console::log_1(&format!("scalars_to_bytes: {} ms", now() - vector_start).into());
+
+        let shader_start = now();
+        let shader_code = load_shader_code(Fq::MODULUS);
+        console::log_1(&format!("load_shader_code: {} ms", now() - shader_start).into());
+
+        let result_start = now();
+        let result = gpu::msm::run_msm_browser(&shader_code, &points_slice, &v_slice).await;
+        console::log_1(&format!("run_msm_browser: {} ms", now() - result_start).into());
+
+        let result_start = now();
+        let result: Vec<Fq> = u16_vec_to_fields_montgomery(&result);
+        console::log_1(&format!("u16_vec_to_fields_montgomery: {} ms", now() - result_start).into());
+        let result = G1::new_jacobian(result[0].clone(), result[1].clone(), result[2].clone()).unwrap();
         console::log_1(&format!("GPU Elapsed: {} ms", now() - gpu_start).into());
         
 
 
         console::log_1(&format!("Result: {:?}", result).into());
-
         assert_eq!(fast, result);
     }
 }

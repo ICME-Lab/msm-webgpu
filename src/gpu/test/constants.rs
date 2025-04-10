@@ -68,7 +68,7 @@ pub async fn run_constants(wgsl_source: &str, scalars_bytes: &[u8]) -> Vec<u32> 
         encoder.copy_buffer_to_buffer(&result_buffer, 0, &readback_buffer, 0, result_buffer_size);
     };
 
-    let result = run_webgpu(
+    run_webgpu(
         &device,
         &queue,
         vec![
@@ -82,19 +82,18 @@ pub async fn run_constants(wgsl_source: &str, scalars_bytes: &[u8]) -> Vec<u32> 
             ("test_constants".to_string(), 1),
         ], 
         compute_pipeline_fn,
-        readback_buffer.clone(),
         copy_results_to_encoder,
     )
     .await;
 
-    let buffer_slice = result.slice(..);
+    let buffer_slice = readback_buffer.slice(..);
     let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
     device.poll(wgpu::Maintain::Wait);
     let data = buffer_slice.get_mapped_range();
 
     let output_u32 = cast_u8_to_u32(&data);
     drop(data);
-    result.unmap();
+    readback_buffer.unmap();
 
     output_u32
 }

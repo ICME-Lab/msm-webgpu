@@ -1,13 +1,16 @@
-use std::time::Instant;
+use std::any::Any;
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::time::{Duration, Instant};
 
 use crate::gpu::*;
 use crate::gpu::{run_webgpu, setup_webgpu};
 use crate::halo2curves::utils::cast_u8_to_u16;
 use wgpu::util::DeviceExt;
+use gloo_timers::future::sleep;
 
 
 pub const WORKGROUP_SIZE: usize = 64;
-pub const MAX_NUM_INVOCATIONS: usize = 1280;
+pub const MAX_NUM_INVOCATIONS: usize = 1300;
 
 pub async fn run_msm_inner(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8], device: &Device, queue: &Queue) -> Buffer {
     let msm_len = scalars_bytes.len() / 64;
@@ -72,7 +75,7 @@ pub async fn run_msm_inner(wgsl_source: &str, points_bytes: &[u8], scalars_bytes
     // Create a separate buffer for reading results back
     let readback_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Readback Buffer"),
-        size: result_buffer_size,
+        size: (3 * NUM_LIMBS * 4) as wgpu::BufferAddress,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
@@ -89,7 +92,7 @@ pub async fn run_msm_inner(wgsl_source: &str, points_bytes: &[u8], scalars_bytes
     };
 
     let copy_results_to_encoder = |encoder: &mut CommandEncoder| {
-        encoder.copy_buffer_to_buffer(&result_buffer, 0, &readback_buffer, 0, result_buffer_size);
+        encoder.copy_buffer_to_buffer(&result_buffer, 0, &readback_buffer, 0, (3 * NUM_LIMBS * 4) as wgpu::BufferAddress);
     };
 
     run_webgpu(
@@ -113,10 +116,11 @@ pub async fn run_msm_inner(wgsl_source: &str, points_bytes: &[u8], scalars_bytes
             ("aggregate".to_string(), 1),
         ], 
         compute_pipeline_fn,
-        readback_buffer.clone(),
         copy_results_to_encoder,
     )
-    .await
+    .await;
+
+    readback_buffer
 }
 
 pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8]) -> Vec<u16> {
@@ -126,7 +130,7 @@ pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8
     println!("MSM time: {:?}", now.elapsed());
 
     let now = Instant::now();
-    let buffer_slice = result.slice(..);
+    let buffer_slice = result.slice(0..(3 * NUM_LIMBS * 4) as u64);
     let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
     device.poll(wgpu::Maintain::Wait);
     let data = buffer_slice.get_mapped_range();
@@ -140,20 +144,47 @@ pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8
 
     output_u16
 }
+use web_sys::console;
+use wasm_bindgen::prelude::*;
+use wgpu::BufferView;
 
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = performance)]
+    fn now() -> f64;
+}
 
 pub async fn run_msm_browser(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8]) -> Vec<u16> {
+    let start = now();
     let (device, queue) = setup_webgpu().await;
-    let result = run_msm_inner(wgsl_source, points_bytes, scalars_bytes, &device, &queue).await;
+    console::log_1(&format!("setup_webgpu: {} ms", now() - start).into());
 
-    let buffer_slice = result.slice(..);
+    let start = now();
+    let readback_buffer = run_msm_inner(wgsl_source, points_bytes, scalars_bytes, &device, &queue).await;
+    console::log_1(&format!("run_msm_inner: {} ms", now() - start).into());
+
+    let start = now();
+    // let buffer_slice = readback_buffer.slice(..);
+    let buffer_slice = readback_buffer.slice(0..(3 * NUM_LIMBS * 4) as u64);
     let _ = map_buffer_async_browser(buffer_slice, wgpu::MapMode::Read).await;
-    device.poll(wgpu::Maintain::Wait);
-    let data = buffer_slice.get_mapped_range();
+    // let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
+    // device.poll(wgpu::Maintain::Wait);
+    // let data = wait_for_mapping(buffer_slice).await.unwrap();
+    // Wait for one second
+    console::log_1(&format!("map_buffer_async_browser: {} ms", now() - start).into());
 
+    let start = now();
+    let data = buffer_slice.get_mapped_range();
+    console::log_1(&format!("get_mapped_range: {} ms", now() - start).into());
+
+    let start = now();
     let output_u16 = cast_u8_to_u16(&data);
+    console::log_1(&format!("cast_u8_to_u16: {} ms", now() - start).into());
     drop(data);
-    result.unmap();
+    let start = now();
+    readback_buffer.unmap();
+    console::log_1(&format!("unmap: {} ms", now() - start).into());
 
     output_u16 
 }
@@ -180,4 +211,42 @@ pub fn map_buffer_async_browser(
             Err(_) => Err(BufferAsyncError {}),
         }
     }
+}
+
+async fn wait_for_mapping(buffer_slice: wgpu::BufferSlice<'_>) -> Result<BufferView<'_>, wgpu::BufferAsyncError> {
+    console::log_1(&format!("wait_for_mapping").into());
+    // Start the async mapping
+    buffer_slice.map_async(wgpu::MapMode::Read, |res| {
+        // You may log or process the result here if needed.
+        // Do not unwrap here; propagate the error if desired.
+        console::log_1(&format!("map_async result: {:?}", res).into());
+        if let Err(e) = res {
+            web_sys::console::log_1(&format!("map_async error: {:?}", e).into());
+        } else {
+            res.unwrap()
+        }
+    });
+    
+    // Poll until the mapping is complete.
+    // device.poll(wgpu::Maintain::Wait) can be called before awaiting.
+    // But since that call blocks until all GPU work is done, in a browser you typically await the mapping future.
+    // Here, instead of sleeping, try awaiting the mapping future:
+    let mapping_result = async {
+        loop {
+            console::log_1(&format!("waiting for safe_get_mapped_range").into());
+            // Give control back to the browser so that the mapping callback can run.
+            sleep(Duration::from_millis(10)).await;
+            if let Ok(v) = safe_get_mapped_range(&buffer_slice) {
+                return v;
+            }
+        }
+    }.await;
+    Ok(mapping_result)
+}
+
+fn safe_get_mapped_range<'a>(slice: &BufferSlice<'a>) -> Result<BufferView<'a>, Box<dyn Any + Send>> {
+    catch_unwind(AssertUnwindSafe(|| {
+        // This will panic if the slice is not mapped properly.
+        slice.get_mapped_range()
+    }))
 }
