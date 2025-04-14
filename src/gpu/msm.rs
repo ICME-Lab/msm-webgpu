@@ -169,7 +169,7 @@ pub async fn run_msm_browser(wgsl_source: &str, points_bytes: &[u8], scalars_byt
     let buffer_slice = readback_buffer.slice(0..(3 * NUM_LIMBS * 4) as u64);
     let _ = map_buffer_async_browser(buffer_slice, wgpu::MapMode::Read).await;
     // let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
-    // device.poll(wgpu::Maintain::Wait);
+    device.poll(wgpu::Maintain::Wait);
     // let data = wait_for_mapping(buffer_slice).await.unwrap();
     // Wait for one second
     console::log_1(&format!("map_buffer_async_browser: {} ms", now() - start).into());
