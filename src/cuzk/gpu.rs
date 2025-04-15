@@ -48,7 +48,7 @@ pub async fn get_device(adapter: &Adapter) -> (Device, Queue) {
     (device, queue)
 }
 
-pub fn create_and_storage_buffer(label: Option<&str>, device: &Device, size: u64) -> Buffer {
+pub fn create_storage_buffer(label: Option<&str>, device: &Device, size: u64) -> Buffer {
     device.create_buffer(&BufferDescriptor {
         label: label,
         size: size,
@@ -130,18 +130,23 @@ pub fn read_from_gpu(
 pub fn create_bind_group_layout(
     device: &Device,
     label: Option<&str>,
+    storage_buffers_read_only: Vec<Buffer>,
     storage_buffers: Vec<Buffer>,
     uniform_buffers: Vec<Buffer>,
 ) -> BindGroupLayout {
+    let storage_buffer_read_only_entries = (0..storage_buffers_read_only.len())
+    .map(|i| default_storage_read_only_buffer_entry(i as u32))
+    .collect::<Vec<_>>();
     let storage_buffer_entries = (0..storage_buffers.len())
-        .map(|i| default_storage_buffer_entry(i as u32))
+        .map(|i| default_storage_buffer_entry((i + storage_buffers_read_only.len()) as u32))
         .collect::<Vec<_>>();
+
     let uniform_buffer_entries = (0..uniform_buffers.len())
-        .map(|i| default_uniform_buffer_entry((i + storage_buffers.len()) as u32))
+        .map(|i| default_uniform_buffer_entry((i + storage_buffers.len() + storage_buffers_read_only.len()) as u32))
         .collect::<Vec<_>>();
     device.create_bind_group_layout(&BindGroupLayoutDescriptor {
         label: label,
-        entries: &vec![storage_buffer_entries, uniform_buffer_entries].concat(),
+        entries: &vec![storage_buffer_read_only_entries, storage_buffer_entries, uniform_buffer_entries].concat(),
     })
 }
 
@@ -151,6 +156,19 @@ pub fn default_storage_buffer_entry(idx: u32) -> BindGroupLayoutEntry {
         visibility: wgpu::ShaderStages::COMPUTE,
         ty: wgpu::BindingType::Buffer {
             ty: wgpu::BufferBindingType::Storage { read_only: false },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    }
+}
+
+pub fn default_storage_read_only_buffer_entry(idx: u32) -> BindGroupLayoutEntry {
+    BindGroupLayoutEntry {
+        binding: idx,
+        visibility: wgpu::ShaderStages::COMPUTE,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Storage { read_only: true },
             has_dynamic_offset: false,
             min_binding_size: None,
         },

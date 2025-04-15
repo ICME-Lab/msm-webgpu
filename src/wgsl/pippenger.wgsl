@@ -55,21 +55,21 @@ fn bucket_reduction_phase(gidx: u32) {
 }
 
 fn final_reduction_phase(gidx: u32) -> JacobianPoint {
-    var result: JacobianPoint = JACOBIAN_IDENTITY;
+    var res: JacobianPoint = JACOBIAN_IDENTITY;
 
-    var j = NumWindows - 1u;
-    loop {
-        result = jacobian_add(
-            windows[gidx * NumWindows + j],
-            small_jacobian_mul(result, TWO_POW_C)
-        );
-        if (j == 0u) {
-            break;
-        }
-        j = j - 1u;
-    }
+    // var j = NumWindows - 1u;
+    // loop {
+    //     res = jacobian_add(
+    //         windows[gidx * NumWindows + j],
+    //         small_jacobian_mul(res, TWO_POW_C)
+    //     );
+    //     if (j == 0u) {
+    //         break;
+    //     }
+    //     j = j - 1u;
+    // }
 
-    return result;
+    return res;
 }
 
 
