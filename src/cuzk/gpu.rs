@@ -128,11 +128,11 @@ pub fn read_from_gpu(
 }
 
 pub fn create_bind_group_layout(
-    device: &Device,
     label: Option<&str>,
-    storage_buffers_read_only: Vec<Buffer>,
-    storage_buffers: Vec<Buffer>,
-    uniform_buffers: Vec<Buffer>,
+    device: &Device,
+    storage_buffers_read_only: Vec<&Buffer>,
+    storage_buffers: Vec<&Buffer>,
+    uniform_buffers: Vec<&Buffer>,
 ) -> BindGroupLayout {
     let storage_buffer_read_only_entries = (0..storage_buffers_read_only.len())
     .map(|i| default_storage_read_only_buffer_entry(i as u32))
@@ -190,14 +190,14 @@ pub fn default_uniform_buffer_entry(idx: u32) -> BindGroupLayoutEntry {
 
 
 pub fn create_bind_group(
-    device: &Device,
     label: Option<&str>,
-    bind_group_layout: BindGroupLayout,
-    buffers: Vec<Buffer>,
+    device: &Device,
+    bind_group_layout: &BindGroupLayout,
+    buffers: Vec<&Buffer>,
 ) -> BindGroup {
     device.create_bind_group(&BindGroupDescriptor {
         label: label,
-        layout: &bind_group_layout,
+        layout: bind_group_layout,
         entries: &buffers
             .iter()
             .enumerate()
@@ -211,15 +211,15 @@ pub fn create_bind_group(
 
 
 pub async fn create_compute_pipeline(
-    device: &Device,
     label: Option<&str>,
-    bind_group_layout: BindGroupLayout,
+    device: &Device,
+    bind_group_layout: &BindGroupLayout,
     code: &str,
     entry_point: &str,
 ) -> ComputePipeline {
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: label,
-        bind_group_layouts: &[&bind_group_layout],
+        bind_group_layouts: &[bind_group_layout],
         push_constant_ranges: &[],
     });
 

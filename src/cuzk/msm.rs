@@ -2,10 +2,11 @@ use halo2curves::bn256::G1Affine;
 use wgpu::{Buffer, CommandEncoder, CommandEncoderDescriptor, Device, Queue};
 
 use crate::cuzk::gpu::{
-    create_and_write_storage_buffer, create_and_write_uniform_buffer, create_bind_group, create_bind_group_layout, create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device
+    create_and_write_storage_buffer, create_and_write_uniform_buffer, create_bind_group,
+    create_bind_group_layout, create_compute_pipeline, create_storage_buffer, execute_pipeline,
+    get_adapter, get_device, read_from_gpu,
 };
 use crate::cuzk::shader_manager::ShaderManager;
-
 
 // TODO: HARDCODE THE VALUE FOR BN256
 pub fn calc_num_words(word_size: usize) -> usize {
@@ -53,64 +54,288 @@ pub async fn compute_msm(points: &[u8], scalars: &[u8]) -> G1Affine {
 
     let adapter = get_adapter().await;
     let (device, queue) = get_device(&adapter).await;
-    let encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+    let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
         label: Some("MSM Encoder"),
     });
 
     ////////////////////////////////////////////////////////////////////////////////////////////
-    /// 1. Point Coordinate Conversation and Scalar Decomposition                              /
-    ///                                                                                        /
-    /// (1) Convert elliptic curve points (ETE Affine coordinates) into 13-bit limbs,          /
-    /// and represented internally in Montgomery form by using Barret Reduction.               /
-    ///                                                                                        /
-    /// (2) Decompose scalars into chunk_size windows using signed bucket indices.             /
+    // 1. Point Coordinate Conversation and Scalar Decomposition                              /
+    //                                                                                        /
+    // (1) Convert elliptic curve points (ETE Affine coordinates) into 13-bit limbs,          /
+    // and represented internally in Montgomery form by using Barret Reduction.               /
+    //                                                                                        /
+    // (2) Decompose scalars into chunk_size windows using signed bucket indices.             /
     ////////////////////////////////////////////////////////////////////////////////////////////
 
-    /// Total thread count = workgroup_size * #x workgroups * #y workgroups * #z workgroups.
+    // Total thread count = workgroup_size * #x workgroups * #y workgroups * #z workgroups.
     let mut c_workgroup_size = 64;
     let mut c_num_x_workgroups = 128;
     let mut c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
     let c_num_z_workgroups = 1;
 
-    if (input_size <= 256) {
+    if input_size <= 256 {
         c_workgroup_size = input_size;
         c_num_x_workgroups = 1;
         c_num_y_workgroups = 1;
-    } else if (input_size > 256 && input_size <= 32768) {
+    } else if input_size > 256 && input_size <= 32768 {
         c_workgroup_size = 64;
         c_num_x_workgroups = 4;
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if (input_size > 32768 && input_size <= 65536) {
+    } else if input_size > 32768 && input_size <= 65536 {
         c_workgroup_size = 256;
         c_num_x_workgroups = 8;
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if (input_size > 65536 && input_size <= 131072) {
+    } else if input_size > 65536 && input_size <= 131072 {
         c_workgroup_size = 256;
         c_num_x_workgroups = 8;
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if (input_size > 131072 && input_size <= 262144) {
+    } else if input_size > 131072 && input_size <= 262144 {
         c_workgroup_size = 256;
         c_num_x_workgroups = 32;
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if (input_size > 262144 && input_size <= 524288) {
+    } else if input_size > 262144 && input_size <= 524288 {
         c_workgroup_size = 256;
         c_num_x_workgroups = 32;
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if (input_size > 524288 && input_size <= 1048576) {
+    } else if input_size > 524288 && input_size <= 1048576 {
         c_workgroup_size = 256;
         c_num_x_workgroups = 32;
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
     }
 
-    let c_shader = shader_manager.gen_decomp_scalars_shader(c_workgroup_size);
+    let c_shader = shader_manager.gen_decomp_scalars_shader(
+        c_workgroup_size,
+        c_num_x_workgroups,
+        c_num_y_workgroups,
+        num_columns,
+    );
 
+    let (point_x_sb, point_y_sb, scalar_chunks_sb) = decompose_shaders(
+        &c_shader,
+        c_num_x_workgroups,
+        c_num_y_workgroups,
+        c_num_z_workgroups,
+        &device,
+        &queue,
+        &mut encoder,
+        points,
+        scalars,
+        num_words,
+        num_subtasks,
+        chunk_size,
+    )
+    .await;
+
+    ////////////////////////////////////////////////////////////////////////////////////////////
+    // 2. Sparse Matrix Transposition                                                         /
+    //                                                                                        /
+    // Compute the indices of the points which share the same                                 /
+    // scalar chunks, enabling the parallel accumulation of points                            /
+    // into buckets. Transposing each subtask (CSR sparse matrix)                             /
+    // is a serial computation.                                                               /
+    //                                                                                        /
+    // The transpose step generates the CSR sparse matrix and                                 /
+    // transpoes the matrix simultaneously, resulting in a                                    /
+    // wide and flat matrix where width of the matrix (n) = 2 ^ chunk_size                    /
+    // and height of the matrix (m) = 1.                                                      /
+    ////////////////////////////////////////////////////////////////////////////////////////////
+
+    let t_num_x_workgroups = 1;
+    let t_num_y_workgroups = 1;
+    let t_num_z_workgroups = 1;
+
+    let t_shader = shader_manager.gen_transpose_shader(num_subtasks);
+
+    let (all_csc_col_ptr_sb, all_csc_val_idxs_sb) = transpose_gpu(
+        &t_shader,
+        &device,
+        &queue,
+        &mut encoder,
+        t_num_x_workgroups,
+        t_num_y_workgroups,
+        t_num_z_workgroups,
+        input_size,
+        num_columns,
+        num_rows,
+        num_subtasks,
+        scalar_chunks_sb,
+    )
+    .await;
+
+    ////////////////////////////////////////////////////////////////////////////////////////////
+    // 3. Sparse Matrix Vector Product (SMVP)                                                 /
+    //                                                                                        /
+    // Each thread handles accumulating points in a single bucket.                            /
+    // The workgroup size and number of workgroups are designed around                        /
+    // minimizing shader invocations.                                                         /
+    ////////////////////////////////////////////////////////////////////////////////////////////
+
+    let half_num_columns = num_columns / 2;
+    let mut s_workgroup_size = 256;
+    let mut s_num_x_workgroups = 64;
+    let mut s_num_y_workgroups = (half_num_columns / s_workgroup_size) / s_num_x_workgroups;
+    let mut s_num_z_workgroups = num_subtasks;
+
+    if half_num_columns < 32768 {
+        s_workgroup_size = 32;
+        s_num_x_workgroups = 1;
+        s_num_y_workgroups = ((half_num_columns / s_workgroup_size) + s_num_x_workgroups - 1) / s_num_x_workgroups;
+    }
+
+    if num_columns < 256 {
+        s_workgroup_size = 1;
+        s_num_x_workgroups = half_num_columns;
+        s_num_y_workgroups = 1;
+        s_num_z_workgroups = 1;
+    }
+
+    // This is a dynamic variable that determines the number of CSR
+    // matrices processed per invocation of the shader. A safe default is 1.
+    let num_subtask_chunk_size = 4;
+
+    // Buffers that store the SMVP result, ie. bucket sums. They are
+    // overwritten per iteration.
+    let bucket_sum_coord_bytelength = (num_columns / 2) * num_words * 4 * num_subtasks;
+    let bucket_sum_x_sb = create_storage_buffer(
+        Some("Bucket sum X buffer"),
+        &device,
+        bucket_sum_coord_bytelength as u64,
+    );
+    let bucket_sum_y_sb = create_storage_buffer(
+        Some("Bucket sum Y buffer"),
+        &device,
+        bucket_sum_coord_bytelength as u64,
+    );
+    let bucket_sum_z_sb = create_storage_buffer(
+        Some("Bucket sum Z buffer"),
+        &device,
+        bucket_sum_coord_bytelength as u64,
+    );
+    let smvp_shader = shader_manager.gen_smvp_shader(s_workgroup_size, num_columns);
+
+    for offset in (0..num_subtasks).step_by(num_subtask_chunk_size) {
+        smvp_gpu(
+            &smvp_shader,
+            s_num_x_workgroups / (num_subtasks / num_subtask_chunk_size),
+            s_num_y_workgroups,
+            s_num_z_workgroups,
+            offset,
+            &device,
+            &queue,
+            &mut encoder,
+            input_size,
+            &all_csc_col_ptr_sb,
+            &point_x_sb,
+            &point_y_sb,
+            &all_csc_val_idxs_sb,
+            &bucket_sum_x_sb,
+            &bucket_sum_y_sb,
+            &bucket_sum_z_sb,
+        )
+        .await;
+    }
+
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    // 4. Bucket Reduction                                                                     /
+    //                                                                                         /
+    // Performs a parallelized running-sum by computing a serieds of point additions,          /
+    // followed by a scalar multiplication (Algorithm 4 of the cuZK paper).                    /
+    /////////////////////////////////////////////////////////////////////////////////////////////
+
+    // This is a dynamic variable that determines the number of CSR
+    // matrices processed per invocation of the BPR shader. A safe default is 1.
+    let num_subtasks_per_bpr_1 = 16;
+
+    let b_num_x_workgroups = num_subtasks_per_bpr_1;
+    let b_num_y_workgroups = 1;
+    let b_num_z_workgroups = 1;
+    let b_workgroup_size = 256;
+
+    // Buffers that store the bucket points reduction (BPR) output.
+    let g_points_coord_bytelength = num_subtasks * b_workgroup_size * num_words * 4;
+    let g_points_x_sb = create_storage_buffer(
+        Some("Bucket points reduction X buffer"),
+        &device,
+        g_points_coord_bytelength as u64,
+    );
+    let g_points_y_sb = create_storage_buffer(
+        Some("Bucket points reduction Y buffer"),
+        &device,
+        g_points_coord_bytelength as u64,
+    );
+    let g_points_z_sb = create_storage_buffer(
+        Some("Bucket points reduction Z buffer"),
+        &device,
+        g_points_coord_bytelength as u64,
+    );
+
+    let bpr_shader = shader_manager.gen_bpr_shader(b_workgroup_size);
+
+    // Stage 1: Bucket points reduction (BPR)
+    for subtask_idx in (0..num_subtasks).step_by(num_subtasks_per_bpr_1) {
+        bpr_1(
+            &bpr_shader,
+            subtask_idx,
+            b_num_x_workgroups,
+            b_num_y_workgroups,
+            b_num_z_workgroups,
+            num_columns,
+            &device,
+            &queue,
+            &mut encoder,
+            &bucket_sum_x_sb,
+            &bucket_sum_y_sb,
+            &bucket_sum_z_sb,
+            &g_points_x_sb,
+            &g_points_y_sb,
+            &g_points_z_sb,
+        )
+        .await;
+    }
+
+    let num_subtasks_per_bpr_2 = 16;
+    let b_2_num_x_workgroups = num_subtasks_per_bpr_2;
+
+    // Stage 2: Bucket points reduction (BPR).
+    for subtask_idx in (0..num_subtasks).step_by(num_subtasks_per_bpr_2) {
+        bpr_2(
+            &bpr_shader,
+            subtask_idx,
+            b_2_num_x_workgroups,
+            1,
+            1,
+            num_columns,
+            &device,
+            &queue,
+            &mut encoder,
+            &bucket_sum_x_sb,
+            &bucket_sum_y_sb,
+            &bucket_sum_z_sb,
+            &g_points_x_sb,
+            &g_points_y_sb,
+            &g_points_z_sb,
+        ).await;
+    }
+
+
+    // Map results back from GPU to CPU.
+    let data = read_from_gpu(
+        &device,
+        &queue,
+        encoder,
+        vec![g_points_x_sb, g_points_y_sb, g_points_z_sb],
+        0
+    );
+
+  // Destroy the GPU device object.
+  device.destroy();
     unimplemented!()
 }
 
 /****************************************************** WGSL Shader Invocations ******************************************************/
 
 /*
- * Prepares and executes the shader for decomposing scalars into chunk_size 
+ * Prepares and executes the shader for decomposing scalars into chunk_size
  * windows using the signed bucket index technique.
  *
  * ASSUMPTION: the vast majority of WebGPU-enabled consumer devices have a
@@ -128,7 +353,7 @@ pub async fn compute_msm(points: &[u8], scalars: &[u8]) -> G1Affine {
  *
  */
 
-pub async fn convert_point_coords_and_decompose_shaders(
+pub async fn decompose_shaders(
     shader_code: &str,
     num_x_workgroups: usize,
     num_y_workgroups: usize,
@@ -166,41 +391,359 @@ pub async fn convert_point_coords_and_decompose_shaders(
     );
 
     // Uniform storage buffer.
-    //   let params_bytes = numbers_to_u8s_for_gpu([input_size]);
+    let params_bytes = to_u8s_for_gpu([input_size].to_vec());
     let params_ub =
-        create_and_write_uniform_buffer(Some("Params buffer"), device, queue, &[input_size]);
+        create_and_write_uniform_buffer(Some("Params buffer"), device, queue, &params_bytes);
 
     let bind_group_layout = create_bind_group_layout(
-        device,
         Some("Bind group layout"),
-        vec![points_sb, scalars_sb],
-        vec![point_x_sb, point_y_sb, scalar_chunks_sb],
-        vec![params_ub],
+        device,
+        vec![&points_sb, &scalars_sb],
+        vec![&point_x_sb, &point_y_sb, &scalar_chunks_sb],
+        vec![&params_ub],
     );
 
     let bind_group = create_bind_group(
-        device,
         Some("Bind group"),
-        bind_group_layout,
-        vec![points_sb, scalars_sb, point_x_sb, point_y_sb, scalar_chunks_sb],
+        device,
+        &bind_group_layout,
+        vec![
+            &points_sb,
+            &scalars_sb,
+            &point_x_sb,
+            &point_y_sb,
+            &scalar_chunks_sb,
+        ],
     );
 
     let compute_pipeline = create_compute_pipeline(
-        device,
         Some("Convert point coords and decompose shader"),
-        bind_group_layout,
+        device,
+        &bind_group_layout,
         shader_code,
         "main",
-    ).await;
+    )
+    .await;
 
     execute_pipeline(
-        &mut encoder,
+        encoder,
+        compute_pipeline,
+        bind_group,
+        num_x_workgroups as u32,
+        num_y_workgroups as u32,
+        num_z_workgroups as u32,
+    )
+    .await;
+
+    (point_x_sb, point_y_sb, scalar_chunks_sb)
+}
+
+/*
+ * Perform a modified version of CSR matrix transposition, which comes before
+ * SMVP. Essentially, this step generates the point indices for each thread in
+ * the SMVP step which corresponds to a particular bucket.
+ */
+pub async fn transpose_gpu(
+    shader_code: &str,
+    device: &Device,
+    queue: &Queue,
+    command_encoder: &mut CommandEncoder,
+    num_x_workgroups: usize,
+    num_y_workgroups: usize,
+    num_z_workgroups: usize,
+    input_size: usize,
+    num_columns: usize,
+    num_rows: usize,
+    num_subtasks: usize,
+    scalar_chunks_sb: Buffer,
+) -> (Buffer, Buffer) {
+    // Input storage buffers.
+    let all_csc_col_ptr_sb = create_storage_buffer(
+        Some("All CSC col"),
+        device,
+        (num_subtasks * (num_columns + 1) * 4) as u64,
+    );
+    let all_csc_val_idxs_sb =
+        create_storage_buffer(Some("All CSC Val Indexes"), device, scalar_chunks_sb.size());
+    let all_curr_sb = create_storage_buffer(
+        Some("All Current"),
+        device,
+        (num_subtasks * num_columns * 4) as u64,
+    );
+
+    // Uniform storage buffer.
+    let params_bytes = to_u8s_for_gpu([num_rows, num_columns, input_size].to_vec());
+    let params_ub = create_and_write_uniform_buffer(
+        Some("Transpose GPU Uniform Params"),
+        device,
+        queue,
+        &params_bytes,
+    );
+
+    let bind_group_layout = create_bind_group_layout(
+        Some("Transpose GPU Bind Group Layout"),
+        device,
+        vec![&scalar_chunks_sb],
+        vec![&all_csc_col_ptr_sb, &all_csc_val_idxs_sb, &all_curr_sb],
+        vec![&params_ub],
+    );
+
+    let bind_group = create_bind_group(
+        Some("Transpose GPU Bind Group"),
+        device,
+        &bind_group_layout,
+        vec![
+            &scalar_chunks_sb,
+            &all_csc_col_ptr_sb,
+            &all_csc_val_idxs_sb,
+            &all_curr_sb,
+            &params_ub,
+        ],
+    );
+
+    let compute_pipeline = create_compute_pipeline(
+        Some("Transpose GPU Compute Pipeline"),
+        device,
+        &bind_group_layout,
+        shader_code,
+        "main",
+    )
+    .await;
+
+    execute_pipeline(
+        command_encoder,
+        compute_pipeline,
+        bind_group,
+        num_x_workgroups as u32,
+        num_y_workgroups as u32,
+        num_z_workgroups as u32,
+    )
+    .await;
+
+    (all_csc_col_ptr_sb, all_csc_val_idxs_sb)
+}
+
+pub fn to_u8s_for_gpu(vals: Vec<usize>) -> Vec<u8> {
+    let max = 1 << 32;
+    let mut buf = vec![];
+    for val in vals {
+        assert!(val < max);
+        buf.extend_from_slice(&val.to_le_bytes());
+    }
+    buf
+}
+
+/*
+ * Compute the bucket sums and perform scalar multiplication with the bucket indices.
+ */
+pub async fn smvp_gpu(
+    shader_code: &str,
+    num_x_workgroups: usize,
+    num_y_workgroups: usize,
+    num_z_workgroups: usize,
+    offset: usize,
+    device: &Device,
+    queue: &Queue,
+    command_encoder: &mut CommandEncoder,
+    input_size: usize,
+    all_csc_col_ptr_sb: &Buffer,
+    point_x_sb: &Buffer,
+    point_y_sb: &Buffer,
+    all_csc_val_idxs_sb: &Buffer,
+    bucket_sum_x_sb: &Buffer,
+    bucket_sum_y_sb: &Buffer,
+    bucket_sum_z_sb: &Buffer,
+) {
+    // Uniform Storage Buffer.
+    let params_bytes = to_u8s_for_gpu(vec![input_size, num_y_workgroups, num_z_workgroups, offset]);
+    let params_ub = create_and_write_uniform_buffer(None, device, queue, &params_bytes);
+
+    let bind_group_layout = create_bind_group_layout(
+        Some("Bind group layout"),
+        device,
+        vec![
+            &all_csc_col_ptr_sb,
+            &all_csc_val_idxs_sb,
+            &point_x_sb,
+            &point_y_sb,
+        ],
+        vec![&bucket_sum_x_sb, &bucket_sum_y_sb, &bucket_sum_z_sb],
+        vec![&params_ub],
+    );
+
+    let bind_group = create_bind_group(
+        Some("Bind group"),
+        device,
+        &bind_group_layout,
+        vec![
+            &all_csc_col_ptr_sb,
+            &all_csc_val_idxs_sb,
+            &point_x_sb,
+            &point_y_sb,
+            &bucket_sum_x_sb,
+            &bucket_sum_y_sb,
+            &bucket_sum_z_sb,
+            &params_ub,
+        ],
+    );
+
+    let compute_pipeline = create_compute_pipeline(
+        Some("Compute pipeline"),
+        device,
+        &bind_group_layout,
+        shader_code,
+        "main",
+    )
+    .await;
+
+    execute_pipeline(
+        command_encoder,
+        compute_pipeline,
+        bind_group,
+        num_x_workgroups as u32,
+        num_y_workgroups as u32,
+        num_z_workgroups as u32,
+    )
+    .await;
+}
+
+pub async fn bpr_1(
+    shader_code: &str,
+    subtask_idx: usize,
+    num_x_workgroups: usize,
+    num_y_workgroups: usize,
+    num_z_workgroups: usize,
+    num_columns: usize,
+    device: &Device,
+    queue: &Queue,
+    command_encoder: &mut CommandEncoder,
+    bucket_sum_x_sb: &Buffer,
+    bucket_sum_y_sb: &Buffer,
+    bucket_sum_z_sb: &Buffer,
+    g_points_x_sb: &Buffer,
+    g_points_y_sb: &Buffer,
+    g_points_z_sb: &Buffer,
+) {
+    // Uniform storage buffer.
+    let params_bytes = to_u8s_for_gpu(vec![subtask_idx, num_columns, num_x_workgroups]);
+    let params_ub = create_and_write_uniform_buffer(None, device, queue, &params_bytes);
+
+    let bind_group_layout = create_bind_group_layout(
+        Some("Bind group layout"),
+        device,
+        vec![],
+        vec![
+            &bucket_sum_x_sb,
+            &bucket_sum_y_sb,
+            &bucket_sum_z_sb,
+            &g_points_x_sb,
+            &g_points_y_sb,
+            &g_points_z_sb,
+        ],
+        vec![&params_ub],
+    );
+
+    let bind_group = create_bind_group(
+        Some("Bind group"),
+        device,
+        &bind_group_layout,
+        vec![
+            &bucket_sum_x_sb,
+            &bucket_sum_y_sb,
+            &bucket_sum_z_sb,
+            &g_points_x_sb,
+            &g_points_y_sb,
+            &g_points_z_sb,
+            &params_ub,
+        ],
+    );
+
+    let compute_pipeline = create_compute_pipeline(
+        Some("Compute pipeline"),
+        device,
+        &bind_group_layout,
+        shader_code,
+        "stage_1",
+    )
+    .await;
+
+    execute_pipeline(
+        command_encoder,
         compute_pipeline,
         bind_group,
         num_x_workgroups as u32,
         num_y_workgroups as u32,
         num_z_workgroups as u32,
     );
-    
-    (point_x_sb, point_y_sb, scalar_chunks_sb)
+}
+
+pub async fn bpr_2(
+    shader_code: &str,
+    subtask_idx: usize,
+    num_x_workgroups: usize,
+    num_y_workgroups: usize,
+    num_z_workgroups: usize,
+    num_columns: usize,
+    device: &Device,
+    queue: &Queue,
+    command_encoder: &mut CommandEncoder,
+    bucket_sum_x_sb: &Buffer,
+    bucket_sum_y_sb: &Buffer,
+    bucket_sum_z_sb: &Buffer,
+    g_points_x_sb: &Buffer,
+    g_points_y_sb: &Buffer,
+    g_points_z_sb: &Buffer,
+) {
+    // Uniform storage buffer.
+    let params_bytes = to_u8s_for_gpu(vec![subtask_idx, num_columns, num_x_workgroups]);
+    let params_ub = create_and_write_uniform_buffer(None, device, queue, &params_bytes);
+
+    let bind_group_layout = create_bind_group_layout(
+        Some("Bind group layout"),
+        device,
+        vec![],
+        vec![
+            &bucket_sum_x_sb,
+            &bucket_sum_y_sb,
+            &bucket_sum_z_sb,
+            &g_points_x_sb,
+            &g_points_y_sb,
+            &g_points_z_sb,
+        ],
+        vec![&params_ub],
+    );
+
+    let bind_group = create_bind_group(
+        Some("Bind group"),
+        device,
+        &bind_group_layout,
+        vec![
+            &bucket_sum_x_sb,
+            &bucket_sum_y_sb,
+            &bucket_sum_z_sb,
+            &g_points_x_sb,
+            &g_points_y_sb,
+            &g_points_z_sb,
+            &params_ub,
+        ],
+    );
+
+    let compute_pipeline = create_compute_pipeline(
+        Some("Compute pipeline"),
+        device,
+        &bind_group_layout,
+        shader_code,
+        "stage_2",
+    )
+    .await;
+
+    execute_pipeline(
+        command_encoder,
+        compute_pipeline,
+        bind_group,
+        num_x_workgroups as u32,
+        num_y_workgroups as u32,
+        num_z_workgroups as u32,
+    )
+    .await;
 }

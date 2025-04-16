@@ -6,7 +6,8 @@ use num_traits::Num;
 use serde_json::json;
 
 // Templates
-const EXTRACT_WORD_FROM_BYTES_LE_FUNCS: &str = "src/cuzk/wgsl/cuzk/extract_word_from_bytes_le.template.wgsl";
+const EXTRACT_WORD_FROM_BYTES_LE_FUNCS: &str =
+    "src/cuzk/wgsl/cuzk/extract_word_from_bytes_le.template.wgsl";
 const MONTGOMERY_PRODUCT_FUNCS: &str = "src/cuzk/wgsl/montgomery/mont_pro_product.template.wgsl";
 const EC_FUNCS: &str = "src/cuzk/wgsl/curve/ec.template.wgsl";
 const FIELD_FUNCS: &str = "src/cuzk/wgsl/field/field.template.wgsl";
@@ -14,11 +15,10 @@ const BIGINT_FUNCS: &str = "src/cuzk/wgsl/bigint/bigint.template.wgsl";
 const STRUCTS: &str = "src/cuzk/wgsl/structs/structs.template.wgsl";
 
 // Shaders
-const TRANSPOSE_SHADER: &str = "src/cuzk/wgsl/cuzk/transpose.wgsl";
+const TRANSPOSE_SHADER: &str = "src/cuzk/wgsl/cuzk/transpose.template.wgsl";
 const SMVP_SHADER: &str = "src/cuzk/wgsl/cuzk/smvp.template.wgsl";
 const BPR_SHADER: &str = "src/cuzk/wgsl/cuzk/bpr.template.wgsl";
 const DECOMPOSE_SCALARS_SHADER: &str = "src/cuzk/wgsl/cuzk/decomp_scalars.template.wgsl";
-
 
 use crate::cuzk::utils::gen_p_limbs;
 pub struct ShaderManager {
@@ -39,7 +39,11 @@ pub struct ShaderManager {
 
 impl ShaderManager {
     pub fn new(word_size: usize, chunk_size: usize, input_size: usize, num_words: usize) -> Self {
-        let p = BigUint::from_str_radix("21888242871839275222246405745257275088696311157297823662689037894645226208583", 10).unwrap();
+        let p = BigUint::from_str_radix(
+            "21888242871839275222246405745257275088696311157297823662689037894645226208583",
+            10,
+        )
+        .unwrap();
         let p_bit_length = 254; // TODO: Parameterise
         Self {
             word_size,
@@ -63,22 +67,35 @@ impl ShaderManager {
         handlebars
             .register_template_file("transpose", TRANSPOSE_SHADER)
             .unwrap();
-        let mut data = BTreeMap::new();
-        data.insert("workgroup_size", workgroup_size);
+        let data = json!({
+            "workgroup_size": workgroup_size,
+        });
         // TODO: Add recompile
         handlebars.render("transpose", &data).unwrap()
     }
 
     pub fn gen_smvp_shader(&self, workgroup_size: usize, num_csr_cols: usize) -> String {
         let mut handlebars = Handlebars::new();
-        handlebars
-            .register_template_file("smvp", SMVP_SHADER)
-            .unwrap();
-        let mut data = BTreeMap::new();
-        data.insert("workgroup_size", workgroup_size);
-        data.insert("num_columns", num_csr_cols);
-        data.insert("word_size", self.word_size);
-        data.insert("num_words", self.num_words);
+        handlebars.register_template_file("smvp", SMVP_SHADER);
+
+        handlebars.register_partial("structs", STRUCTS);
+        handlebars.register_partial("bigint_funcs", BIGINT_FUNCS);
+        handlebars.register_partial("ec_funcs", EC_FUNCS);
+        handlebars.register_partial("field_funcs", FIELD_FUNCS);
+        handlebars.register_partial("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS);
+
+        let data = json!({
+            "word_size": self.word_size,
+            "num_words": self.num_words,
+            "num_columns": num_csr_cols,
+            "workgroup_size": workgroup_size,
+            "n0": self.n0,
+            "p_limbs": self.p_limbs,
+            "mask": self.mask,
+            "two_pow_word_size": self.two_pow_chunk_size,
+            "index_shift": self.index_shift,
+            "half_num_columns": num_csr_cols / 2,
+        });
         // TODO: Add recompile
         handlebars.render("smvp", &data).unwrap()
     }
@@ -88,16 +105,29 @@ impl ShaderManager {
         handlebars
             .register_template_file("bpr", BPR_SHADER)
             .unwrap();
-        let mut data = BTreeMap::new();
-        data.insert("workgroup_size", workgroup_size);
-        data.insert("word_size", self.word_size);
-        data.insert("num_words", self.num_words);
+
+        handlebars.register_partial("structs", STRUCTS);
+        handlebars.register_partial("bigint_funcs", BIGINT_FUNCS);
+        handlebars.register_partial("ec_funcs", EC_FUNCS);
+        handlebars.register_partial("field_funcs", FIELD_FUNCS);
+        handlebars.register_partial("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS);
+
+        let data = json!({
+            "workgroup_size": workgroup_size,
+            "word_size": self.word_size,
+            "num_words": self.num_words,
+            "n0": self.n0,
+            "p_limbs": self.p_limbs,
+            "mask": self.mask,
+            "two_pow_word_size": self.two_pow_chunk_size,
+            "index_shift": self.index_shift,
+        });
         // TODO: Add recompile
         handlebars.render("bpr", &data).unwrap()
     }
 
     pub fn gen_decomp_scalars_shader(
-        &self, 
+        &self,
         workgroup_size: usize,
         num_y_workgroups: usize,
         num_subtasks: usize,
@@ -107,6 +137,15 @@ impl ShaderManager {
         handlebars
             .register_template_file("decomp_scalars", DECOMPOSE_SCALARS_SHADER)
             .unwrap();
+
+        handlebars.register_partial("structs", STRUCTS);
+        handlebars.register_partial("bigint_funcs", BIGINT_FUNCS);
+        handlebars.register_partial("field_funcs", FIELD_FUNCS);
+        handlebars.register_partial("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS);
+        handlebars.register_partial(
+            "extract_word_from_bytes_le_funcs",
+            EXTRACT_WORD_FROM_BYTES_LE_FUNCS,
+        );
 
         let data = json!({
             "workgroup_size": workgroup_size,
