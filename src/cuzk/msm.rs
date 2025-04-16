@@ -5,7 +5,9 @@ use crate::cuzk::gpu::{
     create_and_write_storage_buffer, create_and_write_uniform_buffer, create_bind_group, create_bind_group_layout, create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device
 };
 use crate::cuzk::shader_manager::ShaderManager;
-// TODO: HARDCODE THE VALUE
+
+
+// TODO: HARDCODE THE VALUE FOR BN256
 pub fn calc_num_words(word_size: usize) -> usize {
     let p_width = 254;
     let mut num_words = p_width / word_size;
@@ -15,8 +17,8 @@ pub fn calc_num_words(word_size: usize) -> usize {
     num_words
 }
 
-/// 16-bit limbs.
-const WORD_SIZE: usize = 16;
+/// 13-bit limbs.
+const WORD_SIZE: usize = 13;
 
 /*
  * End-to-end implementation of the modified cuZK MSM algorithm by Lu et al,
@@ -100,7 +102,7 @@ pub async fn compute_msm(points: &[u8], scalars: &[u8]) -> G1Affine {
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
     }
 
-    // let c_shader = shader_manager.gen_
+    let c_shader = shader_manager.gen_decomp_scalars_shader(c_workgroup_size);
 
     unimplemented!()
 }

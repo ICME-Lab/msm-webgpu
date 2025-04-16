@@ -1,7 +1,6 @@
 {{> structs }}
 {{> bigint_funcs }}
 {{> field_funcs }}
-{{> barrett_funcs }}
 {{> montgomery_product_funcs }}
 {{ > extract_word_from_bytes_le_funcs }}
 
@@ -28,11 +27,11 @@ const NUM_SUBTASKS = {{ num_subtasks }}u;
 /// Scalar chunk bitwidth.
 const CHUNK_SIZE = {{ chunk_size }}u;
 
-fn get_r() -> BigInt {
-    var r: BigInt;
-{{{ r_limbs }}}
-    return r;
-}
+// fn get_r() -> BigInt {
+//     var r: BigInt;
+// {{{ r_limbs }}}
+//     return r;
+// }
 
 @compute
 @workgroup_size({{ workgroup_size }})
@@ -72,9 +71,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     y_bigint.limbs[NUM_WORDS - 1u] = y_bytes[0] >> shift;
 
     /// Convert x and y coordinates to Montgomery form.
-    var r = get_r();
-    point_x[id] = field_mul(&x_bigint, &r);
-    point_y[id] = field_mul(&y_bigint, &r);
+    // var r = get_r();
+    // point_x[id] = field_mul(&x_bigint, &r);
+    // point_y[id] = field_mul(&y_bigint, &r);
 
     /// Decompose scalars.
     var scalar_bytes: array<u32, 16>;

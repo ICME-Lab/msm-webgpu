@@ -789,6 +789,7 @@ dependencies = [
  "oneshot",
  "pollster",
  "rand",
+ "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
