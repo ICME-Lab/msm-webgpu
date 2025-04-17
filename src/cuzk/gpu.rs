@@ -93,7 +93,7 @@ pub fn read_from_gpu(
     mut encoder: CommandEncoder,
     storage_buffers: Vec<Buffer>,
     custom_size: u64,
-) -> Vec<u8> {
+) -> Vec<Vec<u8>> {
     let mut staging_buffers = Vec::new();
 
     for storage_buffer in storage_buffers {
@@ -121,7 +121,7 @@ pub fn read_from_gpu(
         let _buffer_future = staging_slice.map_async(MapMode::Read, |x| x.unwrap());
         device.poll(wgpu::Maintain::Wait);
         let result_data = staging_slice.get_mapped_range();
-        data.extend(result_data.to_vec());
+        data.push(result_data.to_vec());
     }
 
     data

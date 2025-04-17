@@ -1,4 +1,8 @@
+use ff::PrimeField;
+use group::{Group, Curve};
+use halo2curves::CurveExt;
 use halo2curves::bn256::G1Affine;
+use halo2curves::CurveAffine;
 use wgpu::{Buffer, CommandEncoder, CommandEncoderDescriptor, Device, Queue};
 
 use crate::cuzk::gpu::{
@@ -42,7 +46,7 @@ const WORD_SIZE: usize = 13;
  *    as the number of points is small, and the time taken to compile a shader to
  *    perform this computation is greater than the time it takes for the CPU to do so.
  */
-pub async fn compute_msm(points: &[u8], scalars: &[u8]) -> G1Affine {
+pub async fn compute_msm<F: PrimeField, C: CurveAffine>(points: &[u8], scalars: &[u8]) -> C::Curve {
     let input_size = scalars.len() / 32;
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_columns = 2u32.pow(chunk_size as u32) as usize;
@@ -179,7 +183,8 @@ pub async fn compute_msm(points: &[u8], scalars: &[u8]) -> G1Affine {
     if half_num_columns < 32768 {
         s_workgroup_size = 32;
         s_num_x_workgroups = 1;
-        s_num_y_workgroups = ((half_num_columns / s_workgroup_size) + s_num_x_workgroups - 1) / s_num_x_workgroups;
+        s_num_y_workgroups =
+            ((half_num_columns / s_workgroup_size) + s_num_x_workgroups - 1) / s_num_x_workgroups;
     }
 
     if num_columns < 256 {
@@ -314,9 +319,9 @@ pub async fn compute_msm(points: &[u8], scalars: &[u8]) -> G1Affine {
             &g_points_x_sb,
             &g_points_y_sb,
             &g_points_z_sb,
-        ).await;
+        )
+        .await;
     }
-
 
     // Map results back from GPU to CPU.
     let data = read_from_gpu(
@@ -324,12 +329,90 @@ pub async fn compute_msm(points: &[u8], scalars: &[u8]) -> G1Affine {
         &queue,
         encoder,
         vec![g_points_x_sb, g_points_y_sb, g_points_z_sb],
-        0
+        0,
     );
 
-  // Destroy the GPU device object.
-  device.destroy();
-    unimplemented!()
+    // Destroy the GPU device object.
+    device.destroy();
+
+    let mut points = vec![];
+
+    let g_points_x = u8s_to_fields_without_assertion::<<<C as CurveAffine>::CurveExt as CurveExt>::Base>(&data[0], num_words, WORD_SIZE);
+    let g_points_y = u8s_to_fields_without_assertion::<<<C as CurveAffine>::CurveExt as CurveExt>::Base>(&data[1], num_words, WORD_SIZE);
+    let g_points_z = u8s_to_fields_without_assertion::<<<C as CurveAffine>::CurveExt as CurveExt>::Base>(&data[2], num_words, WORD_SIZE);
+
+    for i in 0..num_subtasks {
+        let mut point = C::Curve::identity();
+        for j in 0..b_workgroup_size {
+            let reduced_point = C::Curve::new_jacobian(
+                g_points_x[i * b_workgroup_size + j],
+                g_points_y[i * b_workgroup_size + j],
+                g_points_z[i * b_workgroup_size + j],
+            ).unwrap();
+            point = point + reduced_point;
+        }
+        points.push(point);
+    }
+    
+
+  ////////////////////////////////////////////////////////////////////////////////////////////
+  // 5. Horner's Method                                                                     /
+  //                                                                                        /
+  // Calculate the final result using Horner's method (Formula 3 of the cuZK paper)         /
+  ////////////////////////////////////////////////////////////////////////////////////////////
+  
+  let m = C::ScalarExt::from(1 << chunk_size);
+  let mut result = points[points.len() - 1];
+  for i in (0..points.len() - 2).rev() {
+    result = result * m + points[i];
+  }
+
+  result
+}
+
+
+pub fn u8s_to_fields_without_assertion<F: PrimeField>(
+    u8s: &[u8],
+    num_words: usize,
+    word_size: usize,
+) -> Vec<F> {
+    let num_u8s_per_scalar = num_words * 4;
+
+    let mut result = vec![];
+    for i in 0..(u8s.len() / num_u8s_per_scalar) {
+        let p = i * num_u8s_per_scalar;
+        let s = u8s[p..p + num_u8s_per_scalar].to_vec();
+        result.push(u8s_to_field_without_assertion(&s, num_words, word_size));
+    }
+    result
+}
+
+pub fn u8s_to_field_without_assertion<F: PrimeField>(
+    u8s: &[u8],
+    num_words: usize,
+    word_size: usize,
+) -> F {
+    let a = bytemuck::cast_slice::<u8, u16>(u8s);
+    let mut limbs = vec![];
+    for i in (0..a.len()).step_by(2) {
+        limbs.push(a[i]);
+    }
+
+    from_words_le_without_assertion(&limbs, num_words, word_size)
+}
+
+pub fn from_words_le_without_assertion<F: PrimeField>(
+    limbs: &[u16],
+    num_words: usize,
+    word_size: usize,
+) -> F {
+    let mut val = F::ZERO;
+    for i in 0..num_words {
+        let exponent = (num_words - i - 1) * word_size;
+        // TODO: This looks wrong to me. Check Montgomery representation
+        val += F::from(2).pow([exponent as u64]) * F::from(limbs[num_words - i - 1] as u64);
+    }
+    val
 }
 
 /****************************************************** WGSL Shader Invocations ******************************************************/
