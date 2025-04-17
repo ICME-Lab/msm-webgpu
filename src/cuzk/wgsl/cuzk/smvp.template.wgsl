@@ -20,39 +20,35 @@ var<storage, read_write> bucket_x: array<BigInt>;
 @group(0) @binding(5)
 var<storage, read_write> bucket_y: array<BigInt>;
 @group(0) @binding(6)
-var<storage, read_write> bucket_t: array<BigInt>;
-@group(0) @binding(7)
 var<storage, read_write> bucket_z: array<BigInt>;
 
 /// Uniform storage buffer.
 @group(0) @binding(8)
 var<uniform> params: vec4<u32>;
 
-fn get_r() -> BigInt {
-    var r: BigInt;
-{{{ r_limbs }}}
-    return r;
-}
+// fn get_r() -> BigInt {
+//     var r: BigInt;
+// {{{ r_limbs }}}
+//     return r;
+// }
 
-fn get_paf() -> Point {
-    var result: Point;
-    let r = get_r();
-    result.y = r;
-    result.z = r;
-    return result;
-}
+// fn get_paf() -> Point {
+//     var result: Point;
+//     let r = get_r();
+//     result.y = r;
+//     result.z = r;
+//     return result;
+// }
 
 /// Point negation only involves multiplying the X and T coordinates by -1 in
 /// the field.
+// TODO: REVISIT THIS
 fn negate_point(point: Point) -> Point {
     var p = get_p();
     var x = point.x;
-    var t = point.t;
     var neg_x: BigInt;
-    var neg_t: BigInt;
     bigint_sub(&p, &x, &neg_x);
-    bigint_sub(&p, &t, &neg_t);
-    return Point(neg_x, point.y, neg_t, point.z);
+    return Point(neg_x, point.y, point.z);
 }
 
 @compute
@@ -75,7 +71,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     /// Define custom subtask_idx.
     let subtask_idx = (id / h);
 
-    var inf = get_paf();
+    // var inf = get_paf();
+    var inf = POINT_IDENTITY;
 
     let rp_offset = (subtask_idx + subtask_offset) * (num_columns + 1u);
 
@@ -104,10 +101,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             /// because there is a limit to the number of buffers that may be
             /// bound to a shader, so we do so here. Fortunately the computation
             /// is relatively simple: t = xyr and z = 1r.
-            var t = montgomery_product(&x, &y);
+            // var t = montgomery_product(&x, &y);
             var z = get_r();
 
-            let pt = Point(x, y, t, z);
+            let pt = Point(x, y, z);
             sum = add_points(sum, pt);
         }
 
@@ -133,7 +130,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                 let bucket = Point(
                     bucket_x[bi],
                     bucket_y[bi],
-                    bucket_t[bi],
                     bucket_z[bi]
                 );
                 sum = add_points(bucket, sum);
@@ -144,7 +140,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             bucket_x[bi] = sum.x;
             bucket_y[bi] = sum.y;
             bucket_z[bi] = sum.z;
-            bucket_t[bi] = sum.t;
         }
     }
 

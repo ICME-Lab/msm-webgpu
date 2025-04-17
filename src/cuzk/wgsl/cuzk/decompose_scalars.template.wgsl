@@ -2,7 +2,7 @@
 {{> bigint_funcs }}
 {{> field_funcs }}
 {{> montgomery_product_funcs }}
-{{ > extract_word_from_bytes_le_funcs }}
+{{> extract_word_from_bytes_le_funcs }}
 
 /// Input storage buffers.
 @group(0) @binding(0)
@@ -91,7 +91,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let offset = i * INPUT_SIZE;
         chunks_arr[i] = extract_word_from_bytes_le(scalar_bytes, i, CHUNK_SIZE);
     }
-    chunks_arr[NUM_SUBTASKS - 1] = scalar_bytes[0] >> (((NUM_SUBTASKS * CHUNK_SIZE - 256u) + 16u) - CHUNK_SIZE);
+    let div = i32(NUM_SUBTASKS) * i32(CHUNK_SIZE) - 256 + 16 - i32(CHUNK_SIZE);
+    if (div >= 0) {
+        chunks_arr[NUM_SUBTASKS - 1u] = scalar_bytes[0] >> u32(div);
+    }
 
     /// Iterate through chunks_arr to compute the signed indices.
     let l = {{ num_columns }}u;

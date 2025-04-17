@@ -1,6 +1,7 @@
 const NUM_WORDS = {{ num_words }}u;
 const WORD_SIZE = {{ word_size }}u;
 const MASK = {{ mask }}u;
+const W_MASK = {{ w_mask }}u;
 const TWO_POW_WORD_SIZE = {{ two_pow_word_size }}u;
 const N0 = {{ n0 }}u;
 
@@ -54,4 +55,16 @@ fn conditional_reduce(x: ptr<function, BigInt>, y: ptr<function, BigInt>) -> Big
     }
 
     return *x;
+}
+
+fn montgomery_square(x: ptr<function, BigInt>) -> BigInt {
+    return montgomery_product(x, x);
+}
+
+fn montgomery_pow(p: ptr<function, BigInt>, e: u32) -> BigInt {
+    var res: BigInt = *p;
+    for (var i = 1u; i < e; i = i + 1u) {
+        res = montgomery_product(&res, p);
+    }
+    return res;
 }

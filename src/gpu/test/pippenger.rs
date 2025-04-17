@@ -38,7 +38,7 @@ pub fn emulate_bucket_accumulation(points: &[G1Affine], scalars: &[Fr], buckets:
 
     // Bucket accumulation
     for (scalar, point) in scalars_and_points {
-        let u8_scalar = field_to_bytes(*scalar);
+        let u8_scalar = field_to_bytes(scalar);
         for j in 0..W {
             let s_j = u8_scalar[j];
             if s_j != 0 {

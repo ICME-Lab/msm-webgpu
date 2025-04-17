@@ -125,7 +125,7 @@ fn stage_2(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var m = load_bucket_sum(idx);
 
     let t = (subtask_idx / num_subtasks_per_bpr) * (num_threads_per_subtask * num_subtasks_per_bpr) + thread_id;
-    var g = Point(
+    var g = JacobianPoint(
         g_points_x[t],
         g_points_y[t],
         g_points_z[t],

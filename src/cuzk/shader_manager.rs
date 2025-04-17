@@ -12,15 +12,17 @@ const MONTGOMERY_PRODUCT_FUNCS: &str = "src/cuzk/wgsl/montgomery/mont_pro_produc
 const EC_FUNCS: &str = "src/cuzk/wgsl/curve/ec.template.wgsl";
 const FIELD_FUNCS: &str = "src/cuzk/wgsl/field/field.template.wgsl";
 const BIGINT_FUNCS: &str = "src/cuzk/wgsl/bigint/bigint.template.wgsl";
-const STRUCTS: &str = "src/cuzk/wgsl/structs/structs.template.wgsl";
+const STRUCTS: &str = "src/cuzk/wgsl/struct/structs.template.wgsl";
 
 // Shaders
 const TRANSPOSE_SHADER: &str = "src/cuzk/wgsl/cuzk/transpose.template.wgsl";
 const SMVP_SHADER: &str = "src/cuzk/wgsl/cuzk/smvp.template.wgsl";
 const BPR_SHADER: &str = "src/cuzk/wgsl/cuzk/bpr.template.wgsl";
-const DECOMPOSE_SCALARS_SHADER: &str = "src/cuzk/wgsl/cuzk/decomp_scalars.template.wgsl";
+const DECOMPOSE_SCALARS_SHADER: &str = "src/cuzk/wgsl/cuzk/decompose_scalars.template.wgsl";
 
 use crate::cuzk::utils::gen_p_limbs;
+
+use super::utils::{gen_p_limbs_plus_one, gen_zero_limbs};
 pub struct ShaderManager {
     word_size: usize,
     chunk_size: usize,
@@ -31,6 +33,8 @@ pub struct ShaderManager {
     two_pow_word_size: usize,
     two_pow_chunk_size: usize,
     p_limbs: String,
+    p_limbs_plus_one: String,
+    zero_limbs: String,
     p_bit_length: usize,
     slack: usize,
     w_mask: usize,
@@ -55,6 +59,8 @@ impl ShaderManager {
             two_pow_word_size: 1 << word_size,
             two_pow_chunk_size: 1 << chunk_size,
             p_limbs: gen_p_limbs(&p, num_words, word_size),
+            p_limbs_plus_one: gen_p_limbs_plus_one(&p, num_words, word_size),
+            zero_limbs: gen_zero_limbs(num_words),
             p_bit_length,
             slack: num_words * word_size - p_bit_length,
             w_mask: (1 << word_size) - 1,
@@ -76,13 +82,15 @@ impl ShaderManager {
 
     pub fn gen_smvp_shader(&self, workgroup_size: usize, num_csr_cols: usize) -> String {
         let mut handlebars = Handlebars::new();
-        handlebars.register_template_file("smvp", SMVP_SHADER);
+        handlebars
+            .register_template_file("smvp", SMVP_SHADER)
+            .unwrap();
 
-        handlebars.register_partial("structs", STRUCTS);
-        handlebars.register_partial("bigint_funcs", BIGINT_FUNCS);
-        handlebars.register_partial("ec_funcs", EC_FUNCS);
-        handlebars.register_partial("field_funcs", FIELD_FUNCS);
-        handlebars.register_partial("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS);
+        handlebars.register_template_file("structs", STRUCTS).unwrap();
+        handlebars.register_template_file("bigint_funcs", BIGINT_FUNCS).unwrap();
+        handlebars.register_template_file("ec_funcs", EC_FUNCS).unwrap();
+        handlebars.register_template_file("field_funcs", FIELD_FUNCS).unwrap();
+        handlebars.register_template_file("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS).unwrap();
 
         let data = json!({
             "word_size": self.word_size,
@@ -91,10 +99,15 @@ impl ShaderManager {
             "workgroup_size": workgroup_size,
             "n0": self.n0,
             "p_limbs": self.p_limbs,
+            "p_limbs_plus_one": self.p_limbs_plus_one,
+            "zero_limbs": self.zero_limbs,
             "mask": self.mask,
+            "w_mask": self.w_mask,
             "two_pow_word_size": self.two_pow_chunk_size,
             "index_shift": self.index_shift,
             "half_num_columns": num_csr_cols / 2,
+            "num_words_mul_two": self.num_words * 2,
+            "num_words_plus_one": self.num_words + 1,
         });
         // TODO: Add recompile
         handlebars.render("smvp", &data).unwrap()
@@ -106,11 +119,11 @@ impl ShaderManager {
             .register_template_file("bpr", BPR_SHADER)
             .unwrap();
 
-        handlebars.register_partial("structs", STRUCTS);
-        handlebars.register_partial("bigint_funcs", BIGINT_FUNCS);
-        handlebars.register_partial("ec_funcs", EC_FUNCS);
-        handlebars.register_partial("field_funcs", FIELD_FUNCS);
-        handlebars.register_partial("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS);
+        handlebars.register_template_file("structs", STRUCTS).unwrap();
+        handlebars.register_template_file("bigint_funcs", BIGINT_FUNCS).unwrap();
+        handlebars.register_template_file("ec_funcs", EC_FUNCS).unwrap();
+        handlebars.register_template_file("field_funcs", FIELD_FUNCS).unwrap();
+        handlebars.register_template_file("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS).unwrap();
 
         let data = json!({
             "workgroup_size": workgroup_size,
@@ -118,7 +131,10 @@ impl ShaderManager {
             "num_words": self.num_words,
             "n0": self.n0,
             "p_limbs": self.p_limbs,
+            "p_limbs_plus_one": self.p_limbs_plus_one,
+            "zero_limbs": self.zero_limbs,
             "mask": self.mask,
+            "w_mask": self.w_mask,
             "two_pow_word_size": self.two_pow_chunk_size,
             "index_shift": self.index_shift,
         });
@@ -138,14 +154,14 @@ impl ShaderManager {
             .register_template_file("decomp_scalars", DECOMPOSE_SCALARS_SHADER)
             .unwrap();
 
-        handlebars.register_partial("structs", STRUCTS);
-        handlebars.register_partial("bigint_funcs", BIGINT_FUNCS);
-        handlebars.register_partial("field_funcs", FIELD_FUNCS);
-        handlebars.register_partial("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS);
-        handlebars.register_partial(
+        handlebars.register_template_file("structs", STRUCTS).unwrap();
+        handlebars.register_template_file("bigint_funcs", BIGINT_FUNCS).unwrap();
+        handlebars.register_template_file("field_funcs", FIELD_FUNCS).unwrap();
+        handlebars.register_template_file("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS).unwrap();
+        handlebars.register_template_file(
             "extract_word_from_bytes_le_funcs",
             EXTRACT_WORD_FROM_BYTES_LE_FUNCS,
-        );
+        ).unwrap();
 
         let data = json!({
             "workgroup_size": workgroup_size,
@@ -157,6 +173,8 @@ impl ShaderManager {
             "num_columns": num_columns,
             "n0": self.n0,
             "p_limbs": self.p_limbs,
+            "p_limbs_plus_one": self.p_limbs_plus_one,
+            "zero_limbs": self.zero_limbs,
             "slack": self.slack,
             "w_mask": self.w_mask,
             "mask": self.mask,

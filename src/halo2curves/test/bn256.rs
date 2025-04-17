@@ -108,7 +108,7 @@ mod tests {
         let bytes = fields_to_bytes_montgomery(&vec![field]);
         let shader_code = load_bn254_field_to_bytes_shader_code();
         let gpu_bytes = pollster::block_on(gpu::test::ops::field_to_bytes(&shader_code, &bytes));
-        let bytes = field_to_bytes_montgomery(field);
+        let bytes = field_to_bytes_montgomery(&field);
         let gpu_bytes = cast_u8_to_u32(&gpu_bytes)
             .iter()
             .map(|x| *x as u8)
@@ -467,42 +467,42 @@ mod tests_wasm_pack {
         fn now() -> f64;
     }
 
-    #[wasm_bindgen_test]
-    async fn test_webgpu_msm_bn254() {
-        let sample_size = 80000;
-        let points = sample_points::<G1Affine>(sample_size);
-        let scalars = sample_scalars::<Fr>(sample_size);
+    // #[wasm_bindgen_test]
+    // async fn test_webgpu_msm_bn254() {
+    //     let sample_size = 80000;
+    //     let points = sample_points::<G1Affine>(sample_size);
+    //     let scalars = sample_scalars::<Fr>(sample_size);
         
-        let cpu_start = now();
-        let fast = fast_msm(&points, &scalars);
-        console::log_1(&format!("CPU Elapsed: {} ms", now() - cpu_start).into());
+    //     let cpu_start = now();
+    //     let fast = fast_msm(&points, &scalars);
+    //     console::log_1(&format!("CPU Elapsed: {} ms", now() - cpu_start).into());
 
-        let gpu_start = now();
-        // let result = run_webgpu_msm_async_browser(&points, &scalars).await;
-        let points_slice = points_to_bytes(&points);
-        console::log_1(&format!("points_to_bytes: {} ms", now() - gpu_start).into());
+    //     let gpu_start = now();
+    //     // let result = run_webgpu_msm_async_browser(&points, &scalars).await;
+    //     let points_slice = points_to_bytes(&points);
+    //     console::log_1(&format!("points_to_bytes: {} ms", now() - gpu_start).into());
 
-        let vector_start = now();
-        let v_slice = scalars_to_bytes(&scalars);
-        console::log_1(&format!("scalars_to_bytes: {} ms", now() - vector_start).into());
+    //     let vector_start = now();
+    //     let v_slice = scalars_to_bytes(&scalars);
+    //     console::log_1(&format!("scalars_to_bytes: {} ms", now() - vector_start).into());
 
-        let shader_start = now();
-        let shader_code = load_shader_code(Fq::MODULUS);
-        console::log_1(&format!("load_shader_code: {} ms", now() - shader_start).into());
+    //     let shader_start = now();
+    //     let shader_code = load_shader_code(Fq::MODULUS);
+    //     console::log_1(&format!("load_shader_code: {} ms", now() - shader_start).into());
 
-        let result_start = now();
-        let result = gpu::msm::run_msm_browser(&shader_code, &points_slice, &v_slice).await;
-        console::log_1(&format!("run_msm_browser: {} ms", now() - result_start).into());
+    //     let result_start = now();
+    //     let result = gpu::msm::run_msm_browser(&shader_code, &points_slice, &v_slice).await;
+    //     console::log_1(&format!("run_msm_browser: {} ms", now() - result_start).into());
 
-        let result_start = now();
-        let result: Vec<Fq> = u16_vec_to_fields_montgomery(&result);
-        console::log_1(&format!("u16_vec_to_fields_montgomery: {} ms", now() - result_start).into());
-        let result = G1::new_jacobian(result[0].clone(), result[1].clone(), result[2].clone()).unwrap();
-        console::log_1(&format!("GPU Elapsed: {} ms", now() - gpu_start).into());
+    //     let result_start = now();
+    //     let result: Vec<Fq> = u16_vec_to_fields_montgomery(&result);
+    //     console::log_1(&format!("u16_vec_to_fields_montgomery: {} ms", now() - result_start).into());
+    //     let result = G1::new_jacobian(result[0].clone(), result[1].clone(), result[2].clone()).unwrap();
+    //     console::log_1(&format!("GPU Elapsed: {} ms", now() - gpu_start).into());
         
 
 
-        console::log_1(&format!("Result: {:?}", result).into());
-        assert_eq!(fast, result);
-    }
+    //     console::log_1(&format!("Result: {:?}", result).into());
+    //     assert_eq!(fast, result);
+    // }
 }

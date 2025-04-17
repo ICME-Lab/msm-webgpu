@@ -12,6 +12,8 @@ use crate::cuzk::gpu::{
 };
 use crate::cuzk::shader_manager::ShaderManager;
 
+use super::utils::u8s_to_fields_without_assertion;
+
 // TODO: HARDCODE THE VALUE FOR BN256
 pub fn calc_num_words(word_size: usize) -> usize {
     let p_width = 254;
@@ -46,13 +48,21 @@ const WORD_SIZE: usize = 13;
  *    as the number of points is small, and the time taken to compile a shader to
  *    perform this computation is greater than the time it takes for the CPU to do so.
  */
-pub async fn compute_msm<F: PrimeField, C: CurveAffine>(points: &[u8], scalars: &[u8]) -> C::Curve {
+pub async fn compute_msm<C: CurveAffine>(points: &[u8], scalars: &[u8]) -> C::Curve {
     let input_size = scalars.len() / 32;
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_columns = 2u32.pow(chunk_size as u32) as usize;
     let num_rows = (input_size + num_columns - 1) / num_columns;
     let num_subtasks = (256 + chunk_size - 1) / chunk_size;
     let num_words = calc_num_words(WORD_SIZE);
+
+    println!("Input size: {}", input_size);
+    println!("Chunk size: {}", chunk_size);
+    println!("Num columns: {}", num_columns);
+    println!("Num rows: {}", num_rows);
+    println!("Num subtasks: {}", num_subtasks);
+    println!("Num words: {}", num_words);
+    println!("Word size: {}", WORD_SIZE);
 
     let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size, num_words);
 
@@ -114,6 +124,8 @@ pub async fn compute_msm<F: PrimeField, C: CurveAffine>(points: &[u8], scalars: 
         num_columns,
     );
 
+    println!("C shader: {}", c_shader);
+
     let (point_x_sb, point_y_sb, scalar_chunks_sb) = decompose_shaders(
         &c_shader,
         c_num_x_workgroups,
@@ -129,6 +141,10 @@ pub async fn compute_msm<F: PrimeField, C: CurveAffine>(points: &[u8], scalars: 
         chunk_size,
     )
     .await;
+
+    println!("Point X buffer: {:?}", point_x_sb.size());
+    println!("Point Y buffer: {:?}", point_y_sb.size());
+    println!("Scalar chunks buffer: {:?}", scalar_chunks_sb.size());
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     // 2. Sparse Matrix Transposition                                                         /
@@ -150,6 +166,8 @@ pub async fn compute_msm<F: PrimeField, C: CurveAffine>(points: &[u8], scalars: 
 
     let t_shader = shader_manager.gen_transpose_shader(num_subtasks);
 
+    println!("T shader: {}", t_shader);
+
     let (all_csc_col_ptr_sb, all_csc_val_idxs_sb) = transpose_gpu(
         &t_shader,
         &device,
@@ -165,6 +183,9 @@ pub async fn compute_msm<F: PrimeField, C: CurveAffine>(points: &[u8], scalars: 
         scalar_chunks_sb,
     )
     .await;
+
+    println!("All CSC col ptr buffer: {:?}", all_csc_col_ptr_sb.size());
+    println!("All CSC val idxs buffer: {:?}", all_csc_val_idxs_sb.size());
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     // 3. Sparse Matrix Vector Product (SMVP)                                                 /
@@ -371,49 +392,7 @@ pub async fn compute_msm<F: PrimeField, C: CurveAffine>(points: &[u8], scalars: 
 }
 
 
-pub fn u8s_to_fields_without_assertion<F: PrimeField>(
-    u8s: &[u8],
-    num_words: usize,
-    word_size: usize,
-) -> Vec<F> {
-    let num_u8s_per_scalar = num_words * 4;
 
-    let mut result = vec![];
-    for i in 0..(u8s.len() / num_u8s_per_scalar) {
-        let p = i * num_u8s_per_scalar;
-        let s = u8s[p..p + num_u8s_per_scalar].to_vec();
-        result.push(u8s_to_field_without_assertion(&s, num_words, word_size));
-    }
-    result
-}
-
-pub fn u8s_to_field_without_assertion<F: PrimeField>(
-    u8s: &[u8],
-    num_words: usize,
-    word_size: usize,
-) -> F {
-    let a = bytemuck::cast_slice::<u8, u16>(u8s);
-    let mut limbs = vec![];
-    for i in (0..a.len()).step_by(2) {
-        limbs.push(a[i]);
-    }
-
-    from_words_le_without_assertion(&limbs, num_words, word_size)
-}
-
-pub fn from_words_le_without_assertion<F: PrimeField>(
-    limbs: &[u16],
-    num_words: usize,
-    word_size: usize,
-) -> F {
-    let mut val = F::ZERO;
-    for i in 0..num_words {
-        let exponent = (num_words - i - 1) * word_size;
-        // TODO: This looks wrong to me. Check Montgomery representation
-        val += F::from(2).pow([exponent as u64]) * F::from(limbs[num_words - i - 1] as u64);
-    }
-    val
-}
 
 /****************************************************** WGSL Shader Invocations ******************************************************/
 
@@ -486,6 +465,8 @@ pub async fn decompose_shaders(
         vec![&params_ub],
     );
 
+    println!("Decompose bind group layout: {:?}", bind_group_layout);
+
     let bind_group = create_bind_group(
         Some("Bind group"),
         device,
@@ -496,8 +477,11 @@ pub async fn decompose_shaders(
             &point_x_sb,
             &point_y_sb,
             &scalar_chunks_sb,
+            &params_ub,
         ],
     );
+
+    println!("Decompose bind group: {:?}", bind_group);
 
     let compute_pipeline = create_compute_pipeline(
         Some("Convert point coords and decompose shader"),
@@ -607,10 +591,10 @@ pub async fn transpose_gpu(
 }
 
 pub fn to_u8s_for_gpu(vals: Vec<usize>) -> Vec<u8> {
-    let max = 1 << 32;
+    let max: u64 = 1 << 32;
     let mut buf = vec![];
     for val in vals {
-        assert!(val < max);
+        assert!((val as u64) < max);
         buf.extend_from_slice(&val.to_le_bytes());
     }
     buf
@@ -654,6 +638,8 @@ pub async fn smvp_gpu(
         vec![&params_ub],
     );
 
+    println!("SMVP Bind group layout: {:?}", bind_group_layout);
+
     let bind_group = create_bind_group(
         Some("Bind group"),
         device,
@@ -669,6 +655,8 @@ pub async fn smvp_gpu(
             &params_ub,
         ],
     );
+
+    println!("SMVP Bind group: {:?}", bind_group);
 
     let compute_pipeline = create_compute_pipeline(
         Some("Compute pipeline"),
@@ -726,6 +714,8 @@ pub async fn bpr_1(
         vec![&params_ub],
     );
 
+    println!("BPR 1 Bind group layout: {:?}", bind_group_layout);
+
     let bind_group = create_bind_group(
         Some("Bind group"),
         device,
@@ -740,6 +730,8 @@ pub async fn bpr_1(
             &params_ub,
         ],
     );
+
+    println!("BPR 1 Bind group: {:?}", bind_group);
 
     let compute_pipeline = create_compute_pipeline(
         Some("Compute pipeline"),
@@ -757,7 +749,7 @@ pub async fn bpr_1(
         num_x_workgroups as u32,
         num_y_workgroups as u32,
         num_z_workgroups as u32,
-    );
+    ).await;
 }
 
 pub async fn bpr_2(
@@ -796,6 +788,8 @@ pub async fn bpr_2(
         vec![&params_ub],
     );
 
+    println!("BPR 2 Bind group layout: {:?}", bind_group_layout);
+
     let bind_group = create_bind_group(
         Some("Bind group"),
         device,
@@ -810,6 +804,8 @@ pub async fn bpr_2(
             &params_ub,
         ],
     );
+
+    println!("BPR 2 Bind group: {:?}", bind_group);
 
     let compute_pipeline = create_compute_pipeline(
         Some("Compute pipeline"),

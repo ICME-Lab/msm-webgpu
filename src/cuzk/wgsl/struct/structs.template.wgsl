@@ -13,6 +13,5 @@ struct BigIntMediumWide {
 struct Point {
   x: BigInt,
   y: BigInt,
-  t: BigInt,
   z: BigInt
 }

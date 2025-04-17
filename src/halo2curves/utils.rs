@@ -1,7 +1,7 @@
 use ff::PrimeField;
 
 
-pub fn field_to_bytes<F: PrimeField>(value: F) -> Vec<u8> {
+pub fn field_to_bytes<F: PrimeField>(value: &F) -> Vec<u8> {
     let s_bytes = value.to_repr();
     let s_bytes_ref = s_bytes.as_ref();
     s_bytes_ref.to_vec()
@@ -26,7 +26,7 @@ pub fn fields_to_u16_vec<F: PrimeField>(fields: &[F]) -> Vec<u16> {
 }
 
 pub fn field_to_u16_vec<F: PrimeField>(field: &F) -> Vec<u16> {
-    let bytes = field_to_bytes(field.clone());
+    let bytes = field_to_bytes(field);
     let mut u16_vec = Vec::new();
 
     for chunk in bytes.chunks_exact(2) {
@@ -37,7 +37,7 @@ pub fn field_to_u16_vec<F: PrimeField>(field: &F) -> Vec<u16> {
 }
 
 pub fn field_to_u16_as_u32_as_u8_vec<F: PrimeField>(field: &F) -> Vec<u8> {
-    let bytes = field_to_bytes(field.clone());
+    let bytes = field_to_bytes(field);
     assert!(bytes.len() % 2 == 0);
     
     let mut output = Vec::with_capacity((bytes.len() / 2) * 4); // each u16 → u32 → 4 bytes
@@ -81,7 +81,7 @@ pub fn fields_to_u32_vec<F: PrimeField>(fields: &[F]) -> Vec<u32> {
 }
 
 pub fn field_to_u32_vec<F: PrimeField>(field: &F) -> Vec<u32> {
-    let bytes = field_to_bytes(field.clone());
+    let bytes = field_to_bytes(field);
     let mut u32_vec = Vec::new();
 
     for chunk in bytes.chunks_exact(4) {
@@ -120,7 +120,7 @@ mod tests {
     #[test]
     fn test_field_to_bytes() {
         let field = Fr::random(rand::thread_rng());
-        let bytes = field_to_bytes(field);
+        let bytes = field_to_bytes(&field);
         assert_eq!(bytes.len(), 32);
         let field_from_bytes = bytes_to_field::<Fr>(&bytes);
         assert_eq!(field, field_from_bytes);

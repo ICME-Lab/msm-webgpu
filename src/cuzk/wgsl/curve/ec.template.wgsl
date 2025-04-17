@@ -1,66 +1,116 @@
-fn get_edwards_d() -> BigInt {
-    var d: BigInt;
-{{{ d_limbs }}}
-    return d;
+
+
+const POINT_IDENTITY: Point = Point(ZERO, ZERO, ZERO);
+
+fn is_inf(p: Point) -> bool {
+    return field_eq(p.z, ZERO);
 }
 
-fn double_point(p1: Point) -> Point {
-    var p1x = p1.x;
-    var p1y = p1.y;
-    var p1z = p1.z;
-
-    var a = montgomery_product(&p1x, &p1x);
-    var b = montgomery_product(&p1y, &p1y);
-    var a_p_b = fr_add(&a, &b);
-    var z1_m_z1 = montgomery_product(&p1z, &p1z);
-    var c = fr_add(&z1_m_z1, &z1_m_z1);
-    var p = get_p();
-    var d = fr_sub(&p, &a);
-    var x1_m_y1 = fr_add(&p1x, &p1y);
-    var x1y1_m_x1y1 = montgomery_product(&x1_m_y1, &x1_m_y1);
-    var e = fr_sub(&x1y1_m_x1y1, &a_p_b);
-    var g = fr_add(&d, &b);
-    var f = fr_sub(&g, &c);
-    var h = fr_sub(&d, &b);
-    var x3 = montgomery_product(&e, &f);
-    var y3 = montgomery_product(&g, &h);
-    var t3 = montgomery_product(&e, &h);
-    var z3 = montgomery_product(&f, &g);
-    return Point(x3, y3, t3, z3);
+fn point_double(p: Point) -> Point {
+    // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
+    var p1x = p.x;
+    var p1y = p.y;
+    var p1z = p.z;
+    var A = montgomery_product(&p1x, &p1x);
+    var B = montgomery_product(&p1y, &p1y);
+    var C = montgomery_product(&B, &B);
+    var X1plusB = field_add(&p1x, &B);
+    var X1plusB_sq = montgomery_square(&X1plusB);
+    var A_p_C = field_add(&A, &C);
+    var D = field_small_scalar_shift(1, field_sub(&X1plusB_sq, &A_p_C));
+    var A_shift = field_small_scalar_shift(1, A);
+    var E = field_add(&A_shift, &A);
+    var F = montgomery_square(&E);
+    var D_shift = field_small_scalar_shift(1, D);
+    var x3 = field_sub(&F, &D_shift);
+    var C_shift = field_small_scalar_shift(3, C);
+    var D_sub_x3 = field_sub(&D, &x3);
+    var E_mul_D_sub_x3 = montgomery_product(&E, &D_sub_x3);
+    var y3 = field_sub(&E_mul_D_sub_x3, &C_shift);
+    var p1y_shift = field_small_scalar_shift(1, p1y);
+    var z3 = montgomery_product(&p1y_shift, &p1z);
+    return Point(x3, y3, z3);
 }
 
-/// add-2008-hwcd https://eprint.iacr.org/2008/522.pdf section 3.1, p5 (9M + 2D)
-/// https://hyperelliptic.org/EFD/g1p/auto-twisted-extended.html#addition-add-2008-hwcd.
-fn add_points(p1: Point, p2: Point) -> Point {
-    var p1x = p1.x;
-    var p2x = p2.x;
-    var p1y = p1.y;
-    var p2y = p2.y;
-    var p1t = p1.t;
-    var p2t = p2.t;
-    var p1z = p1.z;
-    var p2z = p2.z;
+fn point_add(p: Point, q: Point) -> Point {
+    // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#addition-add-2007-bl
+    if (field_eq(p.y, ZERO)) {
+        return q;
+    }
+    if (field_eq(q.y, ZERO)) {
+        return p;
+    }
+    var p1x = p.x;
+    var p1y = p.y;
+    var p1z = p.z;
+    var q1x = q.x;
+    var q1y = q.y;
+    var q1z = q.z;
 
-    var a = montgomery_product(&p1x, &p2x);
-    var b = montgomery_product(&p1y, &p2y);
-    var a_p_b = fr_add(&a, &b);
-    var t2 = montgomery_product(&p1t, &p2t);
-    var EDWARDS_D = get_edwards_d();
-    var c = montgomery_product(&EDWARDS_D, &t2);
-    var d = montgomery_product(&p1z, &p2z);
-    var xpy = fr_add(&p1x, &p1y);
-    var xpy2 = fr_add(&p2x, &p2y);
-    var e = montgomery_product(&xpy, &xpy2);
-    e = fr_sub(&e, &a_p_b);
-    var f = fr_sub(&d, &c);
-    var g = fr_add(&d, &c);
-    var p = get_p();
-    var a_neg = fr_sub(&p, &a);
-    var h = fr_sub(&b, &a_neg);
-    var added_x = montgomery_product(&e, &f);
-    var added_y = montgomery_product(&g, &h);
-    var added_t = montgomery_product(&e, &h);
-    var added_z = montgomery_product(&f, &g);
+    var Z1Z1 = montgomery_square(&p1z);
+    var Z2Z2 = montgomery_square(&q1z);
+    var U1 = montgomery_product(&p1x, &Z2Z2);
+    var U2 = montgomery_product(&q1x, &Z1Z1);
+    var Z2Z2Z2 = montgomery_product(&Z2Z2, &q1z);
+    var Z1Z1Z1 = montgomery_product(&Z1Z1, &p1z);
+    var S1 = montgomery_product(&p1y, &Z2Z2Z2);
+    var S2 = montgomery_product(&q1y, &Z1Z1Z1);
+    if (field_eq(U1, U2)) {
+        if (field_eq(S1, S2)) {
+            return point_double(p);
+        } else {
+            return POINT_IDENTITY;
+        }
+    }
 
-    return Point(added_x, added_y, added_t, added_z);
+    var H = field_sub(&U2, &U1);
+    var I = field_small_scalar_shift(2, montgomery_square(&H));
+    var J = montgomery_product(&H, &I);
+    var R = field_small_scalar_shift(1, field_sub(&S2, &S1));
+    var V = montgomery_product(&U1, &I);
+    var R_sq = montgomery_square(&R);
+    var V_shift = field_small_scalar_shift(1, V);
+    var J_p_V = field_add(&J, &V_shift);
+    var nx = field_sub(&R_sq, &J_p_V);
+    var V_sub_nx = field_sub(&V, &nx);
+    var R_prod_V_sub_nx = montgomery_product(&R, &V_sub_nx);
+    var shift_1_S1_J = field_small_scalar_shift(1, montgomery_product(&S1, &J));
+    var ny = field_sub(&R_prod_V_sub_nx, &shift_1_S1_J);
+    var Z1Z1_p_Z2Z2 = field_add(&Z1Z1, &Z2Z2);
+    var p1z_p_q1z = field_add(&p1z, &q1z);
+    var p1z_p_q1z_sq = montgomery_square(&p1z_p_q1z);
+    var sub_p1z_p_q1z_sq_Z1Z1_p_Z2Z2 = field_sub(&p1z_p_q1z_sq, &Z1Z1_p_Z2Z2);
+    var nz = montgomery_product(&H, &sub_p1z_p_q1z_sq_Z1Z1_p_Z2Z2);
+    return Point(nx, ny, nz);
 }
+
+fn scalar_mul(p: Point, k: BigInt) -> Point {
+    var r: Point = POINT_IDENTITY;
+    var t: Point = p;
+    for (var i = 0u; i < NUM_WORDS; i = i + 1u) {
+        var k_s = k.limbs[i];
+        for (var j = 0u; j < WORD_SIZE; j = j + 1u) {
+            if ((k_s & 1) == 1u) {
+                r = point_add(r, t);
+            }
+            t = point_double(t);
+            k_s = k_s >> 1;
+        }
+    }
+    return r;
+}
+
+fn small_scalar_mul(p: Point, k: u32) -> Point {
+    var r: Point = POINT_IDENTITY;
+    var t: Point = p;
+    var k_s = k;
+    for (var j = 0u; j < WORD_SIZE; j = j + 1u) {
+        if ((k_s & 1) == 1u) {
+            r = point_add(r, t);
+        }
+        t = point_double(t);
+        k_s = k_s >> 1;
+    }
+    return r;
+}
+
