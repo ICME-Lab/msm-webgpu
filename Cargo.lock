@@ -786,6 +786,7 @@ dependencies = [
  "num-bigint",
  "num-integer",
  "num-traits",
+ "once_cell",
  "oneshot",
  "pollster",
  "rand",

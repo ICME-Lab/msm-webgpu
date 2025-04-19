@@ -3,7 +3,10 @@ use group::{Group, Curve};
 use halo2curves::CurveExt;
 use halo2curves::bn256::G1Affine;
 use halo2curves::CurveAffine;
+use num_bigint::{BigInt, BigUint};
+use num_traits::Num;
 use wgpu::{Buffer, CommandEncoder, CommandEncoderDescriptor, Device, Queue};
+use once_cell::sync::Lazy;
 
 use crate::cuzk::gpu::{
     create_and_write_storage_buffer, create_and_write_uniform_buffer, create_bind_group,
@@ -12,7 +15,7 @@ use crate::cuzk::gpu::{
 };
 use crate::cuzk::shader_manager::ShaderManager;
 
-use super::utils::u8s_to_fields_without_assertion;
+use super::utils::{compute_misc_params, u8s_to_fields_without_assertion, MiscParams};
 
 // TODO: HARDCODE THE VALUE FOR BN256
 pub fn calc_num_words(word_size: usize) -> usize {
@@ -25,7 +28,17 @@ pub fn calc_num_words(word_size: usize) -> usize {
 }
 
 /// 13-bit limbs.
-const WORD_SIZE: usize = 16;
+pub const WORD_SIZE: usize = 13;
+
+pub static P: Lazy<BigInt> = Lazy::new(|| {
+    BigInt::from_str_radix(
+        "21888242871839275222246405745257275088696311157297823662689037894645226208583",
+        10,
+    )
+    .expect("Invalid modulus")
+});
+
+pub static PARAMS: Lazy<MiscParams> = Lazy::new(|| compute_misc_params(&P, WORD_SIZE));
 
 /*
  * End-to-end implementation of the modified cuZK MSM algorithm by Lu et al,
@@ -54,8 +67,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[u8], scalars: &[u8]) -> C::Cu
     let num_columns = 2u32.pow(chunk_size as u32) as usize;
     let num_rows = (input_size + num_columns - 1) / num_columns;
     let num_subtasks = (256 + chunk_size - 1) / chunk_size;
-    let num_words = calc_num_words(WORD_SIZE);
-
+    let num_words = PARAMS.num_words;
     println!("Input size: {}", input_size);
     println!("Chunk size: {}", chunk_size);
     println!("Num columns: {}", num_columns);
@@ -63,8 +75,9 @@ pub async fn compute_msm<C: CurveAffine>(points: &[u8], scalars: &[u8]) -> C::Cu
     println!("Num subtasks: {}", num_subtasks);
     println!("Num words: {}", num_words);
     println!("Word size: {}", WORD_SIZE);
+    println!("Params: {:?}", PARAMS);
 
-    let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size, num_words);
+    let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size);
 
     let adapter = get_adapter().await;
     let (device, queue) = get_device(&adapter).await;

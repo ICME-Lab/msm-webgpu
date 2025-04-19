@@ -1,21 +1,24 @@
 use ff::PrimeField;
-use num_bigint::BigUint;
+use num_bigint::{BigInt, BigUint, Sign};
+use num_traits::{One, FromPrimitive};
+use num_integer::Integer;
+use crate::cuzk::msm::calc_num_words;
 
   
 // TODO: Test
 pub fn to_words_le(
-    val: &BigUint,
+    val: &BigInt,
     num_words: usize,
     word_size: usize,
 ) -> Vec<u16> {
     let mut limbs = vec![0u16; num_words];
 
-    let mask = BigUint::from((1u32 << word_size) - 1);
+    let mask = BigInt::from((1u32 << word_size) - 1);
     for i in 0..num_words {
         let idx = num_words - 1 - i;
         let shift = idx * word_size;
         let w = (val >> shift) & mask.clone();
-        let digits = w.to_u32_digits();
+        let digits = w.to_u32_digits().1;
         if digits.len() > 0 {
             limbs[idx] = digits[0] as u16;
         }
@@ -69,7 +72,7 @@ pub fn from_words_le_without_assertion<F: PrimeField>(
 }
 
 pub fn gen_p_limbs(
-    p: &BigUint,
+    p: &BigInt,
     num_words: usize,
     word_size: usize,
 ) -> String {
@@ -82,7 +85,7 @@ pub fn gen_p_limbs(
 }
 
 pub fn gen_p_limbs_plus_one(
-    p: &BigUint,
+    p: &BigInt,
     num_words: usize,
     word_size: usize,
 ) -> String {
@@ -107,7 +110,7 @@ pub fn gen_zero_limbs(
 }
 
 pub fn gen_r_limbs(
-    r: &BigUint,
+    r: &BigInt,
     num_words: usize,
     word_size: usize,
 ) -> String {
@@ -117,4 +120,40 @@ pub fn gen_r_limbs(
         r += &format!("    r.limbs[{}u] = {}u;\n", i, limb);
     }
     r
+}
+
+#[derive(Debug)]
+pub struct MiscParams {
+    pub num_words: usize,
+    pub n0: u32,
+    pub r: BigInt,
+}
+
+pub fn compute_misc_params(
+    p: &BigInt,
+    word_size: usize,
+) -> MiscParams {
+    assert!(word_size > 0);
+
+    let num_words = calc_num_words(word_size);
+    let r = BigInt::one() << (num_words * word_size);
+    let gcd = r.extended_gcd(p);
+    let rinv = gcd.x;
+    let pprime = gcd.y;
+
+    if rinv < BigInt::ZERO {
+        assert_eq!(((r.clone() * rinv.clone() - p.clone() * pprime.clone()) % p) + p, BigInt::one());
+        assert_eq!(((r.clone() * rinv.clone()) % p) + p, BigInt::one());
+        assert_eq!((p.clone() * pprime.clone()) % r.clone(), BigInt::one());
+      } else {
+        assert_eq!((r.clone() * rinv.clone() - p.clone() * pprime.clone()) % p, BigInt::one());
+        assert_eq!((r.clone() * rinv.clone()) % p, BigInt::one());
+        assert_eq!(((p.clone() * pprime.clone()) % r.clone()) + r.clone(), BigInt::one());
+      }
+    let neg_n_inv = r.clone() - pprime.clone();
+    let n0 = neg_n_inv % (BigInt::one() << word_size);
+    let n0_u32 = n0.to_u32_digits();
+    assert!(n0_u32.1.len() == 1);
+    assert!(n0_u32.0 == Sign::Plus);
+    MiscParams { num_words, n0: n0_u32.1[0], r }
 }

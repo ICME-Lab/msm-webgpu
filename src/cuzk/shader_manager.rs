@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use handlebars::Handlebars;
-use num_bigint::BigUint;
+use num_bigint::{BigInt, BigUint};
 use num_traits::{Num, One};
 use serde_json::json;
 
@@ -22,7 +22,7 @@ const DECOMPOSE_SCALARS_SHADER: &str = "src/cuzk/wgsl/cuzk/decompose_scalars.tem
 
 use crate::cuzk::utils::gen_p_limbs;
 
-use super::utils::{gen_p_limbs_plus_one, gen_r_limbs, gen_zero_limbs};
+use super::{msm::{P, PARAMS}, utils::{gen_p_limbs_plus_one, gen_r_limbs, gen_zero_limbs}};
 pub struct ShaderManager {
     word_size: usize,
     chunk_size: usize,
@@ -39,18 +39,14 @@ pub struct ShaderManager {
     p_bit_length: usize,
     slack: usize,
     w_mask: usize,
-    n0: usize,
+    n0: u32,
 }
 
 impl ShaderManager {
-    pub fn new(word_size: usize, chunk_size: usize, input_size: usize, num_words: usize) -> Self {
-        let p = BigUint::from_str_radix(
-            "21888242871839275222246405745257275088696311157297823662689037894645226208583",
-            10,
-        )
-        .unwrap();
+    pub fn new(word_size: usize, chunk_size: usize, input_size: usize) -> Self {
         let p_bit_length = 254; // TODO: Parameterise
-        let r = BigUint::one() << (num_words * word_size);
+        let num_words = PARAMS.num_words;
+        let r = PARAMS.r.clone();
         Self {
             word_size,
             chunk_size,
@@ -60,13 +56,13 @@ impl ShaderManager {
             index_shift: 1 << (chunk_size - 1),
             two_pow_word_size: 1 << word_size,
             two_pow_chunk_size: 1 << chunk_size,
-            p_limbs: gen_p_limbs(&p, num_words, word_size),
-            p_limbs_plus_one: gen_p_limbs_plus_one(&p, num_words, word_size),
+            p_limbs: gen_p_limbs(&P, num_words, word_size),
+            p_limbs_plus_one: gen_p_limbs_plus_one(&P, num_words, word_size),
             zero_limbs: gen_zero_limbs(num_words),
             p_bit_length,
             slack: num_words * word_size - p_bit_length,
             w_mask: (1 << word_size) - 1,
-            n0: 0, // TODO: Calculate
+            n0: PARAMS.n0.clone(),
             r_limbs: gen_r_limbs(&r, num_words, word_size)
         }
     }
