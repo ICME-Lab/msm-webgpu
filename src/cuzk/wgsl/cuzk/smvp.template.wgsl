@@ -23,14 +23,14 @@ var<storage, read_write> bucket_y: array<BigInt>;
 var<storage, read_write> bucket_z: array<BigInt>;
 
 /// Uniform storage buffer.
-@group(0) @binding(8)
+@group(0) @binding(7)
 var<uniform> params: vec4<u32>;
 
-// fn get_r() -> BigInt {
-//     var r: BigInt;
-// {{{ r_limbs }}}
-//     return r;
-// }
+fn get_r() -> BigInt {
+    var r: BigInt;
+{{{ r_limbs }}}
+    return r;
+}
 
 // fn get_paf() -> Point {
 //     var result: Point;
@@ -42,13 +42,12 @@ var<uniform> params: vec4<u32>;
 
 /// Point negation only involves multiplying the X and T coordinates by -1 in
 /// the field.
-// TODO: REVISIT THIS
 fn negate_point(point: Point) -> Point {
     var p = get_p();
-    var x = point.x;
-    var neg_x: BigInt;
-    bigint_sub(&p, &x, &neg_x);
-    return Point(neg_x, point.y, point.z);
+    var y = point.y;
+    var neg_y: BigInt;
+    bigint_sub(&p, &y, &neg_y);
+    return Point(point.x, neg_y, point.z);
 }
 
 @compute
@@ -105,7 +104,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             var z = get_r();
 
             let pt = Point(x, y, z);
-            sum = add_points(sum, pt);
+            sum = point_add(sum, pt);
         }
 
         /// Negate the point if the recovered bucket index is negative.
@@ -132,7 +131,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                     bucket_y[bi],
                     bucket_z[bi]
                 );
-                sum = add_points(bucket, sum);
+                sum = point_add(bucket, sum);
             }
 
             /// Set the point. Since no point has been set when j == 0, we can just

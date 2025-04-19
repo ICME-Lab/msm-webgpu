@@ -74,7 +74,6 @@ pub async fn run_webgpu_msm_async<C: CurveAffine>(g: &Vec<C>, v: &Vec<C::Scalar>
 #[cfg(test)]
 mod tests {
     use halo2curves::bn256::{Fr, G1Affine};
-
     use super::*;
 
     #[test]

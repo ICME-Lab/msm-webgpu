@@ -25,7 +25,7 @@ pub fn calc_num_words(word_size: usize) -> usize {
 }
 
 /// 13-bit limbs.
-const WORD_SIZE: usize = 13;
+const WORD_SIZE: usize = 16;
 
 /*
  * End-to-end implementation of the modified cuZK MSM algorithm by Lu et al,

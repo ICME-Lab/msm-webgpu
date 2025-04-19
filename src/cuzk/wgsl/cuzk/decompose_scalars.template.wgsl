@@ -27,12 +27,6 @@ const NUM_SUBTASKS = {{ num_subtasks }}u;
 /// Scalar chunk bitwidth.
 const CHUNK_SIZE = {{ chunk_size }}u;
 
-// fn get_r() -> BigInt {
-//     var r: BigInt;
-// {{{ r_limbs }}}
-//     return r;
-// }
-
 @compute
 @workgroup_size({{ workgroup_size }})
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {

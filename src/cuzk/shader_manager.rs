@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use handlebars::Handlebars;
 use num_bigint::BigUint;
-use num_traits::Num;
+use num_traits::{Num, One};
 use serde_json::json;
 
 // Templates
@@ -22,7 +22,7 @@ const DECOMPOSE_SCALARS_SHADER: &str = "src/cuzk/wgsl/cuzk/decompose_scalars.tem
 
 use crate::cuzk::utils::gen_p_limbs;
 
-use super::utils::{gen_p_limbs_plus_one, gen_zero_limbs};
+use super::utils::{gen_p_limbs_plus_one, gen_r_limbs, gen_zero_limbs};
 pub struct ShaderManager {
     word_size: usize,
     chunk_size: usize,
@@ -35,6 +35,7 @@ pub struct ShaderManager {
     p_limbs: String,
     p_limbs_plus_one: String,
     zero_limbs: String,
+    r_limbs: String,
     p_bit_length: usize,
     slack: usize,
     w_mask: usize,
@@ -49,6 +50,7 @@ impl ShaderManager {
         )
         .unwrap();
         let p_bit_length = 254; // TODO: Parameterise
+        let r = BigUint::one() << (num_words * word_size);
         Self {
             word_size,
             chunk_size,
@@ -65,6 +67,7 @@ impl ShaderManager {
             slack: num_words * word_size - p_bit_length,
             w_mask: (1 << word_size) - 1,
             n0: 0, // TODO: Calculate
+            r_limbs: gen_r_limbs(&r, num_words, word_size)
         }
     }
 
@@ -101,6 +104,7 @@ impl ShaderManager {
             "p_limbs": self.p_limbs,
             "p_limbs_plus_one": self.p_limbs_plus_one,
             "zero_limbs": self.zero_limbs,
+            "r_limbs": self.r_limbs,
             "mask": self.mask,
             "w_mask": self.w_mask,
             "two_pow_word_size": self.two_pow_chunk_size,
@@ -133,10 +137,13 @@ impl ShaderManager {
             "p_limbs": self.p_limbs,
             "p_limbs_plus_one": self.p_limbs_plus_one,
             "zero_limbs": self.zero_limbs,
+            "r_limbs": self.r_limbs,
             "mask": self.mask,
             "w_mask": self.w_mask,
             "two_pow_word_size": self.two_pow_chunk_size,
             "index_shift": self.index_shift,
+            "num_words_mul_two": self.num_words * 2,
+            "num_words_plus_one": self.num_words + 1,
         });
         // TODO: Add recompile
         handlebars.render("bpr", &data).unwrap()
@@ -183,6 +190,7 @@ impl ShaderManager {
             "two_pow_chunk_size": self.two_pow_chunk_size,
             "num_words_mul_two": self.num_words * 2,
             "num_words_plus_one": self.num_words + 1,
+            "r_limbs": self.r_limbs
         });
         // TODO: Add recompile
         handlebars.render("decomp_scalars", &data).unwrap()

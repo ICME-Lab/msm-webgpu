@@ -105,3 +105,16 @@ pub fn gen_zero_limbs(
     r += &format!("0u");
     r
 }
+
+pub fn gen_r_limbs(
+    r: &BigUint,
+    num_words: usize,
+    word_size: usize,
+) -> String {
+    let limbs = to_words_le(r, num_words, word_size);
+    let mut r = String::new();
+    for (i, limb) in limbs.iter().enumerate() {
+        r += &format!("    r.limbs[{}u] = {}u;\n", i, limb);
+    }
+    r
+}

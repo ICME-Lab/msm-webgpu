@@ -1,3 +1,9 @@
+{{> structs }}
+{{> montgomery_product_funcs }}
+{{> field_funcs }}
+{{> bigint_funcs }}
+{{> ec_funcs }}
+
 /// Used as input buffers for the bucket sums from SMVP, but also repurposed to
 /// store the m points.
 @group(0) @binding(0)
@@ -23,16 +29,16 @@ var<uniform> params: vec3<u32>;
 /// https://github.com/demox-labs/webgpu-msm/blob/main/src/reference/webgpu/wgsl/Curve.ts#L78.
 fn double_and_add(point: Point, scalar: u32) -> Point {
     /// Set result to the point at infinity.
-    var result: Point = JACOBIAN_IDENTITY;
+    var result: Point = POINT_IDENTITY;
 
     var s = scalar;
     var temp = point;
 
     while (s != 0u) {
         if ((s & 1u) == 1u) {
-            result = add_points(result, temp);
+            result = point_add(result, temp);
         }
-        temp = double_point(temp);
+        temp = point_double(temp);
         s = s >> 1u;
     }
     return result;
@@ -81,8 +87,8 @@ fn stage_1(@builtin(global_invocation_id) global_id: vec3<u32>) {
                   buckets_per_thread - 1u - i;
         let bi = offset + idx;
         let b = load_bucket_sum(bi);
-        m = add_points(m, b);
-        g = add_points(g, m);
+        m = point_add(m, b);
+        g = point_add(g, m);
     }
 
     bucket_sum_x[idx] = m.x;
@@ -125,7 +131,7 @@ fn stage_2(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var m = load_bucket_sum(idx);
 
     let t = (subtask_idx / num_subtasks_per_bpr) * (num_threads_per_subtask * num_subtasks_per_bpr) + thread_id;
-    var g = JacobianPoint(
+    var g = Point(
         g_points_x[t],
         g_points_y[t],
         g_points_z[t],
@@ -133,7 +139,7 @@ fn stage_2(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     /// Perform scalar mul on m and add the result to g.
     let s = buckets_per_thread * (num_threads_per_subtask - (thread_id % num_threads_per_subtask) - 1u);
-    g = add_points(g, double_and_add(m, s));
+    g = point_add(g, double_and_add(m, s));
 
     g_points_x[t] = g.x;
     g_points_y[t] = g.y;

@@ -99,8 +99,8 @@ pub fn read_from_gpu(
     for storage_buffer in storage_buffers {
         let staging_buffer = device.create_buffer(&BufferDescriptor {
             label: Some("Staging Buffer"),
-            size: custom_size,
-            usage: BufferUsages::MAP_READ | BufferUsages::COPY_SRC,
+            size: storage_buffer.size(),
+            usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         encoder.copy_buffer_to_buffer(
