@@ -1,5 +1,10 @@
 use wgpu::{
-    util::{BufferInitDescriptor, DeviceExt}, Adapter, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, Buffer, BufferDescriptor, BufferUsages, CommandEncoder, ComputePipeline, ComputePipelineDescriptor, Device, Features, Instance, Limits, MapMode, MemoryHints, PipelineCompilationOptions, PipelineLayoutDescriptor, PowerPreference, Queue, ShaderModuleDescriptor, ShaderSource
+    util::{BufferInitDescriptor, DeviceExt},
+    Adapter, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, Buffer, BufferDescriptor, BufferUsages,
+    CommandEncoder, ComputePipeline, ComputePipelineDescriptor, Device, Features, Instance, Limits,
+    MapMode, MemoryHints, PipelineCompilationOptions, PipelineLayoutDescriptor, PowerPreference,
+    Queue, ShaderModuleDescriptor, ShaderSource,
 };
 
 pub async fn get_adapter() -> Adapter {
@@ -135,18 +140,27 @@ pub fn create_bind_group_layout(
     uniform_buffers: Vec<&Buffer>,
 ) -> BindGroupLayout {
     let storage_buffer_read_only_entries = (0..storage_buffers_read_only.len())
-    .map(|i| default_storage_read_only_buffer_entry(i as u32))
-    .collect::<Vec<_>>();
+        .map(|i| default_storage_read_only_buffer_entry(i as u32))
+        .collect::<Vec<_>>();
     let storage_buffer_entries = (0..storage_buffers.len())
         .map(|i| default_storage_buffer_entry((i + storage_buffers_read_only.len()) as u32))
         .collect::<Vec<_>>();
 
     let uniform_buffer_entries = (0..uniform_buffers.len())
-        .map(|i| default_uniform_buffer_entry((i + storage_buffers.len() + storage_buffers_read_only.len()) as u32))
+        .map(|i| {
+            default_uniform_buffer_entry(
+                (i + storage_buffers.len() + storage_buffers_read_only.len()) as u32,
+            )
+        })
         .collect::<Vec<_>>();
     device.create_bind_group_layout(&BindGroupLayoutDescriptor {
         label: label,
-        entries: &vec![storage_buffer_read_only_entries, storage_buffer_entries, uniform_buffer_entries].concat(),
+        entries: &vec![
+            storage_buffer_read_only_entries,
+            storage_buffer_entries,
+            uniform_buffer_entries,
+        ]
+        .concat(),
     })
 }
 
@@ -188,7 +202,6 @@ pub fn default_uniform_buffer_entry(idx: u32) -> BindGroupLayoutEntry {
     }
 }
 
-
 pub fn create_bind_group(
     label: Option<&str>,
     device: &Device,
@@ -208,7 +221,6 @@ pub fn create_bind_group(
             .collect::<Vec<_>>(),
     })
 }
-
 
 pub async fn create_compute_pipeline(
     label: Option<&str>,
@@ -254,4 +266,3 @@ pub async fn execute_pipeline(
     cpass.set_bind_group(0, &bind_group, &[]);
     cpass.dispatch_workgroups(num_x_workgroups, num_y_workgroups, num_z_workgroups);
 }
-

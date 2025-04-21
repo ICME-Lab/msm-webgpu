@@ -2,8 +2,53 @@ use ff::PrimeField;
 use num_bigint::{BigInt, BigUint, Sign};
 use num_traits::{One, FromPrimitive};
 use num_integer::Integer;
-use crate::cuzk::msm::calc_num_words;
+use crate::{cuzk::msm::calc_num_words, utils::montgomery::{bytes_to_field_montgomery, field_to_bytes_montgomery}};
 
+  
+//   /**
+//  * Converts a single bigint to a Uint8Array for GPU processing, breaking it down into words.
+//  * @param {bigint} val - The bigint to convert.
+//  * @param {number} num_words - The number of words per bigint.
+//  * @param {number} word_size - The size of each word in bits.
+//  * @returns {Uint8Array} The resulting byte array for GPU use.
+//  */
+// export const bigint_to_u8_for_gpu = (
+//     val: bigint,
+//     num_words: number,
+//     word_size: number,
+//   ): Uint8Array => {
+//     const result = new Uint8Array(num_words * 4);
+//     const limbs = to_words_le(BigInt(val), num_words, word_size);
+//     for (let i = 0; i < limbs.length; i++) {
+//       const i4 = i * 4;
+//       result[i4] = limbs[i] & 255;
+//       result[i4 + 1] = limbs[i] >> 8;
+//     }
+  
+//     return result;
+//   };
+
+pub fn field_to_u8_vec_montgomery_for_gpu<F: PrimeField>(
+    field: &F,
+    num_words: usize,
+    word_size: usize,
+) -> Vec<u8> {
+    let bytes = field_to_bytes_montgomery(field);
+
+    // TODO: Avoid this step
+    let v = BigInt::from_bytes_le(Sign::Plus, &bytes);
+
+    let limbs = to_words_le(&v, num_words, word_size);
+    let mut u8_vec = vec![0u8; num_words * 4];
+
+    for (i, limb) in limbs.iter().enumerate() {
+        let i4 = i * 4;
+        u8_vec[i4] = (limb & 255) as u8;
+        u8_vec[i4 + 1] = (limb >> 8) as u8;
+    }
+
+    u8_vec
+}
   
 // TODO: Test
 pub fn to_words_le(
@@ -53,6 +98,8 @@ pub fn u8s_to_field_without_assertion<F: PrimeField>(
     for i in (0..a.len()).step_by(2) {
         limbs.push(a[i]);
     }
+    println!("a: {:?}", a);
+    println!("limbs: {:?}", limbs);
 
     from_words_le_without_assertion(&limbs, num_words, word_size)
 }
@@ -62,13 +109,21 @@ pub fn from_words_le_without_assertion<F: PrimeField>(
     num_words: usize,
     word_size: usize,
 ) -> F {
-    let mut val = F::ZERO;
+    // let mut val = F::ZERO;
+    // for i in 0..num_words {
+    //     let exponent = (num_words - i - 1) * word_size;
+    //     // TODO: This looks wrong to me. Check Montgomery representation
+    //     val += F::from(2).pow([exponent as u64]) * F::from(limbs[num_words - i - 1] as u64);
+    // }
+    // val
+    let mut val = BigInt::ZERO;
     for i in 0..num_words {
         let exponent = (num_words - i - 1) * word_size;
-        // TODO: This looks wrong to me. Check Montgomery representation
-        val += F::from(2).pow([exponent as u64]) * F::from(limbs[num_words - i - 1] as u64);
+        val += BigInt::from(2).pow(exponent as u32) * BigInt::from(limbs[num_words - i - 1]);
     }
-    val
+    let bytes = val.to_bytes_le().1;
+    let field = bytes_to_field_montgomery(&bytes);
+    field
 }
 
 pub fn gen_p_limbs(

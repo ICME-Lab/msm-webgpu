@@ -159,6 +159,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[u8], scalars: &[u8]) -> C::Cu
     println!("Point Y buffer: {:?}", point_y_sb.size());
     println!("Scalar chunks buffer: {:?}", scalar_chunks_sb.size());
 
+
     ////////////////////////////////////////////////////////////////////////////////////////////
     // 2. Sparse Matrix Transposition                                                         /
     //                                                                                        /
@@ -199,6 +200,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[u8], scalars: &[u8]) -> C::Cu
 
     println!("All CSC col ptr buffer: {:?}", all_csc_col_ptr_sb.size());
     println!("All CSC val idxs buffer: {:?}", all_csc_val_idxs_sb.size());
+
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     // 3. Sparse Matrix Vector Product (SMVP)                                                 /
@@ -273,6 +275,8 @@ pub async fn compute_msm<C: CurveAffine>(points: &[u8], scalars: &[u8]) -> C::Cu
         )
         .await;
     }
+
+    assert!(false);
 
     /////////////////////////////////////////////////////////////////////////////////////////////
     // 4. Bucket Reduction                                                                     /
@@ -462,7 +466,7 @@ pub async fn decompose_shaders(
     let scalar_chunks_sb = create_storage_buffer(
         Some("Scalar chunks buffer"),
         device,
-        (input_size * num_subtasks * 4) as u64,
+        (input_size * num_subtasks * 4) as u64, // TODO: Check this
     );
 
     // Uniform storage buffer.

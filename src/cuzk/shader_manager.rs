@@ -6,19 +6,20 @@ use num_traits::{Num, One};
 use serde_json::json;
 
 // Templates
-const EXTRACT_WORD_FROM_BYTES_LE_FUNCS: &str =
+pub const EXTRACT_WORD_FROM_BYTES_LE_FUNCS: &str =
     "src/cuzk/wgsl/cuzk/extract_word_from_bytes_le.template.wgsl";
-const MONTGOMERY_PRODUCT_FUNCS: &str = "src/cuzk/wgsl/montgomery/mont_pro_product.template.wgsl";
-const EC_FUNCS: &str = "src/cuzk/wgsl/curve/ec.template.wgsl";
-const FIELD_FUNCS: &str = "src/cuzk/wgsl/field/field.template.wgsl";
-const BIGINT_FUNCS: &str = "src/cuzk/wgsl/bigint/bigint.template.wgsl";
-const STRUCTS: &str = "src/cuzk/wgsl/struct/structs.template.wgsl";
+pub const MONTGOMERY_PRODUCT_FUNCS: &str = "src/cuzk/wgsl/montgomery/mont_pro_product.template.wgsl";
+pub const EC_FUNCS: &str = "src/cuzk/wgsl/curve/ec.template.wgsl";
+pub const FIELD_FUNCS: &str = "src/cuzk/wgsl/field/field.template.wgsl";
+pub const BIGINT_FUNCS: &str = "src/cuzk/wgsl/bigint/bigint.template.wgsl";
+pub const STRUCTS: &str = "src/cuzk/wgsl/struct/structs.template.wgsl";
 
 // Shaders
-const TRANSPOSE_SHADER: &str = "src/cuzk/wgsl/cuzk/transpose.template.wgsl";
-const SMVP_SHADER: &str = "src/cuzk/wgsl/cuzk/smvp.template.wgsl";
-const BPR_SHADER: &str = "src/cuzk/wgsl/cuzk/bpr.template.wgsl";
-const DECOMPOSE_SCALARS_SHADER: &str = "src/cuzk/wgsl/cuzk/decompose_scalars.template.wgsl";
+pub const TRANSPOSE_SHADER: &str = "src/cuzk/wgsl/cuzk/transpose.template.wgsl";
+pub const SMVP_SHADER: &str = "src/cuzk/wgsl/cuzk/smvp.template.wgsl";
+pub const BPR_SHADER: &str = "src/cuzk/wgsl/cuzk/bpr.template.wgsl";
+pub const DECOMPOSE_SCALARS_SHADER: &str = "src/cuzk/wgsl/cuzk/decompose_scalars.template.wgsl";
+pub const TEST_FIELD_SHADER: &str = "src/cuzk/wgsl/field/test_field.wgsl";
 
 use crate::cuzk::utils::gen_p_limbs;
 
@@ -190,5 +191,34 @@ impl ShaderManager {
         });
         // TODO: Add recompile
         handlebars.render("decomp_scalars", &data).unwrap()
+    }
+
+    // Test methods
+    pub fn gen_test_field_shader(&self) -> String {
+        let mut handlebars = Handlebars::new();
+        handlebars.register_template_file("test_field", TEST_FIELD_SHADER).unwrap();
+        
+
+        handlebars.register_template_file("structs", STRUCTS).unwrap();
+        handlebars.register_template_file("bigint_funcs", BIGINT_FUNCS).unwrap();
+        handlebars.register_template_file("field_funcs", FIELD_FUNCS).unwrap();
+        handlebars.register_template_file("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS).unwrap();
+
+        let data = json!({
+            "word_size": self.word_size,
+            "num_words": self.num_words,
+            "p_limbs": self.p_limbs,
+            "p_limbs_plus_one": self.p_limbs_plus_one,
+            "zero_limbs": self.zero_limbs,
+            "r_limbs": self.r_limbs,
+            "mask": self.mask,
+            "w_mask": self.w_mask,
+            "two_pow_word_size": self.two_pow_word_size,
+            "two_pow_chunk_size": self.two_pow_chunk_size,
+            "num_words_mul_two": self.num_words * 2,
+            "num_words_plus_one": self.num_words + 1,
+            "n0": self.n0,
+        });
+        handlebars.render("test_field", &data).unwrap()
     }
 }
