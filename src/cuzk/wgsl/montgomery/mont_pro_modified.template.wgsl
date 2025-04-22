@@ -12,7 +12,6 @@ const WORD_SIZE = {{ word_size }}u;
 const MASK = {{ mask }}u;
 const N0 = {{ n0 }}u;
 const NSAFE = {{ nsafe }}u;
-const TWO_POW_WORD_SIZE = {{ two_pow_word_size }}u;
 const COST = {{ cost }}u;
 
 fn get_p() -> BigInt {

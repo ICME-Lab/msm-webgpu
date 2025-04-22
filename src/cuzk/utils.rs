@@ -120,9 +120,6 @@ pub fn u8s_to_field_without_assertion<F: PrimeField>(
     for i in (0..a.len()).step_by(2) {
         limbs.push(a[i]);
     }
-    println!("a: {:?}", a);
-    println!("limbs: {:?}", limbs);
-
     from_words_le_without_assertion(&limbs, num_words, word_size)
 }
 
@@ -204,7 +201,6 @@ pub fn compute_misc_params(
     word_size: usize,
 ) -> MiscParams {
     assert!(word_size > 0);
-
     let num_words = calc_num_words(word_size);
     let r = BigInt::one() << (num_words * word_size);
     let gcd = r.extended_gcd(p);

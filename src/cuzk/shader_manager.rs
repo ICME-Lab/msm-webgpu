@@ -8,7 +8,8 @@ use serde_json::json;
 // Templates
 pub const EXTRACT_WORD_FROM_BYTES_LE_FUNCS: &str =
     "src/cuzk/wgsl/cuzk/extract_word_from_bytes_le.template.wgsl";
-pub const MONTGOMERY_PRODUCT_FUNCS: &str = "src/cuzk/wgsl/montgomery/mont_pro_product.template.wgsl";
+// pub const MONTGOMERY_PRODUCT_FUNCS: &str = "src/cuzk/wgsl/montgomery/mont_pro_product.template.wgsl";
+pub const MONTGOMERY_PRODUCT_FUNCS: &str = "src/cuzk/wgsl/montgomery/mont_product.template.wgsl";
 pub const EC_FUNCS: &str = "src/cuzk/wgsl/curve/ec.template.wgsl";
 pub const FIELD_FUNCS: &str = "src/cuzk/wgsl/field/field.template.wgsl";
 pub const BIGINT_FUNCS: &str = "src/cuzk/wgsl/bigint/bigint.template.wgsl";

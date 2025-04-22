@@ -44,3 +44,20 @@ fn bigint_gt(x: ptr<function, BigInt>, y: ptr<function, BigInt>) -> u32 {
     }
     return 0u;
 }
+
+fn bigint_mul(a: ptr<function, BigInt>, b: ptr<function, BigInt>) -> BigIntWide {
+    var res: BigIntWide;
+    for (var i = 0u; i < NUM_WORDS; i = i + 1u) {
+        for (var j = 0u; j < NUM_WORDS; j = j + 1u) {
+            let c = (*a).limbs[i] * (*b).limbs[j];
+            res.limbs[i+j] += c & W_MASK;
+            res.limbs[i+j+1] += c >> WORD_SIZE;
+        }   
+    }
+    // start from 0 and carry the extra over to the next index
+    for (var i = 0u; i < 2*NUM_WORDS - 1; i = i + 1u) {
+        res.limbs[i+1] += res.limbs[i] >> WORD_SIZE;
+        res.limbs[i] = res.limbs[i] & W_MASK;
+    }
+    return res;
+}

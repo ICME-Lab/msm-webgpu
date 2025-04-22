@@ -28,7 +28,7 @@ pub fn calc_num_words(word_size: usize) -> usize {
 }
 
 /// 13-bit limbs.
-pub const WORD_SIZE: usize = 13;
+pub const WORD_SIZE: usize = 16;
 
 pub static P: Lazy<BigInt> = Lazy::new(|| {
     BigInt::from_str_radix(

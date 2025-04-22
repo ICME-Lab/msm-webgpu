@@ -3,39 +3,29 @@ use std::time::Instant;
 use ff::PrimeField;
 use wgpu::CommandEncoderDescriptor;
 
-use crate::{
-    cuzk::{
-        gpu::{
-            create_and_write_storage_buffer, create_bind_group, create_bind_group_layout,
-            create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter,
-            get_device, read_from_gpu,
-        }, lib::fields_to_bytes_montgomery, msm::{PARAMS, WORD_SIZE}, shader_manager::ShaderManager, utils::{field_to_u8_vec_for_gpu, field_to_u8_vec_montgomery_for_gpu, u8s_to_field_without_assertion, u8s_to_fields_without_assertion}
-    }, gpu::test::ops::field_op as field_op_old, halo2curves::utils::cast_u8_to_u16, utils::{files::load_bn254_field_shader_code, montgomery::{field_to_bytes_montgomery, field_to_u16_as_u32_as_u8_vec_montgomery, u16_vec_to_fields_montgomery}}
+use crate::cuzk::{
+    gpu::{
+        create_and_write_storage_buffer, create_bind_group, create_bind_group_layout,
+        create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device,
+        read_from_gpu,
+    },
+    msm::{PARAMS, WORD_SIZE},
+    shader_manager::ShaderManager,
+    utils::{field_to_u8_vec_montgomery_for_gpu, u8s_to_field_without_assertion},
 };
 
 pub async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
     let a_bytes = field_to_u8_vec_montgomery_for_gpu(&a, PARAMS.num_words, WORD_SIZE);
     let b_bytes = field_to_u8_vec_montgomery_for_gpu(&b, PARAMS.num_words, WORD_SIZE);
 
-
     let input_size = 1;
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
-    let num_columns = 2u32.pow(chunk_size as u32) as usize;
-    let num_rows = (input_size + num_columns - 1) / num_columns;
-    let num_subtasks = (256 + chunk_size - 1) / chunk_size;
     let num_words = PARAMS.num_words;
     println!("Input size: {}", input_size);
     println!("Chunk size: {}", chunk_size);
-    println!("Num columns: {}", num_columns);
-    println!("Num rows: {}", num_rows);
-    println!("Num subtasks: {}", num_subtasks);
     println!("Num words: {}", num_words);
     println!("Word size: {}", WORD_SIZE);
     println!("Params: {:?}", PARAMS);
-    println!("A: {:?}", a);
-    println!("B: {:?}", b);
-    println!("A bytes: {:?}", a_bytes);
-    println!("B bytes: {:?}", b_bytes);
 
     let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size);
 
@@ -46,15 +36,11 @@ pub async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
     });
 
     let shader_code = shader_manager.gen_test_field_shader();
-    println!("{}", shader_code);
+
     let a_sb = create_and_write_storage_buffer(Some("A buffer"), &device, &a_bytes);
     let b_sb = create_and_write_storage_buffer(Some("B buffer"), &device, &b_bytes);
 
-    let result_sb = create_storage_buffer(
-        Some("Result buffer"),
-        &device,
-        80, 
-    );
+    let result_sb = create_storage_buffer(Some("Result buffer"), &device, 80);
 
     let bind_group_layout = create_bind_group_layout(
         Some("Bind group layout"),
@@ -64,16 +50,12 @@ pub async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
         vec![],
     );
 
-    println!("Decompose bind group layout: {:?}", bind_group_layout);
-
     let bind_group = create_bind_group(
         Some("Bind group"),
         &device,
         &bind_group_layout,
         vec![&a_sb, &b_sb, &result_sb],
     );
-
-    println!("Decompose bind group: {:?}", bind_group);
 
     let compute_pipeline = create_compute_pipeline(
         Some("Field add shader"),
@@ -91,11 +73,9 @@ pub async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
 
     // Destroy the GPU device object.
     device.destroy();
-    println!("Data: {:?}", data);
 
     let result = u8s_to_field_without_assertion::<F>(&data[0], num_words, WORD_SIZE);
 
-    println!("Result: {:?}", result);
     result
 }
 
@@ -112,10 +92,10 @@ pub async fn run_webgpu_field_op_async<F: PrimeField>(op: &str, a: F, b: F) -> F
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use ff::Field;
     use halo2curves::bn256::Fq;
     use rand::thread_rng;
-    use super::*;
 
     #[test]
     fn test_webgpu_field_add() {

@@ -36,15 +36,6 @@ const TWO: BigInt256 = BigInt256(
     array(2u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u)
 );
 
-fn get_higher_with_slack(a: BigInt512) -> BaseField {
-    var out: BaseField;
-    const slack = 2u; // 256 - 254
-    for (var i = 0u; i < N; i = i + 1u) {
-        out.limbs[i] = ((a.limbs[i + N] << slack) + (a.limbs[i + N - 1] >> (W - slack))) & W_mask;
-    }
-    return out;
-}
-
 // once reduces once (assumes that 0 <= a < 2 * mod)
 fn field_reduce(a: BigInt256) -> BaseField {
     var res: BigInt256;

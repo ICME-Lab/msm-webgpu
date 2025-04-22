@@ -3,7 +3,6 @@ const NUM_WORDS = {{ num_words }}u;
 const WORD_SIZE = {{ word_size }}u;
 const MASK = {{ mask }}u;
 const W_MASK = {{ w_mask }}u;
-const TWO_POW_WORD_SIZE = {{ two_pow_word_size }}u;
 const N0 = {{ n0 }}u;
 
 
@@ -16,8 +15,8 @@ fn montgomery_product(x: ptr<function, BigInt>, y: ptr<function, BigInt>) -> Big
 
     for (var i = 0u; i < NUM_WORDS; i ++) {
         var t = s.limbs[0] + (*x).limbs[i] * (*y).limbs[0];
-        var tprime = t & MASK;
-        var qi = (N0 * tprime) & MASK;
+        var tprime = t & W_MASK;
+        var qi = (N0 * tprime) & W_MASK;
         var c = (t + qi * p.limbs[0]) >> WORD_SIZE;
         s.limbs[0] = s.limbs[1] + (*x).limbs[i] * (*y).limbs[1] + qi * p.limbs[1] + c;
 
