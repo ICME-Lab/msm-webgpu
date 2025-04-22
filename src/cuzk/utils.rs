@@ -1,33 +1,11 @@
-use ff::PrimeField;
+use ff::{PrimeField, Field};
+use halo2curves::CurveAffine;
 use num_bigint::{BigInt, BigUint, Sign};
 use num_traits::{One, FromPrimitive};
 use num_integer::Integer;
 use crate::{cuzk::msm::calc_num_words, halo2curves::utils::field_to_bytes, utils::montgomery::{bytes_to_field_montgomery, field_to_bytes_montgomery}};
 
   
-//   /**
-//  * Converts a single bigint to a Uint8Array for GPU processing, breaking it down into words.
-//  * @param {bigint} val - The bigint to convert.
-//  * @param {number} num_words - The number of words per bigint.
-//  * @param {number} word_size - The size of each word in bits.
-//  * @returns {Uint8Array} The resulting byte array for GPU use.
-//  */
-// export const bigint_to_u8_for_gpu = (
-//     val: bigint,
-//     num_words: number,
-//     word_size: number,
-//   ): Uint8Array => {
-//     const result = new Uint8Array(num_words * 4);
-//     const limbs = to_words_le(BigInt(val), num_words, word_size);
-//     for (let i = 0; i < limbs.length; i++) {
-//       const i4 = i * 4;
-//       result[i4] = limbs[i] & 255;
-//       result[i4 + 1] = limbs[i] >> 8;
-//     }
-  
-//     return result;
-//   };
-
 pub fn field_to_u8_vec_montgomery_for_gpu<F: PrimeField>(
     field: &F,
     num_words: usize,
@@ -48,6 +26,22 @@ pub fn field_to_u8_vec_montgomery_for_gpu<F: PrimeField>(
     }
 
     u8_vec
+}
+
+pub fn points_to_bytes_for_gpu<C: CurveAffine>(
+    g: &Vec<C>,
+    num_words: usize,
+    word_size: usize,
+) -> Vec<u8> {
+    g.into_iter()
+        .flat_map(|affine| {
+            let coords = affine.coordinates().unwrap();
+            let x = field_to_u8_vec_montgomery_for_gpu(coords.x(), num_words, word_size);
+            let y = field_to_u8_vec_montgomery_for_gpu(coords.y(), num_words, word_size);
+            let z = field_to_u8_vec_montgomery_for_gpu(&C::Base::ONE, num_words, word_size);
+            [x, y, z].concat()
+        })
+        .collect::<Vec<_>>()
 }
 
 pub fn field_to_u8_vec_for_gpu<F: PrimeField>(
