@@ -14,6 +14,7 @@ use crate::cuzk::gpu::{
     get_adapter, get_device, read_from_gpu,
 };
 use crate::cuzk::shader_manager::ShaderManager;
+use crate::cuzk::utils::{field_to_u8_vec_for_gpu, fields_to_u8_vec_for_gpu, points_to_bytes_for_gpu_x_y};
 
 use super::utils::{compute_misc_params, u8s_to_fields_without_assertion, MiscParams};
 
@@ -61,8 +62,8 @@ pub static PARAMS: Lazy<MiscParams> = Lazy::new(|| compute_misc_params(&P, WORD_
  *    as the number of points is small, and the time taken to compile a shader to
  *    perform this computation is greater than the time it takes for the CPU to do so.
  */
-pub async fn compute_msm<C: CurveAffine>(points: &[u8], scalars: &[u8]) -> C::Curve {
-    let input_size = scalars.len() / 32;
+pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> C::Curve {
+    let input_size = scalars.len();
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_columns = 2u32.pow(chunk_size as u32) as usize;
     let num_rows = (input_size + num_columns - 1) / num_columns;
@@ -77,6 +78,9 @@ pub async fn compute_msm<C: CurveAffine>(points: &[u8], scalars: &[u8]) -> C::Cu
     println!("Word size: {}", WORD_SIZE);
     println!("Params: {:?}", PARAMS);
 
+    let (point_x_bytes, point_y_bytes) = points_to_bytes_for_gpu_x_y(points, num_words, WORD_SIZE);
+    let scalar_bytes = fields_to_u8_vec_for_gpu(scalars, num_words, WORD_SIZE);
+
     let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size);
 
     let adapter = get_adapter().await;
@@ -86,7 +90,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[u8], scalars: &[u8]) -> C::Cu
     });
 
     ////////////////////////////////////////////////////////////////////////////////////////////
-    // 1. Point Coordinate Conversation and Scalar Decomposition                              /
+    // 1. Point Coordinate Conversion and Scalar Decomposition                              /
     //                                                                                        /
     // (1) Convert elliptic curve points (ETE Affine coordinates) into 13-bit limbs,          /
     // and represented internally in Montgomery form by using Barret Reduction.               /
@@ -147,9 +151,9 @@ pub async fn compute_msm<C: CurveAffine>(points: &[u8], scalars: &[u8]) -> C::Cu
         &device,
         &queue,
         &mut encoder,
-        points,
-        scalars,
-        num_words,
+        &point_x_bytes,
+        &point_y_bytes,
+        &scalar_bytes,
         num_subtasks,
         chunk_size,
     )
@@ -440,29 +444,26 @@ pub async fn decompose_shaders(
     device: &Device,
     queue: &Queue,
     encoder: &mut CommandEncoder,
-    points_buffer: &[u8],
+    points_x_buffer: &[u8],
+    points_y_buffer: &[u8],
     scalars_buffer: &[u8],
-    num_words: usize,
     num_subtasks: usize,
     chunk_size: usize,
 ) -> (Buffer, Buffer, Buffer) {
     assert!(num_subtasks * chunk_size == 256);
     let input_size = scalars_buffer.len() / 32;
-    let points_sb = create_and_write_storage_buffer(Some("Points buffer"), device, points_buffer);
-    let scalars_sb =
-        create_and_write_storage_buffer(Some("Scalars buffer"), device, scalars_buffer);
-
+    let points_x_sb = create_and_write_storage_buffer(
+        Some("Points X buffer"),
+        device,
+        points_x_buffer,
+    );
+    let points_y_sb = create_and_write_storage_buffer(
+        Some("Points Y buffer"),
+        device,
+        points_y_buffer,
+    );
+    let scalars_sb = create_and_write_storage_buffer(Some("Scalars buffer"), device, scalars_buffer);
     // Output storage buffers.
-    let point_x_sb = create_storage_buffer(
-        Some("Point X buffer"),
-        device,
-        (input_size * num_words * 4) as u64,
-    );
-    let point_y_sb = create_storage_buffer(
-        Some("Point Y buffer"),
-        device,
-        (input_size * num_words * 4) as u64,
-    );
     let scalar_chunks_sb = create_storage_buffer(
         Some("Scalar chunks buffer"),
         device,
@@ -477,8 +478,8 @@ pub async fn decompose_shaders(
     let bind_group_layout = create_bind_group_layout(
         Some("Bind group layout"),
         device,
-        vec![&points_sb, &scalars_sb],
-        vec![&point_x_sb, &point_y_sb, &scalar_chunks_sb],
+        vec![&scalars_sb],
+        vec![&scalar_chunks_sb],
         vec![&params_ub],
     );
 
@@ -489,10 +490,7 @@ pub async fn decompose_shaders(
         device,
         &bind_group_layout,
         vec![
-            &points_sb,
             &scalars_sb,
-            &point_x_sb,
-            &point_y_sb,
             &scalar_chunks_sb,
             &params_ub,
         ],
@@ -519,7 +517,7 @@ pub async fn decompose_shaders(
     )
     .await;
 
-    (point_x_sb, point_y_sb, scalar_chunks_sb)
+    (points_x_sb, points_y_sb, scalar_chunks_sb)
 }
 
 /*

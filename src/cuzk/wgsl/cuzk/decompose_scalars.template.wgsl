@@ -6,20 +6,14 @@
 
 /// Input storage buffers.
 @group(0) @binding(0)
-var<storage, read> coords: array<u32>;
-@group(0) @binding(1)
 var<storage, read> scalars: array<u32>;
 
 /// Output storage buffers.
-@group(0) @binding(2)
-var<storage, read_write> point_x: array<BigInt>;
-@group(0) @binding(3)
-var<storage, read_write> point_y: array<BigInt>;
-@group(0) @binding(4)
+@group(0) @binding(1)
 var<storage, read_write> chunks: array<u32>;
 
 /// Uniform storage buffer.
-@group(0) @binding(5)
+@group(0) @binding(2)
 var<uniform> input_size: u32;
 
 const NUM_SUBTASKS = {{ num_subtasks }}u;
@@ -35,40 +29,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id = gidx * {{ num_y_workgroups }} + gidy;
 
     let INPUT_SIZE = input_size;
-
-    // Store the x and y coordinates as byte arrays ([x8, y8, x8, y8]) 
-    /// for easier indexing, where id = [0, ..., num_points].
-    var x_bytes: array<u32, 16>;
-    var y_bytes: array<u32, 16>;
-    for (var i = 0u; i < 8u; i++) {
-        let offset = id * 16u;
-
-        let x = coords[offset + i];
-        x_bytes[15 - (i * 2)] = x & 65535u;
-        x_bytes[15 - (i * 2) - 1] = x >> 16u;
-
-        let y = coords[offset + 8 + i];
-        y_bytes[15 - (i * 2)] = y & 65535u;
-        y_bytes[15 - (i * 2) - 1] = y >> 16u;
-    }
-
-    /// Convert the byte arrays to BigInts with word_size limbs.
-    var x_bigint: BigInt;
-    var y_bigint: BigInt;
-    for (var i = 0u; i < NUM_WORDS - 1u; i ++) {
-        x_bigint.limbs[i] = extract_word_from_bytes_le(x_bytes, i, WORD_SIZE);
-        y_bigint.limbs[i] = extract_word_from_bytes_le(y_bytes, i, WORD_SIZE);
-    }
-
-    let shift = (((NUM_WORDS * WORD_SIZE - 256u) + 16u) - WORD_SIZE);
-    x_bigint.limbs[NUM_WORDS - 1u] = x_bytes[0] >> shift;
-    y_bigint.limbs[NUM_WORDS - 1u] = y_bytes[0] >> shift;
-
-    /// Convert x and y coordinates to Montgomery form.
-    // var r = get_r();
-    // point_x[id] = field_mul(&x_bigint, &r);
-    // point_y[id] = field_mul(&y_bigint, &r);
-
     /// Decompose scalars.
     var scalar_bytes: array<u32, 16>;
     for (var i = 0u; i < 8u; i++) {

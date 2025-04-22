@@ -32,7 +32,7 @@ pub async fn point_op<C: CurveAffine>(op: &str, a: C, b: C) -> C::Curve {
     let adapter = get_adapter().await;
     let (device, queue) = get_device(&adapter).await;
     let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
-        label: Some("Field Encoder"),
+        label: Some("Point Encoder"),
     });
 
     let shader_code = shader_manager.gen_test_point_shader();

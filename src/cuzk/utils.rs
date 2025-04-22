@@ -44,6 +44,45 @@ pub fn points_to_bytes_for_gpu<C: CurveAffine>(
         .collect::<Vec<_>>()
 }
 
+pub fn points_to_bytes_for_gpu_x_y<C: CurveAffine>(
+    g: &[C],            
+    num_words: usize,
+    word_size: usize,
+) -> (Vec<u8>, Vec<u8>) {
+    // each coordinate is num_words * word_size bytes long
+    let bytes_per_coord = num_words * 4;
+
+    // pre‑allocate the exact size we need to avoid reallocations
+    let mut xs = Vec::with_capacity(g.len() * bytes_per_coord);
+    let mut ys = Vec::with_capacity(g.len() * bytes_per_coord);
+
+    for affine in g {
+        let coords = affine.coordinates().unwrap();
+
+        xs.extend(field_to_u8_vec_montgomery_for_gpu(
+            coords.x(),
+            num_words,
+            word_size,
+        ));
+        ys.extend(field_to_u8_vec_montgomery_for_gpu(
+            coords.y(),
+            num_words,
+            word_size,
+        ));
+    }
+
+    (xs, ys)
+}
+
+
+pub fn fields_to_u8_vec_for_gpu<F: PrimeField>(
+    fields: &[F],
+    num_words: usize,
+    word_size: usize,
+) -> Vec<u8> {
+    fields.iter().flat_map(|field| field_to_u8_vec_for_gpu(field, num_words, word_size)).collect::<Vec<_>>()
+}
+
 pub fn field_to_u8_vec_for_gpu<F: PrimeField>(
     field: &F,
     num_words: usize,

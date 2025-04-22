@@ -40,7 +40,7 @@ pub async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
     let a_sb = create_and_write_storage_buffer(Some("A buffer"), &device, &a_bytes);
     let b_sb = create_and_write_storage_buffer(Some("B buffer"), &device, &b_bytes);
 
-    let result_sb = create_storage_buffer(Some("Result buffer"), &device, 80);
+    let result_sb = create_storage_buffer(Some("Result buffer"), &device, (num_words * 4) as u64);
 
     let bind_group_layout = create_bind_group_layout(
         Some("Bind group layout"),

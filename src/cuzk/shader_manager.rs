@@ -20,8 +20,8 @@ pub const TRANSPOSE_SHADER: &str = "src/cuzk/wgsl/cuzk/transpose.template.wgsl";
 pub const SMVP_SHADER: &str = "src/cuzk/wgsl/cuzk/smvp.template.wgsl";
 pub const BPR_SHADER: &str = "src/cuzk/wgsl/cuzk/bpr.template.wgsl";
 pub const DECOMPOSE_SCALARS_SHADER: &str = "src/cuzk/wgsl/cuzk/decompose_scalars.template.wgsl";
-pub const TEST_FIELD_SHADER: &str = "src/cuzk/wgsl/field/test_field.wgsl";
-pub const TEST_POINT_SHADER: &str = "src/cuzk/wgsl/curve/test_point.wgsl";
+pub const TEST_FIELD_SHADER: &str = "src/cuzk/wgsl/test/test_field.wgsl";
+pub const TEST_POINT_SHADER: &str = "src/cuzk/wgsl/test/test_point.wgsl";
 
 use crate::cuzk::utils::gen_p_limbs;
 
