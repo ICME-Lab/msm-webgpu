@@ -1,3 +1,4 @@
+
 const NUM_WORDS = {{ num_words }}u;
 const WORD_SIZE = {{ word_size }}u;
 const MASK = {{ mask }}u;
@@ -5,11 +6,7 @@ const W_MASK = {{ w_mask }}u;
 const TWO_POW_WORD_SIZE = {{ two_pow_word_size }}u;
 const N0 = {{ n0 }}u;
 
-fn get_p() -> BigInt {
-    var p: BigInt;
-{{{ p_limbs }}}
-    return p;
-}
+
 
 /// An optimised variant of the Montgomery product algorithm from
 /// https://github.com/mitschabaude/montgomery#13-x-30-bit-multiplication.
@@ -38,7 +35,7 @@ fn montgomery_product(x: ptr<function, BigInt>, y: ptr<function, BigInt>) -> Big
     for (var i = 0u; i < NUM_WORDS; i ++) {
         var v = s.limbs[i] + c;
         c = v >> WORD_SIZE;
-        s.limbs[i] = v & MASK;
+        s.limbs[i] = v & W_MASK; // Check whether W_MASK or MASK
     }
 
     return conditional_reduce(&s, &p);

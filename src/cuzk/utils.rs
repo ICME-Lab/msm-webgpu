@@ -2,7 +2,7 @@ use ff::PrimeField;
 use num_bigint::{BigInt, BigUint, Sign};
 use num_traits::{One, FromPrimitive};
 use num_integer::Integer;
-use crate::{cuzk::msm::calc_num_words, utils::montgomery::{bytes_to_field_montgomery, field_to_bytes_montgomery}};
+use crate::{cuzk::msm::calc_num_words, halo2curves::utils::field_to_bytes, utils::montgomery::{bytes_to_field_montgomery, field_to_bytes_montgomery}};
 
   
 //   /**
@@ -49,7 +49,29 @@ pub fn field_to_u8_vec_montgomery_for_gpu<F: PrimeField>(
 
     u8_vec
 }
-  
+
+pub fn field_to_u8_vec_for_gpu<F: PrimeField>(
+    field: &F,
+    num_words: usize,
+    word_size: usize,
+) -> Vec<u8> {
+    let bytes = field_to_bytes(field);
+
+    // TODO: Avoid this step
+    let v = BigInt::from_bytes_le(Sign::Plus, &bytes);
+
+    let limbs = to_words_le(&v, num_words, word_size);
+    let mut u8_vec = vec![0u8; num_words * 4];
+
+    for (i, limb) in limbs.iter().enumerate() {
+        let i4 = i * 4;
+        u8_vec[i4] = (limb & 255) as u8;
+        u8_vec[i4 + 1] = (limb >> 8) as u8;
+    }
+
+    u8_vec
+}
+
 // TODO: Test
 pub fn to_words_le(
     val: &BigInt,
@@ -109,13 +131,6 @@ pub fn from_words_le_without_assertion<F: PrimeField>(
     num_words: usize,
     word_size: usize,
 ) -> F {
-    // let mut val = F::ZERO;
-    // for i in 0..num_words {
-    //     let exponent = (num_words - i - 1) * word_size;
-    //     // TODO: This looks wrong to me. Check Montgomery representation
-    //     val += F::from(2).pow([exponent as u64]) * F::from(limbs[num_words - i - 1] as u64);
-    // }
-    // val
     let mut val = BigInt::ZERO;
     for i in 0..num_words {
         let exponent = (num_words - i - 1) * word_size;

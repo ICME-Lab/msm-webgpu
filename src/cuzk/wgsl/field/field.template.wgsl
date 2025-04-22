@@ -2,6 +2,12 @@ const ZERO: BigInt = BigInt(
     array({{ zero_limbs }})
 );
 
+fn get_p() -> BigInt {
+    var p: BigInt;
+{{{ p_limbs }}}
+    return p;
+}
+
 fn get_p_limbs_plus_one() -> BigIntMediumWide {
     var p: BigIntMediumWide;
 {{{ p_limbs_plus_one }}}

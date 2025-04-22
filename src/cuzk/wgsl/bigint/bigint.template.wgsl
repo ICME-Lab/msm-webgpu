@@ -18,6 +18,7 @@ fn bigint_add(a: ptr<function, BigInt>, b: ptr<function, BigInt>, res: ptr<funct
     return carry;
 }
 
+
 fn bigint_sub(a: ptr<function, BigInt>, b: ptr<function, BigInt>, res: ptr<function, BigInt>) -> u32 {
     var borrow: u32 = 0u;
     for (var i: u32 = 0u; i < NUM_WORDS; i = i + 1u) {

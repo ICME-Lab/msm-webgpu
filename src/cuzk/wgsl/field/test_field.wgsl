@@ -20,6 +20,7 @@ fn test_montgomery_product(
     result = montgomery_product(&x, &y);
 }
 
+
 @compute @workgroup_size(1)
 fn test_field_add(
     @builtin(global_invocation_id) global_id: vec3<u32>,
