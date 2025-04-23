@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use ff::PrimeField;
+    use group::{prime::PrimeCurveAffine, Group};
     use halo2curves::bn256::{Fr, G1Affine, G1};
 
     use crate::cuzk::{
@@ -21,6 +22,23 @@ mod tests {
         }
     }
 
+    fn get_element<T: Clone + Copy>(arr: &[T], id: i32) -> T {
+        if id < 0 {
+            arr[arr.len() + id as usize]
+        } else {
+            arr[id as usize]
+        }
+    }
+
+    fn update_element<T: Clone + Copy>(arr: &mut Vec<T>, id: i32, val: T) {
+        let len = arr.len();
+        if id < 0 {
+            arr[len + id as usize] = val;
+        } else {
+            arr[id as usize] = val;
+        }
+    }
+
     fn cpu_transpose(
         all_csr_col_idx: Vec<i32>,
         n: u32,
@@ -28,35 +46,51 @@ mod tests {
         num_subtasks: u32,
         input_size: u32,
     ) -> (Vec<i32>, Vec<i32>, Vec<i32>) {
-        let all_csc_col_ptr = vec![0; (num_subtasks * (n + 1)) as usize];
-        let all_csc_row_idx = vec![0; (num_subtasks * input_size) as usize];
-        let all_csc_vals = vec![0; (num_subtasks * input_size) as usize];
-        let all_curr = vec![0; (num_subtasks * n) as usize];
+        let mut all_csc_col_ptr: Vec<i32> = vec![0; (num_subtasks * (n + 1)) as usize];
+        let mut all_csc_row_idx: Vec<i32> = vec![0; (num_subtasks * input_size) as usize];
+        let mut all_csc_vals: Vec<i32> = vec![0; (num_subtasks * input_size) as usize];
+        let mut all_curr: Vec<i32> = vec![0; (num_subtasks * n) as usize];
 
         for subtask_idx in 0..num_subtasks {
-            let ccp_offset = subtask_idx * (n + 1);
-            let cci_offset = subtask_idx * input_size;
-            let curr_offset = subtask_idx * n;
+            let ccp_offset = (subtask_idx * (n + 1)) as i32;
+            let cci_offset = (subtask_idx * input_size) as i32;
+            let curr_offset = (subtask_idx * n) as i32;
 
             for i in 0..m {
                 let (start, end) = calc_start_end(m, n, i);
                 for j in start..end {
-                    all_csc_col_ptr[ccp_offset + all_csr_col_idx[cci_offset + j] + 1] += 1;
+                    let tmp = get_element(&all_csr_col_idx, cci_offset + j as i32);
+                    let idx = ccp_offset + tmp + 1;
+                    let val = get_element(&all_csc_col_ptr, idx);
+                    update_element(&mut all_csc_col_ptr, idx, val + 1);
                 }
             }
 
             for i in 0..n {
-                all_csc_col_ptr[ccp_offset + i + 1] += all_csc_col_ptr[ccp_offset + i];
+                let idx = ccp_offset + i as i32 + 1;
+                let val = get_element(&all_csc_col_ptr, idx);
+                let prev_val = get_element(&all_csc_col_ptr, ccp_offset + i as i32);
+                update_element(&mut all_csc_col_ptr, idx, val + prev_val);
             }
 
             let mut val = 0;
             for i in 0..m {
                 let (start, end) = calc_start_end(m, n, i);
                 for j in start..end {
-                    all_csc_row_idx[cci_offset
-                        + all_csc_col_ptr[ccp_offset + all_csr_col_idx[cci_offset + j]]] = i;
-                    all_csc_vals[cci_offset
-                        + all_csc_col_ptr[ccp_offset + all_csr_col_idx[cci_offset + j]]] = val;
+                    let tmp = get_element(&all_csr_col_idx, cci_offset + j as i32);
+                    let idx = curr_offset + tmp;
+                    let col = ccp_offset + tmp;
+
+                    let loc = get_element(&all_csc_col_ptr, col) + get_element(&all_curr, idx);
+                    let curr_val = get_element(&all_curr, idx);
+                    update_element(&mut all_curr, idx, curr_val + 1);
+                    update_element(
+                        &mut all_csc_row_idx,
+                        subtask_idx as i32 * input_size as i32 + loc,
+                        i as i32,
+                    );
+                    update_element(&mut all_csc_vals, cci_offset + loc, val);
+
                     val += 1;
                 }
             }
@@ -119,37 +153,42 @@ mod tests {
     ) -> Vec<G1Affine> {
         let l = 1 << chunk_size;
         let h = l / 2;
-        let zero = G1::ZERO;
+        let zero = G1Affine::identity();
         let mut buckets: Vec<G1Affine> = vec![zero; num_columns as usize / 2];
 
         let rp_offset = subtask_idx * (num_columns + 1);
 
         for thread_id in 0..num_columns / 2 {
-            let row_idx = thread_id + num_columns / 2;
-            if thread_id == 0 && j == 0 {
-                row_idx = 0;
-            }
+            for j in 0..2 {
+                let mut row_idx = thread_id + num_columns / 2;
+                if j == 1 {
+                    row_idx = num_columns / 2 - thread_id;
+                }
+                if thread_id == 0 && j == 0 {
+                    row_idx = 0;
+                }
 
-            let row_begin = all_csc_col_ptr[rp_offset + row_idx];
-            let row_end = all_csc_col_ptr[rp_offset + row_idx + 1];
+                let row_begin = all_csc_col_ptr[rp_offset + row_idx];
+                let row_end = all_csc_col_ptr[rp_offset + row_idx + 1];
 
-            let mut sum = zero;
-            for k in row_begin..row_end {
-                sum = sum + points[all_csc_val_idxs[subtask_idx * input_size + k]];
-            }
+                let mut sum = zero;
+                for k in row_begin..row_end {
+                    sum = sum + points[all_csc_val_idxs[subtask_idx * input_size + k]];
+                }
 
-            let bucket_idx;
-            if h > row_idx {
-                bucket_idx = h - row_idx;
-                sum = sum.negate();
-            } else {
-                bucket_idx = row_idx - h;
-            }
+                let bucket_idx;
+                if h > row_idx {
+                    bucket_idx = h - row_idx;
+                    sum = -sum;
+                } else {
+                    bucket_idx = row_idx - h;
+                }
 
-            if bucket_idx > 0 {
-                buckets[thread_id] = buckets[thread_id] + sum;
-            } else {
-                buckets[thread_id] = buckets[thread_id] + zero;
+                if bucket_idx > 0 {
+                    buckets[thread_id as usize] = buckets[thread_id as usize] + sum.into();
+                } else {
+                    buckets[thread_id as usize] = buckets[thread_id as usize] + zero.into();
+                }
             }
         }
         buckets
@@ -273,7 +312,6 @@ mod tests {
         result
     }
 
-
     #[test]
     fn test_cuzk() {
         let input_size = 16;
@@ -327,7 +365,8 @@ mod tests {
             let num_buckets = buckets.len();
             let (g_points, m_points) = parallel_bucket_reduction_1(buckets);
 
-            let p_result = parallel_bucket_reduction_2(g_points, m_points, num_buckets);
+            let p_result =
+                parallel_bucket_reduction_2(g_points, m_points, num_buckets, num_subtasks);
 
             let bucket_sum_2 = G1::ZERO;
             for b in p_result {
@@ -337,7 +376,7 @@ mod tests {
             assert_eq!(bucket_sum_serial, bucket_sum_2);
             assert_eq!(bucket_sum_rs, bucket_sum_2);
 
-                // Horner's rule
+            // Horner's rule
 
             let m = 1 << chunk_size;
             let result = bucket_sums[bucket_sums.len() - 1];
