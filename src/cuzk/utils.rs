@@ -90,10 +90,7 @@ pub fn field_to_u8_vec_for_gpu<F: PrimeField>(
 ) -> Vec<u8> {
     let bytes = field_to_bytes(field);
 
-    // TODO: Avoid this step
-    let v = BigInt::from_bytes_le(Sign::Plus, &bytes);
-
-    let limbs = to_words_le(&v, num_words, word_size);
+    let limbs = to_words_le_from_le_bytes(&bytes, num_words, word_size);
     let mut u8_vec = vec![0u8; num_words * 4];
 
     for (i, limb) in limbs.iter().enumerate() {
@@ -105,13 +102,12 @@ pub fn field_to_u8_vec_for_gpu<F: PrimeField>(
     u8_vec
 }
 
-// TODO: Test
 pub fn to_words_le(
     val: &BigInt,
     num_words: usize,
     word_size: usize,
-) -> Vec<u16> {
-    let mut limbs = vec![0u16; num_words];
+) -> Vec<u32> {
+    let mut limbs = vec![0u32; num_words];
 
     let mask = BigInt::from((1u32 << word_size) - 1);
     for i in 0..num_words {
@@ -120,9 +116,56 @@ pub fn to_words_le(
         let w = (val >> shift) & mask.clone();
         let digits = w.to_u32_digits().1;
         if digits.len() > 0 {
-            limbs[idx] = digits[0] as u16;
+            limbs[idx] = digits[0] as u32;
         }
     }   
+
+    limbs
+}
+
+pub fn to_words_le_from_field<F: PrimeField>(
+    val: &F,
+    num_words: usize,
+    word_size: usize,
+) -> Vec<u32> {
+    let bytes = field_to_bytes(val);
+    to_words_le_from_le_bytes(&bytes, num_words, word_size)
+}
+
+pub fn to_words_le_from_field_montgomery<F: PrimeField>(
+    val: &F,
+    num_words: usize,
+    word_size: usize,
+) -> Vec<u32> {
+    let bytes = field_to_bytes_montgomery(val);
+    to_words_le_from_le_bytes(&bytes, num_words, word_size)
+}
+
+pub fn to_words_le_from_le_bytes(
+    val: &[u8],
+    num_words: usize,
+    word_size: usize,
+) -> Vec<u32> {
+    assert!(word_size <= 32, "u32 supports up to 32 bits");
+
+    let mut limbs = vec![0u32; num_words];
+
+    for idx in 0..num_words {
+        let mut word = 0u32;
+
+        // Pick out `word_size` bits that start at bit `idx * word_size`
+        for bit_in_word in 0..word_size {
+            let global_bit = idx * word_size + bit_in_word;
+            let byte_idx   = global_bit / 8;          // 0 = least-significant byte
+            if byte_idx >= val.len() { break; }       // past the supplied data → 0
+
+            let bit_in_byte = global_bit % 8;
+            let bit = (val[byte_idx] >> bit_in_byte) & 1;
+            word |= (bit as u32) << bit_in_word;
+        }
+
+        limbs[idx] = word;
+    }
 
     limbs
 }
@@ -255,4 +298,26 @@ pub fn compute_misc_params(
     assert!(n0_u32.1.len() == 1);
     assert!(n0_u32.0 == Sign::Plus);
     MiscParams { num_words, n0: n0_u32.1[0], r }
+}
+
+#[cfg(test)]
+mod tests {
+    use halo2curves::bn256::Fr;
+
+    use crate::cuzk::lib::sample_scalars;
+
+    use super::*;
+    
+    #[test]
+    fn test_to_words_le_from_le_bytes() {
+        let val = sample_scalars::<Fr>(1)[0];
+        let bytes = field_to_bytes(&val);
+        let word_size = 16;
+        let num_words = calc_num_words(word_size);
+
+        let v = BigInt::from_bytes_le(Sign::Plus, &bytes);
+        let limbs = to_words_le(&v, num_words, word_size);
+        let limbs_from_le_bytes = to_words_le_from_le_bytes(&bytes, num_words, word_size);
+        assert_eq!(limbs, limbs_from_le_bytes);
+    }
 }

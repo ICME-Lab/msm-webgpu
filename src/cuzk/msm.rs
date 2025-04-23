@@ -45,7 +45,7 @@ pub static PARAMS: Lazy<MiscParams> = Lazy::new(|| compute_misc_params(&P, WORD_
  * End-to-end implementation of the modified cuZK MSM algorithm by Lu et al,
  * 2022: https://eprint.iacr.org/2022/1321.pdf
  *
- * Many aspects of cuZK were adapted and modified for our submission, and some
+ * Many aspects of cuZK were adapted and modified, and some
  * aspects were omitted. As such, please refer to the documentation
  * (https://hackmd.io/HNH0DcSqSka4hAaIfJNHEA) we have written for a more accurate
  * description of our work. We also used techniques by previous ZPrize contestations.
@@ -54,7 +54,6 @@ pub static PARAMS: Lazy<MiscParams> = Lazy::new(|| compute_misc_params(&P, WORD_
  * 1. Perform as much of the computation within the GPU as possible, in order
  *    to minimse CPU-GPU and GPU-CPU data transfer, which is slow.
  * 2. Use optimizations inspired by previous years' submissions, such as:
- *    - Montgomery multiplication and Barrett reduction with 13-bit limb sizes
  *    - Signed bucket indices
  * 3. Careful memory management to stay within WebGPU's default buffer size
  *    limits.
@@ -90,12 +89,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     });
 
     ////////////////////////////////////////////////////////////////////////////////////////////
-    // 1. Point Coordinate Conversion and Scalar Decomposition                              /
-    //                                                                                        /
-    // (1) Convert elliptic curve points (ETE Affine coordinates) into 13-bit limbs,          /
-    // and represented internally in Montgomery form by using Barret Reduction.               /
-    //                                                                                        /
-    // (2) Decompose scalars into chunk_size windows using signed bucket indices.             /
+    // 1. Decompose scalars into chunk_size windows using signed bucket indices.             /
     ////////////////////////////////////////////////////////////////////////////////////////////
 
     // Total thread count = workgroup_size * #x workgroups * #y workgroups * #z workgroups.
@@ -280,7 +274,6 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         .await;
     }
 
-    assert!(false);
 
     /////////////////////////////////////////////////////////////////////////////////////////////
     // 4. Bucket Reduction                                                                     /
@@ -365,6 +358,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         .await;
     }
 
+    assert!(false);
     // Map results back from GPU to CPU.
     let data = read_from_gpu(
         &device,
@@ -373,6 +367,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         vec![g_points_x_sb, g_points_y_sb, g_points_z_sb],
         0,
     );
+
 
     // Destroy the GPU device object.
     device.destroy();
