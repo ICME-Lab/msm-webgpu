@@ -31,33 +31,33 @@ pub fn sample_points<C: CurveAffine>(n: usize) -> Vec<C> {
         .collect::<Vec<_>>()
 }
 
-pub fn fast_msm<C: CurveAffine>(g: &Vec<C>, v: &Vec<C::Scalar>) -> C::Curve {
+pub fn fast_msm<C: CurveAffine>(g: &[C], v: &[C::Scalar]) -> C::Curve {
     best_multiexp(v, g)
 }
 
-pub fn scalars_to_bytes<F: PrimeField>(v: &Vec<F>) -> Vec<u8> {
+pub fn scalars_to_bytes<F: PrimeField>(v: &[F]) -> Vec<u8> {
     v.iter().flat_map(|x| field_to_bytes(x)).collect::<Vec<_>>()
 }
 
-pub fn fields_to_bytes_montgomery<F: PrimeField>(v: &Vec<F>) -> Vec<u8> {
+pub fn fields_to_bytes_montgomery<F: PrimeField>(v: &[F]) -> Vec<u8> {
     v.iter()
         .flat_map(|x| field_to_bytes_montgomery(x))
         .collect::<Vec<_>>()
 }
 
-pub fn points_to_bytes<C: CurveAffine>(g: &Vec<C>) -> Vec<u8> {
+pub fn points_to_bytes<C: CurveAffine>(g: &[C]) -> Vec<u8> {
     g.into_iter()
         .flat_map(|affine| {
             let coords = affine.coordinates().unwrap();
             let x = field_to_bytes_montgomery(coords.x());
             let y = field_to_bytes_montgomery(coords.y());
-            let z = field_to_bytes_montgomery(&C::Base::ONE);
-            [x, y, z].concat()
+            // let z = field_to_bytes_montgomery(&C::Base::ONE);
+            [x, y].concat()
         })
         .collect::<Vec<_>>()
 }
 
-pub fn run_webgpu_msm<C: CurveAffine>(g: &Vec<C>, v: &Vec<C::Scalar>) -> C::Curve {
+pub fn run_webgpu_msm<C: CurveAffine>(g: &[C], v: &[C::Scalar]) -> C::Curve {
     pollster::block_on(compute_msm(g, v))
 }
 

@@ -120,6 +120,9 @@ pub fn read_from_gpu(
 
     queue.submit(Some(encoder.finish()));
 
+    println!("Staging buffers: {:?}", staging_buffers);
+
+    println!("Before mapping");
     let mut data = Vec::new();
     for staging_buffer in staging_buffers {
         let staging_slice = staging_buffer.slice(..);
@@ -128,6 +131,8 @@ pub fn read_from_gpu(
         let result_data = staging_slice.get_mapped_range();
         data.push(result_data.to_vec());
     }
+
+    println!("After mapping");
 
     data
 }

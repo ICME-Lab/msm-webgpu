@@ -362,7 +362,7 @@ mod tests {
 
     #[test]
     fn test_cuzk() {
-        let input_size = 16;
+        let input_size = 1024;
         let chunk_size: usize = 4;
         let num_columns = 1 << chunk_size;
         let num_rows = (input_size + num_columns - 1) / num_columns;
@@ -371,9 +371,6 @@ mod tests {
 
         let scalars = sample_scalars::<Fr>(input_size);
         let points = sample_points::<G1Affine>(input_size);
-
-        println!("points: {:?}", points);
-        println!("scalars: {:?}", scalars);
 
         let decomposed_scalars = decompose_scalars_signed(&scalars, num_subtasks, chunk_size);
 

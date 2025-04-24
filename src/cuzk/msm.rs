@@ -1,20 +1,20 @@
 use ff::PrimeField;
-use group::{Group, Curve};
-use halo2curves::CurveExt;
+use group::{Curve, Group};
 use halo2curves::bn256::G1Affine;
 use halo2curves::CurveAffine;
+use halo2curves::CurveExt;
 use num_bigint::{BigInt, BigUint};
 use num_traits::Num;
-use wgpu::{Buffer, CommandEncoder, CommandEncoderDescriptor, Device, Queue};
 use once_cell::sync::Lazy;
+use wgpu::{Buffer, CommandEncoder, CommandEncoderDescriptor, Device, Queue};
 
 use crate::cuzk::gpu::{
     create_and_write_storage_buffer, create_and_write_uniform_buffer, create_bind_group,
     create_bind_group_layout, create_compute_pipeline, create_storage_buffer, execute_pipeline,
     get_adapter, get_device, read_from_gpu,
 };
+use crate::cuzk::lib::{points_to_bytes, scalars_to_bytes};
 use crate::cuzk::shader_manager::ShaderManager;
-use crate::cuzk::utils::{field_to_u8_vec_for_gpu, fields_to_u8_vec_for_gpu, points_to_bytes_for_gpu_x_y};
 
 use super::utils::{compute_misc_params, u8s_to_fields_without_assertion, MiscParams};
 
@@ -77,8 +77,8 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     println!("Word size: {}", WORD_SIZE);
     println!("Params: {:?}", PARAMS);
 
-    let (point_x_bytes, point_y_bytes) = points_to_bytes_for_gpu_x_y(points, num_words, WORD_SIZE);
-    let scalar_bytes = fields_to_u8_vec_for_gpu(scalars, num_words, WORD_SIZE);
+    let point_bytes = points_to_bytes(points);
+    let scalar_bytes = scalars_to_bytes(scalars);
 
     let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size);
 
@@ -137,7 +137,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
 
     println!("C shader: {}", c_shader);
 
-    let (point_x_sb, point_y_sb, scalar_chunks_sb) = decompose_shaders(
+    let (point_x_sb, point_y_sb, scalar_chunks_sb) = convert_point_coords_and_decompose_shaders(
         &c_shader,
         c_num_x_workgroups,
         c_num_y_workgroups,
@@ -145,18 +145,17 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         &device,
         &queue,
         &mut encoder,
-        &point_x_bytes,
-        &point_y_bytes,
+        &point_bytes,
         &scalar_bytes,
         num_subtasks,
         chunk_size,
+        num_words,
     )
     .await;
 
     println!("Point X buffer: {:?}", point_x_sb.size());
     println!("Point Y buffer: {:?}", point_y_sb.size());
     println!("Scalar chunks buffer: {:?}", scalar_chunks_sb.size());
-
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     // 2. Sparse Matrix Transposition                                                         /
@@ -274,7 +273,6 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         .await;
     }
 
-
     /////////////////////////////////////////////////////////////////////////////////////////////
     // 4. Bucket Reduction                                                                     /
     //                                                                                         /
@@ -358,7 +356,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         .await;
     }
 
-    assert!(false);
+
     // Map results back from GPU to CPU.
     let data = read_from_gpu(
         &device,
@@ -368,15 +366,20 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         0,
     );
 
-
     // Destroy the GPU device object.
     device.destroy();
 
     let mut points = vec![];
 
-    let g_points_x = u8s_to_fields_without_assertion::<<<C as CurveAffine>::CurveExt as CurveExt>::Base>(&data[0], num_words, WORD_SIZE);
-    let g_points_y = u8s_to_fields_without_assertion::<<<C as CurveAffine>::CurveExt as CurveExt>::Base>(&data[1], num_words, WORD_SIZE);
-    let g_points_z = u8s_to_fields_without_assertion::<<<C as CurveAffine>::CurveExt as CurveExt>::Base>(&data[2], num_words, WORD_SIZE);
+    let g_points_x = u8s_to_fields_without_assertion::<
+        <<C as CurveAffine>::CurveExt as CurveExt>::Base,
+    >(&data[0], num_words, WORD_SIZE);
+    let g_points_y = u8s_to_fields_without_assertion::<
+        <<C as CurveAffine>::CurveExt as CurveExt>::Base,
+    >(&data[1], num_words, WORD_SIZE);
+    let g_points_z = u8s_to_fields_without_assertion::<
+        <<C as CurveAffine>::CurveExt as CurveExt>::Base,
+    >(&data[2], num_words, WORD_SIZE);
 
     for i in 0..num_subtasks {
         let mut point = C::Curve::identity();
@@ -385,30 +388,27 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
                 g_points_x[i * b_workgroup_size + j],
                 g_points_y[i * b_workgroup_size + j],
                 g_points_z[i * b_workgroup_size + j],
-            ).unwrap();
+            )
+            .unwrap();
             point = point + reduced_point;
         }
         points.push(point);
     }
-    
 
-  ////////////////////////////////////////////////////////////////////////////////////////////
-  // 5. Horner's Method                                                                     /
-  //                                                                                        /
-  // Calculate the final result using Horner's method (Formula 3 of the cuZK paper)         /
-  ////////////////////////////////////////////////////////////////////////////////////////////
-  
-  let m = C::ScalarExt::from(1 << chunk_size);
-  let mut result = points[points.len() - 1];
-  for i in (0..points.len() - 2).rev() {
-    result = result * m + points[i];
-  }
+    ////////////////////////////////////////////////////////////////////////////////////////////
+    // 5. Horner's Method                                                                     /
+    //                                                                                        /
+    // Calculate the final result using Horner's method (Formula 3 of the cuZK paper)         /
+    ////////////////////////////////////////////////////////////////////////////////////////////
 
-  result
+    let m = C::ScalarExt::from(1 << chunk_size);
+    let mut result = points[points.len() - 1];
+    for i in (0..points.len() - 2).rev() {
+        result = result * m + points[i];
+    }
+
+    result
 }
-
-
-
 
 /****************************************************** WGSL Shader Invocations ******************************************************/
 
@@ -431,7 +431,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
  *
  */
 
-pub async fn decompose_shaders(
+pub async fn convert_point_coords_and_decompose_shaders(
     shader_code: &str,
     num_x_workgroups: usize,
     num_y_workgroups: usize,
@@ -439,25 +439,27 @@ pub async fn decompose_shaders(
     device: &Device,
     queue: &Queue,
     encoder: &mut CommandEncoder,
-    points_x_buffer: &[u8],
-    points_y_buffer: &[u8],
-    scalars_buffer: &[u8],
+    points_bytes: &[u8],
+    scalars_bytes: &[u8],
     num_subtasks: usize,
     chunk_size: usize,
+    num_words: usize,
 ) -> (Buffer, Buffer, Buffer) {
     assert!(num_subtasks * chunk_size == 256);
-    let input_size = scalars_buffer.len() / 32;
-    let points_x_sb = create_and_write_storage_buffer(
-        Some("Points X buffer"),
+    let input_size = scalars_bytes.len() / 32;
+    let points_sb = create_and_write_storage_buffer(Some("Points buffer"), device, points_bytes);
+    let scalars_sb = create_and_write_storage_buffer(Some("Scalars buffer"), device, scalars_bytes);
+
+    let points_x_sb = create_storage_buffer(
+        Some("Point X buffer"),
         device,
-        points_x_buffer,
+        (input_size * num_words * 4) as u64,
     );
-    let points_y_sb = create_and_write_storage_buffer(
-        Some("Points Y buffer"),
+    let points_y_sb = create_storage_buffer(
+        Some("Point Y buffer"),
         device,
-        points_y_buffer,
+        (input_size * num_words * 4) as u64,
     );
-    let scalars_sb = create_and_write_storage_buffer(Some("Scalars buffer"), device, scalars_buffer);
     // Output storage buffers.
     let scalar_chunks_sb = create_storage_buffer(
         Some("Scalar chunks buffer"),
@@ -473,25 +475,19 @@ pub async fn decompose_shaders(
     let bind_group_layout = create_bind_group_layout(
         Some("Bind group layout"),
         device,
-        vec![&scalars_sb],
-        vec![&scalar_chunks_sb],
+        vec![&points_sb, &scalars_sb],
+        vec![&points_x_sb, &points_y_sb, &scalar_chunks_sb],
         vec![&params_ub],
     );
 
-    println!("Decompose bind group layout: {:?}", bind_group_layout);
 
     let bind_group = create_bind_group(
         Some("Bind group"),
         device,
         &bind_group_layout,
-        vec![
-            &scalars_sb,
-            &scalar_chunks_sb,
-            &params_ub,
-        ],
+        vec![&points_sb, &scalars_sb, &points_x_sb, &points_y_sb, &scalar_chunks_sb, &params_ub],
     );
 
-    println!("Decompose bind group: {:?}", bind_group);
 
     let compute_pipeline = create_compute_pipeline(
         Some("Convert point coords and decompose shader"),
@@ -724,7 +720,6 @@ pub async fn bpr_1(
         vec![&params_ub],
     );
 
-    println!("BPR 1 Bind group layout: {:?}", bind_group_layout);
 
     let bind_group = create_bind_group(
         Some("Bind group"),
@@ -740,8 +735,6 @@ pub async fn bpr_1(
             &params_ub,
         ],
     );
-
-    println!("BPR 1 Bind group: {:?}", bind_group);
 
     let compute_pipeline = create_compute_pipeline(
         Some("Compute pipeline"),
@@ -759,7 +752,8 @@ pub async fn bpr_1(
         num_x_workgroups as u32,
         num_y_workgroups as u32,
         num_z_workgroups as u32,
-    ).await;
+    )
+    .await;
 }
 
 pub async fn bpr_2(
@@ -798,8 +792,6 @@ pub async fn bpr_2(
         vec![&params_ub],
     );
 
-    println!("BPR 2 Bind group layout: {:?}", bind_group_layout);
-
     let bind_group = create_bind_group(
         Some("Bind group"),
         device,
@@ -814,8 +806,6 @@ pub async fn bpr_2(
             &params_ub,
         ],
     );
-
-    println!("BPR 2 Bind group: {:?}", bind_group);
 
     let compute_pipeline = create_compute_pipeline(
         Some("Compute pipeline"),

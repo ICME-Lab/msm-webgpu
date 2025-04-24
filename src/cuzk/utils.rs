@@ -74,7 +74,6 @@ pub fn points_to_bytes_for_gpu_x_y<C: CurveAffine>(
     (xs, ys)
 }
 
-
 pub fn fields_to_u8_vec_for_gpu<F: PrimeField>(
     fields: &[F],
     num_words: usize,
