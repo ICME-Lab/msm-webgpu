@@ -1,12 +1,20 @@
 #[cfg(test)]
 mod tests {
     use ff::PrimeField;
-    use group::{prime::PrimeCurveAffine, Group};
-    use halo2curves::bn256::{Fr, G1Affine, G1};
+    use group::{prime::PrimeCurveAffine, Curve, Group};
+    use halo2curves::{
+        bn256::{Fq, Fr, G1Affine, G1},
+        CurveAffine,
+    };
+    use num_bigint::BigUint;
+    use num_traits::Num;
 
-    use crate::cuzk::{
-        lib::{sample_points, sample_scalars},
-        utils::{to_words_le, to_words_le_from_field},
+    use crate::{
+        cuzk::{
+            lib::{sample_points, sample_scalars},
+            utils::{to_words_le, to_words_le_from_field},
+        },
+        halo2curves::utils::bytes_to_field,
     };
 
     use super::*;
@@ -14,7 +22,7 @@ mod tests {
     /// https://synergy.cs.vt.edu/pubs/papers/wang-transposition-ics16.pdf.
     /// It simulates running multiple transpositions in parallel, with one thread
     /// per CSR matrix. It does not accept an arbitrary csr_row_ptr array.
-    fn calc_start_end(m: u32, n: u32, i: u32) -> (u32, u32) {
+    fn calc_start_end(m: usize, n: usize, i: usize) -> (usize, usize) {
         if i < m {
             (i * n, i * n + n)
         } else {
@@ -41,10 +49,10 @@ mod tests {
 
     fn cpu_transpose(
         all_csr_col_idx: Vec<i32>,
-        n: u32,
-        m: u32,
-        num_subtasks: u32,
-        input_size: u32,
+        n: usize,
+        m: usize,
+        num_subtasks: usize,
+        input_size: usize,
     ) -> (Vec<i32>, Vec<i32>, Vec<i32>) {
         let mut all_csc_col_ptr: Vec<i32> = vec![0; (num_subtasks * (n + 1)) as usize];
         let mut all_csc_row_idx: Vec<i32> = vec![0; (num_subtasks * input_size) as usize];
@@ -99,9 +107,9 @@ mod tests {
     }
 
     fn decompose_scalars_signed<F: PrimeField>(
-        scalars: Vec<F>,
-        num_words: u32,
-        word_size: u32,
+        scalars: &[F],
+        num_words: usize,
+        word_size: usize,
     ) -> Vec<Vec<i32>> {
         let l = 1 << word_size;
         let shift = 1 << (word_size - 1);
@@ -109,7 +117,7 @@ mod tests {
         let mut as_limbs: Vec<Vec<i32>> = Vec::new();
 
         for scalar in scalars {
-            let limbs = to_words_le_from_field(&scalar, num_words as usize, word_size as usize);
+            let limbs = to_words_le_from_field(scalar, num_words, word_size);
             let mut signed_slices: Vec<i32> = vec![0; limbs.len()];
 
             let mut carry = 0;
@@ -125,6 +133,8 @@ mod tests {
                     carry = 0;
                 }
             }
+
+            // We do not need to handle the case where the final carry equals 1, as the highest word of the field modulus (0x12ab) is smaller than 2^{16-1}
             if carry == 1 {
                 panic!("final carry is 1");
             }
@@ -143,18 +153,18 @@ mod tests {
      */
 
     fn cpu_smvp_signed(
-        subtask_idx: u32,
-        input_size: u32,
-        num_columns: u32,
-        chunk_size: u32,
-        all_csc_col_ptr: Vec<i32>,
-        all_csc_val_idxs: Vec<i32>,
-        points: Vec<G1Affine>,
-    ) -> Vec<G1Affine> {
+        subtask_idx: usize,
+        input_size: usize,
+        num_columns: usize,
+        chunk_size: usize,
+        all_csc_col_ptr: &[i32],
+        all_csc_val_idxs: &[i32],
+        points: &[G1Affine],
+    ) -> Vec<G1> {
         let l = 1 << chunk_size;
         let h = l / 2;
-        let zero = G1Affine::identity();
-        let mut buckets: Vec<G1Affine> = vec![zero; num_columns as usize / 2];
+        let zero = G1::identity();
+        let mut buckets: Vec<G1> = vec![zero; num_columns / 2];
 
         let rp_offset = subtask_idx * (num_columns + 1);
 
@@ -173,7 +183,10 @@ mod tests {
 
                 let mut sum = zero;
                 for k in row_begin..row_end {
-                    sum = sum + points[all_csc_val_idxs[subtask_idx * input_size + k]];
+                    let idx = subtask_idx as i32 * input_size as i32 + k;
+                    let val = get_element(&all_csc_val_idxs, idx);
+                    let point = get_element(&points, val);
+                    sum = sum + G1::from(point);
                 }
 
                 let bucket_idx;
@@ -185,32 +198,32 @@ mod tests {
                 }
 
                 if bucket_idx > 0 {
-                    buckets[thread_id as usize] = buckets[thread_id as usize] + sum.into();
+                    buckets[thread_id] = buckets[thread_id] + sum;
                 } else {
-                    buckets[thread_id as usize] = buckets[thread_id as usize] + zero.into();
+                    buckets[thread_id] = buckets[thread_id] + zero;
                 }
             }
         }
         buckets
     }
 
-    fn serial_bucket_reduction(buckets: Vec<G1Affine>) -> G1Affine {
+    fn serial_bucket_reduction(buckets: &[G1]) -> G1 {
         let mut indices = vec![];
         for i in 1..buckets.len() {
             indices.push(i);
         }
         indices.push(0);
 
-        let mut bucket_sum = G1::ZERO;
+        let mut bucket_sum = G1::identity();
         for i in 1..buckets.len() + 1 {
-            let b = buckets[indices[i - 1]].multiply(i as u64);
+            let b = buckets[indices[i - 1]] * Fr::from(i as u64);
             bucket_sum = bucket_sum + b;
         }
         bucket_sum
     }
 
     // Perform running sum in the classic fashion - one siumulated thread only
-    fn running_sum_bucket_reduction(buckets: Vec<G1Affine>) -> G1Affine {
+    fn running_sum_bucket_reduction(buckets: &[G1]) -> G1 {
         let n = buckets.len();
         let mut m = buckets[0];
         let mut g = m;
@@ -221,14 +234,16 @@ mod tests {
             m = m + b;
             g = g + m;
         }
+
+        g
     }
 
     // Perform running sum with simulated parallelism. It is up to the caller
     // to add the resulting points.
 
-    fn parallel_bucket_reduction(buckets: Vec<G1Affine>, num_threads: u32) -> Vec<G1Affine> {
+    fn parallel_bucket_reduction(buckets: &[G1], num_threads: usize) -> Vec<G1> {
         let buckets_per_thread = buckets.len() / num_threads;
-        let mut bucket_sums: Vec<G1Affine> = vec![];
+        let mut bucket_sums: Vec<G1> = vec![];
 
         for thread_id in 0..num_threads {
             let idx = if thread_id == 0 {
@@ -237,10 +252,10 @@ mod tests {
                 (num_threads - thread_id) * buckets_per_thread
             };
 
-            let m = buckets[idx];
+            let mut m = buckets[idx];
             let mut g = m;
 
-            for i in 0..buckets_per_thread - 1 {
+            for i in 0..(buckets_per_thread - 1) {
                 let idx = (num_threads - thread_id) * buckets_per_thread - 1 - i;
                 let b = buckets[idx];
                 m = m + b;
@@ -249,7 +264,7 @@ mod tests {
 
             let s = buckets_per_thread * (num_threads - thread_id - 1);
             if s > 0 {
-                g = g + m.multiply(s as u64);
+                g = g + m * Fr::from(s as u64);
             }
 
             bucket_sums.push(g);
@@ -258,13 +273,10 @@ mod tests {
     }
 
     // The first part of the parallel bucket reduction algo
-    fn parallel_bucket_reduction_1(
-        buckets: Vec<G1Affine>,
-        num_threads: u32,
-    ) -> (Vec<G1Affine>, Vec<G1Affine>) {
+    fn parallel_bucket_reduction_1(buckets: &[G1], num_threads: usize) -> (Vec<G1>, Vec<G1>) {
         let buckets_per_thread = buckets.len() / num_threads;
-        let mut g_points: Vec<G1Affine> = vec![];
-        let mut m_points: Vec<G1Affine> = vec![];
+        let mut g_points: Vec<G1> = vec![];
+        let mut m_points: Vec<G1> = vec![];
 
         for thread_id in 0..num_threads {
             let idx = if thread_id == 0 {
@@ -273,10 +285,10 @@ mod tests {
                 (num_threads - thread_id) * buckets_per_thread
             };
 
-            let m = buckets[idx];
+            let mut m = buckets[idx];
             let mut g = m;
 
-            for i in 0..buckets_per_thread - 1 {
+            for i in 0..(buckets_per_thread - 1) {
                 let idx = (num_threads - thread_id) * buckets_per_thread - 1 - i;
                 let b = buckets[idx];
                 m = m + b;
@@ -290,32 +302,68 @@ mod tests {
     }
 
     // The second part of the parallel bucket reduction algo
-
     fn parallel_bucket_reduction_2(
-        g_points: Vec<G1Affine>,
-        m_points: Vec<G1Affine>,
-        num_buckets: u32,
-        num_threads: u32,
-    ) -> Vec<G1Affine> {
+        g_points: Vec<G1>,
+        m_points: Vec<G1>,
+        num_buckets: usize,
+        num_threads: usize,
+    ) -> Vec<G1> {
         let buckets_per_thread = num_buckets / num_threads;
-        let mut result: Vec<G1Affine> = vec![];
+        let mut result: Vec<G1> = vec![];
 
         for thread_id in 0..num_threads {
-            let g = g_points[thread_id];
+            let mut g = g_points[thread_id];
             let m = m_points[thread_id];
             let s = buckets_per_thread * (num_threads - thread_id - 1);
             if s > 0 {
-                g = g + m.multiply(s as u64);
+                g = g + m * Fr::from(s as u64);
             }
             result.push(g);
         }
         result
     }
 
+    fn sample_scalars_and_points_test(input_size: usize) -> (Vec<G1Affine>, Vec<Fr>) {
+        let mut points = vec![];
+        let mut scalars = vec![];
+
+        let v = BigUint::from_str_radix(
+            "1111111111111111111111111111111111111111111111111111111111111111111111111111",
+            10,
+        )
+        .unwrap();
+        let v_scalar: Fr = bytes_to_field(&v.to_bytes_le());
+
+        let x = BigUint::from_str_radix(
+            "2796670805570508460920584878396618987767121022598342527208237783066948667246",
+            10,
+        )
+        .unwrap();
+        let x_base: Fq = bytes_to_field(&x.to_bytes_le());
+
+        let y = BigUint::from_str_radix(
+            "8134280397689638111748378379571739274369602049665521098046934931245960532166",
+            10,
+        )
+        .unwrap();
+        let y_base: Fq = bytes_to_field(&y.to_bytes_le());
+
+        let base_point = G1Affine::from_xy(x_base, y_base).unwrap();
+        for i in 0..input_size {
+            let f_i = Fr::from(i as u64);
+            let scalar = f_i * v_scalar;
+            scalars.push(scalar);
+            let f_i1 = Fr::from(i as u64 + 1);
+            let p = base_point * f_i1;
+            points.push(p.to_affine());
+        }
+        (points, scalars)
+    }
+
     #[test]
     fn test_cuzk() {
         let input_size = 16;
-        let chunk_size = 4;
+        let chunk_size: usize = 4;
         let num_columns = 1 << chunk_size;
         let num_rows = (input_size + num_columns - 1) / num_columns;
         let num_chunks_per_scalar = (256 + chunk_size - 1) / chunk_size;
@@ -324,11 +372,14 @@ mod tests {
         let scalars = sample_scalars::<Fr>(input_size);
         let points = sample_points::<G1Affine>(input_size);
 
-        let decomposed_scalars = decompose_scalars_signed(scalars, num_subtasks, chunk_size);
+        println!("points: {:?}", points);
+        println!("scalars: {:?}", scalars);
 
-        let bucket_sums = vec![];
+        let decomposed_scalars = decompose_scalars_signed(&scalars, num_subtasks, chunk_size);
+
+        let mut bucket_sums = vec![];
         // Perform multiple transpositions "in parallel"}
-        let (all_csc_col_ptr, all_csc_row_idx, all_csc_vals) = cpu_transpose(
+        let (all_csc_col_ptr, _, all_csc_vals) = cpu_transpose(
             decomposed_scalars.concat(),
             num_columns,
             num_rows,
@@ -343,61 +394,59 @@ mod tests {
                 input_size,
                 num_columns,
                 chunk_size,
-                all_csc_col_ptr,
-                all_csc_vals,
-                points,
+                &all_csc_col_ptr,
+                &all_csc_vals,
+                &points,
             );
 
-            let buckets_sum_serial = serial_bucket_reduction(buckets);
-            let buckets_sum_rs = running_sum_bucket_reduction(buckets);
+            let buckets_sum_serial = serial_bucket_reduction(&buckets);
+            let buckets_sum_rs = running_sum_bucket_reduction(&buckets);
 
-            // Use the full pBucketPointReduciton algo
-            let bucket_sum = G1::ZERO;
-            for b in parallel_bucket_reduction(buckets) {
+            let mut bucket_sum = G1::identity();
+            for b in parallel_bucket_reduction(&buckets, 4) {
                 bucket_sum = bucket_sum + b;
             }
 
-            assert_eq!(bucket_sum_serial, bucket_sum);
-            assert_eq!(bucket_sum_rs, bucket_sum);
+            assert_eq!(buckets_sum_serial, bucket_sum);
+            assert_eq!(buckets_sum_rs, bucket_sum);
 
             bucket_sums.push(bucket_sum);
 
             let num_buckets = buckets.len();
-            let (g_points, m_points) = parallel_bucket_reduction_1(buckets);
+            let (g_points, m_points) = parallel_bucket_reduction_1(&buckets, 4);
 
-            let p_result =
-                parallel_bucket_reduction_2(g_points, m_points, num_buckets, num_subtasks);
+            let p_result = parallel_bucket_reduction_2(g_points, m_points, num_buckets, 4);
 
-            let bucket_sum_2 = G1::ZERO;
+            let mut bucket_sum_2 = G1::identity();
             for b in p_result {
                 bucket_sum_2 = bucket_sum_2 + b;
             }
 
-            assert_eq!(bucket_sum_serial, bucket_sum_2);
-            assert_eq!(bucket_sum_rs, bucket_sum_2);
-
-            // Horner's rule
-
-            let m = 1 << chunk_size;
-            let result = bucket_sums[bucket_sums.len() - 1];
-            for i in (0..bucket_sums.len() - 1).rev() {
-                result = result.multiply(m);
-                result = result.add(bucket_sums[i]);
-            }
-
-            let result_affine = result.toAffine();
-
-            let expected = G1::ZERO;
-            for i in 0..input_size {
-                if scalars[i] != G1::ZERO {
-                    let p = points[i].multiply(scalars[i]);
-                    expected = expected.add(p);
-                }
-            }
-            let expected_affine = expected.toAffine();
-
-            assert_eq!(result_affine.x, expected_affine.x);
-            assert_eq!(result_affine.y, expected_affine.y);
+            assert_eq!(buckets_sum_serial, bucket_sum_2);
+            assert_eq!(buckets_sum_rs, bucket_sum_2);
         }
+
+        // Horner's rule
+
+        let m = 1 << chunk_size;
+        let mut result = bucket_sums[bucket_sums.len() - 1];
+        for i in (0..bucket_sums.len() - 1).rev() {
+            result = result * Fr::from(m as u64);
+            result = result + bucket_sums[i];
+        }
+
+        let result_affine = result.to_affine();
+
+        let mut expected = G1::identity();
+        for i in 0..input_size {
+            if scalars[i] != Fr::zero() {
+                let p = points[i] * scalars[i];
+                expected = expected + p;
+            }
+        }
+        let expected_affine = expected.to_affine();
+
+        assert_eq!(result_affine.x, expected_affine.x);
+        assert_eq!(result_affine.y, expected_affine.y);
     }
 }
