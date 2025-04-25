@@ -69,7 +69,7 @@ pub async fn point_op<C: CurveAffine>(op: &str, a: C, b: C) -> C::Curve {
     execute_pipeline(&mut encoder, compute_pipeline, bind_group, 1, 1, 1).await;
 
     // Map results back from GPU to CPU.
-    let data = read_from_gpu(&device, &queue, encoder, vec![result_sb], 0);
+    let data = read_from_gpu(&device, &queue, encoder, vec![result_sb]).await;
 
     // Destroy the GPU device object.
     device.destroy();

@@ -3,25 +3,50 @@ use std::collections::BTreeMap;
 use handlebars::Handlebars;
 use num_bigint::{BigInt, BigUint};
 use num_traits::{Num, One};
+use once_cell::sync::Lazy;
 use serde_json::json;
 
 // Templates
-pub const EXTRACT_WORD_FROM_BYTES_LE_FUNCS: &str =
-    "src/cuzk/wgsl/cuzk/extract_word_from_bytes_le.template.wgsl";
-// pub const MONTGOMERY_PRODUCT_FUNCS: &str = "src/cuzk/wgsl/montgomery/mont_pro_product.template.wgsl";
-pub const MONTGOMERY_PRODUCT_FUNCS: &str = "src/cuzk/wgsl/montgomery/mont_product.template.wgsl";
-pub const EC_FUNCS: &str = "src/cuzk/wgsl/curve/ec.template.wgsl";
-pub const FIELD_FUNCS: &str = "src/cuzk/wgsl/field/field.template.wgsl";
-pub const BIGINT_FUNCS: &str = "src/cuzk/wgsl/bigint/bigint.template.wgsl";
-pub const STRUCTS: &str = "src/cuzk/wgsl/struct/structs.template.wgsl";
+pub static DECOMPOSE_SCALARS_SHADER: Lazy<String> = Lazy::new(|| {
+    include_str!("wgsl/cuzk/decompose_scalars.template.wgsl").to_string()
+});
+pub static EXTRACT_WORD_FROM_BYTES_LE_FUNCS: Lazy<String> = Lazy::new(|| {
+    include_str!("wgsl/cuzk/extract_word_from_bytes_le.template.wgsl").to_string()
+});
+pub static MONTGOMERY_PRODUCT_FUNCS: Lazy<String> = Lazy::new(|| {
+    include_str!("wgsl/montgomery/mont_pro_product.template.wgsl").to_string()
+});
+// pub const MONTGOMERY_PRODUCT_FUNCS: &str = "src/cuzk/wgsl/montgomery/mont_product.template.wgsl";
+pub static EC_FUNCS: Lazy<String> = Lazy::new(|| {
+    include_str!("wgsl/curve/ec.template.wgsl").to_string()
+});
+pub static FIELD_FUNCS: Lazy<String> = Lazy::new(|| {
+    include_str!("wgsl/field/field.template.wgsl").to_string()
+});
+pub static BIGINT_FUNCS: Lazy<String> = Lazy::new(|| {
+    include_str!("wgsl/bigint/bigint.template.wgsl").to_string()
+});
+pub static STRUCTS: Lazy<String> = Lazy::new(|| {
+    include_str!("wgsl/struct/structs.template.wgsl").to_string()
+});
 
 // Shaders
-pub const TRANSPOSE_SHADER: &str = "src/cuzk/wgsl/cuzk/transpose.template.wgsl";
-pub const SMVP_SHADER: &str = "src/cuzk/wgsl/cuzk/smvp.template.wgsl";
-pub const BPR_SHADER: &str = "src/cuzk/wgsl/cuzk/bpr.template.wgsl";
-pub const DECOMPOSE_SCALARS_SHADER: &str = "src/cuzk/wgsl/cuzk/decompose_scalars.template.wgsl";
-pub const TEST_FIELD_SHADER: &str = "src/cuzk/wgsl/test/test_field.wgsl";
-pub const TEST_POINT_SHADER: &str = "src/cuzk/wgsl/test/test_point.wgsl";
+pub static TRANSPOSE_SHADER: Lazy<String> = Lazy::new(|| {
+    include_str!("wgsl/cuzk/transpose.template.wgsl").to_string()
+});
+pub static SMVP_SHADER: Lazy<String> = Lazy::new(|| {
+    include_str!("wgsl/cuzk/smvp.template.wgsl").to_string()
+});
+pub static BPR_SHADER: Lazy<String> = Lazy::new(|| {
+    include_str!("wgsl/cuzk/bpr.template.wgsl").to_string()
+});
+// pub const DECOMPOSE_SCALARS_SHADER: &str = "src/cuzk/wgsl/cuzk/decompose_scalars.template.wgsl";
+pub static TEST_FIELD_SHADER: Lazy<String> = Lazy::new(|| {
+    include_str!("wgsl/test/test_field.wgsl").to_string()
+});
+pub static TEST_POINT_SHADER: Lazy<String> = Lazy::new(|| {
+    include_str!("wgsl/test/test_point.wgsl").to_string()
+});
 
 use crate::cuzk::utils::gen_p_limbs;
 
@@ -67,7 +92,7 @@ impl ShaderManager {
     pub fn gen_transpose_shader(&self, workgroup_size: usize) -> String {
         let mut handlebars = Handlebars::new();
         handlebars
-            .register_template_file("transpose", TRANSPOSE_SHADER)
+            .register_template_string("transpose", TRANSPOSE_SHADER.as_str())
             .unwrap();
         let data = json!({
             "workgroup_size": workgroup_size,
@@ -79,14 +104,14 @@ impl ShaderManager {
     pub fn gen_smvp_shader(&self, workgroup_size: usize, num_csr_cols: usize) -> String {
         let mut handlebars = Handlebars::new();
         handlebars
-            .register_template_file("smvp", SMVP_SHADER)
+            .register_template_string("smvp", SMVP_SHADER.as_str())
             .unwrap();
 
-        handlebars.register_template_file("structs", STRUCTS).unwrap();
-        handlebars.register_template_file("bigint_funcs", BIGINT_FUNCS).unwrap();
-        handlebars.register_template_file("ec_funcs", EC_FUNCS).unwrap();
-        handlebars.register_template_file("field_funcs", FIELD_FUNCS).unwrap();
-        handlebars.register_template_file("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS).unwrap();
+        handlebars.register_template_string("structs", STRUCTS.as_str()).unwrap();
+        handlebars.register_template_string("bigint_funcs", BIGINT_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string("ec_funcs", EC_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string("field_funcs", FIELD_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS.as_str()).unwrap();
 
         let data = json!({
             "word_size": self.word_size,
@@ -112,14 +137,14 @@ impl ShaderManager {
     pub fn gen_bpr_shader(&self, workgroup_size: usize) -> String {
         let mut handlebars = Handlebars::new();
         handlebars
-            .register_template_file("bpr", BPR_SHADER)
+            .register_template_string("bpr", BPR_SHADER.as_str())
             .unwrap();
 
-        handlebars.register_template_file("structs", STRUCTS).unwrap();
-        handlebars.register_template_file("bigint_funcs", BIGINT_FUNCS).unwrap();
-        handlebars.register_template_file("ec_funcs", EC_FUNCS).unwrap();
-        handlebars.register_template_file("field_funcs", FIELD_FUNCS).unwrap();
-        handlebars.register_template_file("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS).unwrap();
+        handlebars.register_template_string("structs", STRUCTS.as_str()).unwrap();
+        handlebars.register_template_string("bigint_funcs", BIGINT_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string("ec_funcs", EC_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string("field_funcs", FIELD_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS.as_str()).unwrap();
 
         let data = json!({
             "workgroup_size": workgroup_size,
@@ -149,16 +174,16 @@ impl ShaderManager {
     ) -> String {
         let mut handlebars = Handlebars::new();
         handlebars
-            .register_template_file("decomp_scalars", DECOMPOSE_SCALARS_SHADER)
+            .register_template_string("decomp_scalars", DECOMPOSE_SCALARS_SHADER.as_str())
             .unwrap();
 
-        handlebars.register_template_file("structs", STRUCTS).unwrap();
-        handlebars.register_template_file("bigint_funcs", BIGINT_FUNCS).unwrap();
-        handlebars.register_template_file("field_funcs", FIELD_FUNCS).unwrap();
-        handlebars.register_template_file("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS).unwrap();
-        handlebars.register_template_file(
+        handlebars.register_template_string("structs", STRUCTS.as_str()).unwrap();
+        handlebars.register_template_string("bigint_funcs", BIGINT_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string("field_funcs", FIELD_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string(
             "extract_word_from_bytes_le_funcs",
-            EXTRACT_WORD_FROM_BYTES_LE_FUNCS,
+            EXTRACT_WORD_FROM_BYTES_LE_FUNCS.as_str(),
         ).unwrap();
 
         let data = json!({
@@ -188,13 +213,13 @@ impl ShaderManager {
     // Test methods
     pub fn gen_test_field_shader(&self) -> String {
         let mut handlebars = Handlebars::new();
-        handlebars.register_template_file("test_field", TEST_FIELD_SHADER).unwrap();
+        handlebars.register_template_string("test_field", TEST_FIELD_SHADER.as_str()).unwrap();
         
 
-        handlebars.register_template_file("structs", STRUCTS).unwrap();
-        handlebars.register_template_file("bigint_funcs", BIGINT_FUNCS).unwrap();
-        handlebars.register_template_file("field_funcs", FIELD_FUNCS).unwrap();
-        handlebars.register_template_file("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS).unwrap();
+        handlebars.register_template_string("structs", STRUCTS.as_str()).unwrap();
+        handlebars.register_template_string("bigint_funcs", BIGINT_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string("field_funcs", FIELD_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS.as_str()).unwrap();
 
         let data = json!({
             "word_size": self.word_size,
@@ -214,14 +239,14 @@ impl ShaderManager {
 
     pub fn gen_test_point_shader(&self) -> String {
         let mut handlebars = Handlebars::new();
-        handlebars.register_template_file("test_point", TEST_POINT_SHADER).unwrap();
+        handlebars.register_template_string("test_point", TEST_POINT_SHADER.as_str()).unwrap();
         
 
-        handlebars.register_template_file("structs", STRUCTS).unwrap();
-        handlebars.register_template_file("bigint_funcs", BIGINT_FUNCS).unwrap();
-        handlebars.register_template_file("field_funcs", FIELD_FUNCS).unwrap();
-        handlebars.register_template_file("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS).unwrap();
-        handlebars.register_template_file("ec_funcs", EC_FUNCS).unwrap();
+        handlebars.register_template_string("structs", STRUCTS.as_str()).unwrap();
+        handlebars.register_template_string("bigint_funcs", BIGINT_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string("field_funcs", FIELD_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string("ec_funcs", EC_FUNCS.as_str()).unwrap();
 
         let data = json!({
             "word_size": self.word_size,

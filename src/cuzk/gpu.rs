@@ -1,10 +1,8 @@
+use std::panic;
+
+use web_sys::console;
 use wgpu::{
-    util::{BufferInitDescriptor, DeviceExt},
-    Adapter, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
-    BindGroupLayoutDescriptor, BindGroupLayoutEntry, Buffer, BufferDescriptor, BufferUsages,
-    CommandEncoder, ComputePipeline, ComputePipelineDescriptor, Device, Features, Instance, Limits,
-    MapMode, MemoryHints, PipelineCompilationOptions, PipelineLayoutDescriptor, PowerPreference,
-    Queue, ShaderModuleDescriptor, ShaderSource,
+    util::{BufferInitDescriptor, DeviceExt}, Adapter, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, Buffer, BufferAsyncError, BufferDescriptor, BufferSlice, BufferUsages, CommandEncoder, ComputePipeline, ComputePipelineDescriptor, Device, Features, Instance, Limits, MapMode, MemoryHints, PipelineCompilationOptions, PipelineLayoutDescriptor, PowerPreference, Queue, ShaderModuleDescriptor, ShaderSource
 };
 
 pub async fn get_adapter() -> Adapter {
@@ -57,7 +55,17 @@ pub fn create_storage_buffer(label: Option<&str>, device: &Device, size: u64) ->
     device.create_buffer(&BufferDescriptor {
         label: label,
         size: size,
-        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
+        // usage: BufferUsages::STORAGE,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    })
+}
+
+pub fn create_storage_and_copy_buffer(label: Option<&str>, device: &Device, size: u64) -> Buffer {
+    device.create_buffer(&BufferDescriptor {
+        label: label,
+        size: size,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     })
 }
@@ -92,19 +100,21 @@ pub fn create_and_write_uniform_buffer(
     buffer
 }
 
-pub fn read_from_gpu(
+pub async fn read_from_gpu(
     device: &Device,
     queue: &Queue,
     mut encoder: CommandEncoder,
     storage_buffers: Vec<Buffer>,
-    custom_size: u64,
 ) -> Vec<Vec<u8>> {
     let mut staging_buffers = Vec::new();
 
-    for storage_buffer in storage_buffers {
+    for (i, storage_buffer) in storage_buffers.iter().enumerate() {
+        let size = storage_buffer.size();
+        console::log_1(&format!("Storage buffer: {:?}", storage_buffer).into());
+        console::log_1(&format!("Size: {}", size).into());
         let staging_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("Staging Buffer"),
-            size: storage_buffer.size(),
+            label: Some(&format!("Staging Buffer {}", i)),
+            size: size,
             usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -113,27 +123,36 @@ pub fn read_from_gpu(
             0,
             &staging_buffer,
             0,
-            storage_buffer.size(),
+            size,
         );
         staging_buffers.push(staging_buffer);
     }
 
-    queue.submit(Some(encoder.finish()));
+    let command_buffer = encoder.finish();
 
-    println!("Staging buffers: {:?}", staging_buffers);
 
-    println!("Before mapping");
+    queue.submit(vec![command_buffer]);
+
+    console::log_1(&format!("After submit").into());
+    console::log_1(&format!("Staging buffers: {:?}", staging_buffers).into());
+
     let mut data = Vec::new();
     for staging_buffer in staging_buffers {
         let staging_slice = staging_buffer.slice(..);
-        let _buffer_future = staging_slice.map_async(MapMode::Read, |x| x.unwrap());
+        console::log_1(&format!("Staging slice: {:?}", staging_slice).into());
+        let _buffer_future = map_buffer_async_browser(staging_slice, MapMode::Read).await;
+        if let Err(e) = _buffer_future {
+            console::log_1(&format!("Error mapping buffer: {:?}", e).into());
+        }
+        console::log_1(&format!("After mapping buffer").into());
         device.poll(wgpu::Maintain::Wait);
         let result_data = staging_slice.get_mapped_range();
+        console::log_1(&format!("Result data: {:?}", result_data).into());
         data.push(result_data.to_vec());
     }
 
-    println!("After mapping");
-
+    console::log_1(&format!("Data: {:?}", data).into());
+    console::log_1(&format!("After mapping").into());
     data
 }
 
@@ -270,4 +289,20 @@ pub async fn execute_pipeline(
     cpass.set_pipeline(&pipeline);
     cpass.set_bind_group(0, &bind_group, &[]);
     cpass.dispatch_workgroups(num_x_workgroups, num_y_workgroups, num_z_workgroups);
+}
+
+pub fn map_buffer_async_browser(
+    slice: BufferSlice<'_>,
+    mode: MapMode,
+) -> impl std::future::Future<Output = Result<(), BufferAsyncError>> {
+    let (sender, receiver) = oneshot::channel();
+    slice.map_async(mode, move |res| {
+        let _ = sender.send(res);
+    });
+    async move {
+        match receiver.await {
+            Ok(result) => result,
+            Err(_) => Err(BufferAsyncError {}),
+        }
+    }
 }

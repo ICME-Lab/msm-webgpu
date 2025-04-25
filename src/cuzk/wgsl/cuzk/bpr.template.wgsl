@@ -25,11 +25,24 @@ var<storage, read_write> g_points_z: array<BigInt>;
 @group(0) @binding(6)
 var<uniform> params: vec3<u32>;
 
+fn get_r() -> BigInt {
+    var r: BigInt;
+{{{ r_limbs }}}
+    return r;
+}
+
+fn get_paf() -> Point {
+    var result: Point;
+    let r = get_r();
+    result.y = r;
+    result.z = r;
+    return result;
+}
 /// This double-and-add code is adapted from the ZPrize test harness:
 /// https://github.com/demox-labs/webgpu-msm/blob/main/src/reference/webgpu/wgsl/Curve.ts#L78.
 fn double_and_add(point: Point, scalar: u32) -> Point {
     /// Set result to the point at infinity.
-    var result: Point = POINT_IDENTITY;
+    var result: Point = get_paf();
 
     var s = scalar;
     var temp = point;
@@ -82,7 +95,7 @@ fn stage_1(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     var m = load_bucket_sum(idx);
     var g = m;
-    for (var i = 0u; i < buckets_per_thread - 1u; i ++) {
+    for (var i = 0u; i < buckets_per_thread - 1u; i++) {
         let idx = (num_threads_per_subtask - (thread_id % num_threads_per_subtask)) * 
                   buckets_per_thread - 1u - i;
         let bi = offset + idx;
@@ -100,7 +113,7 @@ fn stage_1(@builtin(global_invocation_id) global_id: vec3<u32>) {
     g_points_y[t] = g.y;
     g_points_z[t] = g.z;
 
-    {{{ recompile }}}
+    // {{{ recompile }}}
 }
 
 @compute

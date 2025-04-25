@@ -240,7 +240,6 @@ mod tests {
 
     // Perform running sum with simulated parallelism. It is up to the caller
     // to add the resulting points.
-
     fn parallel_bucket_reduction(buckets: &[G1], num_threads: usize) -> Vec<G1> {
         let buckets_per_thread = buckets.len() / num_threads;
         let mut bucket_sums: Vec<G1> = vec![];
@@ -321,43 +320,6 @@ mod tests {
             result.push(g);
         }
         result
-    }
-
-    fn sample_scalars_and_points_test(input_size: usize) -> (Vec<G1Affine>, Vec<Fr>) {
-        let mut points = vec![];
-        let mut scalars = vec![];
-
-        let v = BigUint::from_str_radix(
-            "1111111111111111111111111111111111111111111111111111111111111111111111111111",
-            10,
-        )
-        .unwrap();
-        let v_scalar: Fr = bytes_to_field(&v.to_bytes_le());
-
-        let x = BigUint::from_str_radix(
-            "2796670805570508460920584878396618987767121022598342527208237783066948667246",
-            10,
-        )
-        .unwrap();
-        let x_base: Fq = bytes_to_field(&x.to_bytes_le());
-
-        let y = BigUint::from_str_radix(
-            "8134280397689638111748378379571739274369602049665521098046934931245960532166",
-            10,
-        )
-        .unwrap();
-        let y_base: Fq = bytes_to_field(&y.to_bytes_le());
-
-        let base_point = G1Affine::from_xy(x_base, y_base).unwrap();
-        for i in 0..input_size {
-            let f_i = Fr::from(i as u64);
-            let scalar = f_i * v_scalar;
-            scalars.push(scalar);
-            let f_i1 = Fr::from(i as u64 + 1);
-            let p = base_point * f_i1;
-            points.push(p.to_affine());
-        }
-        (points, scalars)
     }
 
     #[test]

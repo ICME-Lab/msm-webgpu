@@ -6,8 +6,10 @@ use halo2curves::CurveExt;
 use num_bigint::{BigInt, BigUint};
 use num_traits::Num;
 use once_cell::sync::Lazy;
+use web_sys::console;
 use wgpu::{Buffer, CommandEncoder, CommandEncoderDescriptor, Device, Queue};
 
+use crate::cuzk::gpu::create_storage_and_copy_buffer;
 use crate::cuzk::gpu::{
     create_and_write_storage_buffer, create_and_write_uniform_buffer, create_bind_group,
     create_bind_group_layout, create_compute_pipeline, create_storage_buffer, execute_pipeline,
@@ -29,7 +31,7 @@ pub fn calc_num_words(word_size: usize) -> usize {
 }
 
 /// 13-bit limbs.
-pub const WORD_SIZE: usize = 16;
+pub const WORD_SIZE: usize = 13;
 
 pub static P: Lazy<BigInt> = Lazy::new(|| {
     BigInt::from_str_radix(
@@ -64,7 +66,7 @@ pub static PARAMS: Lazy<MiscParams> = Lazy::new(|| compute_misc_params(&P, WORD_
 pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> C::Curve {
     let input_size = scalars.len();
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
-    let num_columns = 2u32.pow(chunk_size as u32) as usize;
+    let num_columns = 1 << chunk_size;
     let num_rows = (input_size + num_columns - 1) / num_columns;
     let num_subtasks = (256 + chunk_size - 1) / chunk_size;
     let num_words = PARAMS.num_words;
@@ -87,6 +89,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
         label: Some("MSM Encoder"),
     });
+
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     // 1. Decompose scalars into chunk_size windows using signed bucket indices.             /
@@ -135,7 +138,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         num_columns,
     );
 
-    println!("C shader: {}", c_shader);
+    // println!("C shader: {}", c_shader);
 
     let (point_x_sb, point_y_sb, scalar_chunks_sb) = convert_point_coords_and_decompose_shaders(
         &c_shader,
@@ -311,6 +314,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
 
     // Stage 1: Bucket points reduction (BPR)
     for subtask_idx in (0..num_subtasks).step_by(num_subtasks_per_bpr_1) {
+
         bpr_1(
             &bpr_shader,
             subtask_idx,
@@ -363,24 +367,27 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         &queue,
         encoder,
         vec![g_points_x_sb, g_points_y_sb, g_points_z_sb],
-        0,
-    );
+    ).await;
 
+    console::log_1(&format!("Data: {:?}", data).into());
     // Destroy the GPU device object.
     device.destroy();
+    console::log_1(&format!("Device destroyed").into());
 
     let mut points = vec![];
 
     let g_points_x = u8s_to_fields_without_assertion::<
         <<C as CurveAffine>::CurveExt as CurveExt>::Base,
     >(&data[0], num_words, WORD_SIZE);
+    console::log_1(&format!("G points x: {:?}", g_points_x).into());
     let g_points_y = u8s_to_fields_without_assertion::<
         <<C as CurveAffine>::CurveExt as CurveExt>::Base,
     >(&data[1], num_words, WORD_SIZE);
+    console::log_1(&format!("G points y: {:?}", g_points_y).into());
     let g_points_z = u8s_to_fields_without_assertion::<
         <<C as CurveAffine>::CurveExt as CurveExt>::Base,
     >(&data[2], num_words, WORD_SIZE);
-
+    console::log_1(&format!("G points z: {:?}", g_points_z).into());
     for i in 0..num_subtasks {
         let mut point = C::Curve::identity();
         for j in 0..b_workgroup_size {
@@ -395,18 +402,21 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         points.push(point);
     }
 
+    console::log_1(&format!("Points: {:?}", points).into());
+
     ////////////////////////////////////////////////////////////////////////////////////////////
     // 5. Horner's Method                                                                     /
     //                                                                                        /
     // Calculate the final result using Horner's method (Formula 3 of the cuZK paper)         /
     ////////////////////////////////////////////////////////////////////////////////////////////
 
+    console::log_1(&format!("Horner's method").into());
     let m = C::ScalarExt::from(1 << chunk_size);
     let mut result = points[points.len() - 1];
     for i in (0..points.len() - 2).rev() {
         result = result * m + points[i];
     }
-
+    console::log_1(&format!("Result: {:?}", result).into());
     result
 }
 
@@ -601,7 +611,7 @@ pub fn to_u8s_for_gpu(vals: Vec<usize>) -> Vec<u8> {
     let mut buf = vec![];
     for val in vals {
         assert!((val as u64) < max);
-        buf.extend_from_slice(&val.to_le_bytes());
+        buf.extend_from_slice(&(val as u32).to_le_bytes());
     }
     buf
 }
@@ -703,6 +713,7 @@ pub async fn bpr_1(
 ) {
     // Uniform storage buffer.
     let params_bytes = to_u8s_for_gpu(vec![subtask_idx, num_columns, num_x_workgroups]);
+    println!("Params bytes: {:?}", params_bytes);
     let params_ub = create_and_write_uniform_buffer(None, device, queue, &params_bytes);
 
     let bind_group_layout = create_bind_group_layout(
