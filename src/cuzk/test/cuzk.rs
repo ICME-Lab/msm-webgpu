@@ -1,23 +1,15 @@
 #[cfg(test)]
 mod tests {
     use ff::PrimeField;
-    use group::{prime::PrimeCurveAffine, Curve, Group};
-    use halo2curves::{
-        bn256::{Fq, Fr, G1Affine, G1},
-        CurveAffine,
-    };
-    use num_bigint::BigUint;
-    use num_traits::Num;
+    use group::{Curve, Group};
+    use halo2curves::bn256::{Fr, G1Affine, G1};
 
-    use crate::{
+    use crate::
         cuzk::{
             lib::{sample_points, sample_scalars},
-            utils::{to_words_le, to_words_le_from_field},
-        },
-        halo2curves::utils::bytes_to_field,
+        utils::to_words_le_from_field,
     };
 
-    use super::*;
     /// Rust implementation of serial transpose algorithm from
     /// https://synergy.cs.vt.edu/pubs/papers/wang-transposition-ics16.pdf.
     /// It simulates running multiple transpositions in parallel, with one thread

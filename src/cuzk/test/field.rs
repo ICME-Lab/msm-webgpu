@@ -74,6 +74,8 @@ pub async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
     // Destroy the GPU device object.
     device.destroy();
 
+    println!("Data: {:?}", data[0]);
+
     let result = u8s_to_field_without_assertion::<F>(&data[0], num_words, WORD_SIZE);
 
     result
