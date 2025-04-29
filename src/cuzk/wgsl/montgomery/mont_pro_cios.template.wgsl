@@ -1,5 +1,4 @@
 {{> structs }}
-{{> montgomery_product_funcs }}
 {{> field_functions }}
 {{> bigint_functions }}
 

@@ -7,7 +7,7 @@ use crate::cuzk::{
     gpu::{
         create_and_write_storage_buffer, create_bind_group, create_bind_group_layout,
         create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device,
-        read_from_gpu,
+        read_from_gpu, read_from_gpu_test,
     },
     msm::{PARAMS, WORD_SIZE},
     shader_manager::ShaderManager,
@@ -69,13 +69,14 @@ pub async fn point_op<C: CurveAffine>(op: &str, a: C, b: C) -> C::Curve {
     execute_pipeline(&mut encoder, compute_pipeline, bind_group, 1, 1, 1).await;
 
     // Map results back from GPU to CPU.
-    let data = read_from_gpu(&device, &queue, encoder, vec![result_sb]).await;
+    let data = read_from_gpu_test(&device, &queue, encoder, vec![result_sb]).await;
 
     // Destroy the GPU device object.
     device.destroy();
 
     let result = u8s_to_fields_without_assertion::<<<C as CurveAffine>::CurveExt as CurveExt>::Base>(&data[0], num_words, WORD_SIZE);
 
+    println!("Result: {:?}", result);
     C::Curve::new_jacobian(result[0].clone(), result[1].clone(), result[2].clone()).unwrap()
 }
 
@@ -93,6 +94,7 @@ pub async fn run_webgpu_point_op_async<C: CurveAffine>(op: &str, a: C, b: C) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use group::cofactor::CofactorCurveAffine;
     use halo2curves::bn256::G1Affine;
     use rand::thread_rng;
 
@@ -100,7 +102,25 @@ mod tests {
     fn test_webgpu_point_add() {
         let mut rng = thread_rng();
         let a = G1Affine::random(&mut rng);
+        println!("a: {:?}", a);
         let b = G1Affine::random(&mut rng);
+        println!("b: {:?}", b);
+
+        let fast = a + b;
+
+        let result = run_webgpu_point_op::<G1Affine>("test_point_add", a, b);
+
+        println!("Result: {:?}", result);
+        assert_eq!(fast, result);
+    }
+
+    #[test]
+    fn test_webgpu_point_add_identity() {
+        let mut rng = thread_rng();
+        let a = G1Affine::random(&mut rng);
+        println!("a: {:?}", a);
+        let b = G1Affine::identity();
+        println!("b: {:?}", b);
 
         let fast = a + b;
 

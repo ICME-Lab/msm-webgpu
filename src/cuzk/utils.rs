@@ -3,7 +3,8 @@ use halo2curves::CurveAffine;
 use num_bigint::{BigInt, BigUint, Sign};
 use num_traits::{One, FromPrimitive};
 use num_integer::Integer;
-use crate::{cuzk::msm::calc_num_words, halo2curves::utils::field_to_bytes, utils::montgomery::{bytes_to_field_montgomery, field_to_bytes_montgomery}};
+use web_sys::console;
+use crate::{cuzk::msm::{calc_num_words, P}, halo2curves::utils::field_to_bytes, utils::montgomery::{bytes_to_field_montgomery, field_to_bytes_montgomery}};
 
   
 pub fn field_to_u8_vec_montgomery_for_gpu<F: PrimeField>(
@@ -203,13 +204,24 @@ pub fn from_words_le_without_assertion<F: PrimeField>(
     num_words: usize,
     word_size: usize,
 ) -> F {
+    assert!(num_words == limbs.len());
+
     let mut val = BigInt::ZERO;
     for i in 0..num_words {
         let exponent = (num_words - i - 1) * word_size;
-        val += BigInt::from(2).pow(exponent as u32) * BigInt::from(limbs[num_words - i - 1]);
+        // debug(&format!("exponent: {:?}", exponent));
+        let limb = limbs[num_words - i - 1];
+        // debug(&format!("limb: {:?}", limb));
+        val += BigInt::from(2).pow(exponent as u32) * BigInt::from(limb);
+        if val == *P {
+            val = BigInt::ZERO;
+        }
     }
+    // debug(&format!("val: {:?}", val));
     let bytes = val.to_bytes_le().1;
+    // debug(&format!("bytes: {:?}", bytes));
     let field = bytes_to_field_montgomery(&bytes);
+    // debug(&format!("field: {:?}", field));
     field
 }
 
@@ -299,6 +311,15 @@ pub fn compute_misc_params(
     MiscParams { num_words, n0: n0_u32.1[0], r }
 }
 
+pub fn debug(s: &str) {
+    // if wasm
+    #[cfg(target_arch = "wasm32")]
+    console::log_1(&s.into());
+    // if not wasm
+    #[cfg(not(target_arch = "wasm32"))]
+    println!("{}", s);
+}
+
 #[cfg(test)]
 mod tests {
     use halo2curves::bn256::Fr;
@@ -311,12 +332,13 @@ mod tests {
     fn test_to_words_le_from_le_bytes() {
         let val = sample_scalars::<Fr>(1)[0];
         let bytes = field_to_bytes(&val);
-        let word_size = 16;
-        let num_words = calc_num_words(word_size);
+        for word_size in 13..17 {
+            let num_words = calc_num_words(word_size);
 
-        let v = BigInt::from_bytes_le(Sign::Plus, &bytes);
-        let limbs = to_words_le(&v, num_words, word_size);
-        let limbs_from_le_bytes = to_words_le_from_le_bytes(&bytes, num_words, word_size);
-        assert_eq!(limbs, limbs_from_le_bytes);
+            let v = BigInt::from_bytes_le(Sign::Plus, &bytes);
+            let limbs = to_words_le(&v, num_words, word_size);
+            let limbs_from_le_bytes = to_words_le_from_le_bytes(&bytes, num_words, word_size);
+            assert_eq!(limbs, limbs_from_le_bytes);
+        }
     }
 }

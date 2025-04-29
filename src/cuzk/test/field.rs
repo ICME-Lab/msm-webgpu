@@ -7,7 +7,7 @@ use crate::cuzk::{
     gpu::{
         create_and_write_storage_buffer, create_bind_group, create_bind_group_layout,
         create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device,
-        read_from_gpu,
+        read_from_gpu, read_from_gpu_test,
     },
     msm::{PARAMS, WORD_SIZE},
     shader_manager::ShaderManager,
@@ -69,7 +69,7 @@ pub async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
     execute_pipeline(&mut encoder, compute_pipeline, bind_group, 1, 1, 1).await;
 
     // Map results back from GPU to CPU.
-    let data = read_from_gpu(&device, &queue, encoder, vec![result_sb]).await;
+    let data = read_from_gpu_test(&device, &queue, encoder, vec![result_sb]).await;
 
     // Destroy the GPU device object.
     device.destroy();
@@ -94,6 +94,8 @@ pub async fn run_webgpu_field_op_async<F: PrimeField>(op: &str, a: F, b: F) -> F
 
 #[cfg(test)]
 mod tests {
+    use crate::cuzk::{lib::sample_scalars, utils::field_to_u8_vec_for_gpu};
+
     use super::*;
     use ff::Field;
     use halo2curves::bn256::Fq;
@@ -101,30 +103,38 @@ mod tests {
 
     #[test]
     fn test_webgpu_field_add() {
-        let mut rng = thread_rng();
-        let a = Fq::random(&mut rng);
-        let b = Fq::random(&mut rng);
+        let scalars = sample_scalars::<Fq>(50);
+        for scalar in scalars.chunks(2) {
+            let a = scalar[0];
+            let b = scalar[1];
 
-        let fast = a + b;
+            let fast = a + b;
+            let fast_bytes = field_to_u8_vec_montgomery_for_gpu(&fast, PARAMS.num_words, WORD_SIZE);
+            println!("Fast bytes: {:?}", fast_bytes);
 
-        let result = run_webgpu_field_op::<Fq>("test_field_add", a, b);
+            let result = run_webgpu_field_op::<Fq>("test_field_add", a, b);
 
-        println!("Result: {:?}", result);
-        assert_eq!(fast, result);
+            println!("Result: {:?}", result);
+            assert_eq!(fast, result);
+        }
     }
 
     #[test]
     fn test_webgpu_field_sub() {
-        let mut rng = thread_rng();
-        let a = Fq::random(&mut rng);
-        let b = Fq::random(&mut rng);
+        let scalars = sample_scalars::<Fq>(50);
+        for scalar in scalars.chunks(2) {
+            let a = scalar[0];
+            let b = scalar[1];
 
-        let fast = a - b;
+            let fast = a - b;
+            let fast_bytes = field_to_u8_vec_montgomery_for_gpu(&fast, PARAMS.num_words, WORD_SIZE);
+            println!("Fast bytes: {:?}", fast_bytes);
 
-        let result = run_webgpu_field_op::<Fq>("test_field_sub", a, b);
+            let result = run_webgpu_field_op::<Fq>("test_field_sub", a, b);
 
-        println!("Result: {:?}", result);
-        assert_eq!(fast, result);
+            println!("Result: {:?}", result);
+            assert_eq!(fast, result);
+        }
     }
 
     #[test]
@@ -135,7 +145,10 @@ mod tests {
 
         let fast = a * b;
 
+        let fast_bytes = field_to_u8_vec_montgomery_for_gpu(&fast, PARAMS.num_words, WORD_SIZE);
+        println!("Fast bytes: {:?}", fast_bytes);
         let result = run_webgpu_field_op::<Fq>("test_montgomery_product", a, b);
+
 
         println!("Result: {:?}", result);
         assert_eq!(fast, result);

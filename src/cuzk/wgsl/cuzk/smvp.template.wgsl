@@ -32,13 +32,13 @@ fn get_r() -> BigInt {
     return r;
 }
 
-// fn get_paf() -> Point {
-//     var result: Point;
-//     let r = get_r();
-//     result.y = r;
-//     result.z = r;
-//     return result;
-// }
+fn get_paf() -> Point {
+    var result: Point;
+    let r = get_r();
+    result.y = r;
+    result.z = r;
+    return result;
+}
 
 /// Point negation only involves multiplying the X and T coordinates by -1 in
 /// the field.
@@ -101,7 +101,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             /// bound to a shader, so we do so here. Fortunately the computation
             /// is relatively simple: t = xyr and z = 1r.
             // var t = montgomery_product(&x, &y);
-            var z = get_r();
+            // var z = get_r();
+            var z = ZERO;
 
             let pt = Point(x, y, z);
             sum = point_add(sum, pt);

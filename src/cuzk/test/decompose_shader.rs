@@ -1,32 +1,29 @@
 use std::{iter::zip, time::Instant};
 
-use ff::PrimeField;
-use halo2curves::{CurveAffine, CurveExt};
+use halo2curves::CurveAffine;
 use wgpu::CommandEncoderDescriptor;
 
 use crate::cuzk::{
     gpu::{
-        create_and_write_storage_buffer, create_bind_group, create_bind_group_layout,
-        create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device,
-        read_from_gpu,
-    }, lib::{points_to_bytes, scalars_to_bytes}, msm::{convert_point_coords_and_decompose_shaders, PARAMS, WORD_SIZE}, shader_manager::ShaderManager, utils::{field_to_u8_vec_montgomery_for_gpu, u8s_to_field_without_assertion, u8s_to_fields_without_assertion}
+        get_adapter, get_device, read_from_gpu_test,
+    }, lib::{points_to_bytes, scalars_to_bytes}, msm::{convert_point_coords_and_decompose_shaders, PARAMS, WORD_SIZE}, shader_manager::ShaderManager, utils::{debug, field_to_u8_vec_montgomery_for_gpu, u8s_to_field_without_assertion, u8s_to_fields_without_assertion}
 };
 
-pub async fn decompose<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> Vec<C> {
+pub async fn decompose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> (Vec<C>, Vec<u8>) {
     let input_size = scalars.len();
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_columns = 1 << chunk_size;
     let num_rows = (input_size + num_columns - 1) / num_columns;
     let num_subtasks = (256 + chunk_size - 1) / chunk_size;
     let num_words = PARAMS.num_words;
-    println!("Input size: {}", input_size);
-    println!("Chunk size: {}", chunk_size);
-    println!("Num columns: {}", num_columns);
-    println!("Num rows: {}", num_rows);
-    println!("Num subtasks: {}", num_subtasks);
-    println!("Num words: {}", num_words);
-    println!("Word size: {}", WORD_SIZE);
-    println!("Params: {:?}", PARAMS);
+    debug(&format!("Input size: {}", input_size));
+    debug(&format!("Chunk size: {}", chunk_size));
+    debug(&format!("Num columns: {}", num_columns));
+    debug(&format!("Num rows: {}", num_rows));
+    debug(&format!("Num subtasks: {}", num_subtasks));
+    debug(&format!("Num words: {}", num_words));
+    debug(&format!("Word size: {}", WORD_SIZE));
+    debug(&format!("Params: {:?}", PARAMS));
 
     let point_bytes = points_to_bytes(points);
     let scalar_bytes = scalars_to_bytes(scalars);
@@ -78,8 +75,8 @@ pub async fn decompose<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> V
 
     let c_shader = shader_manager.gen_decomp_scalars_shader(
         c_workgroup_size,
-        c_num_x_workgroups,
         c_num_y_workgroups,
+        num_subtasks,
         num_columns,
     );
 
@@ -101,12 +98,12 @@ pub async fn decompose<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> V
     )
     .await;
     // Map results back from GPU to CPU.
-    let data = read_from_gpu(&device, &queue, encoder, vec![point_x_sb, point_y_sb, scalar_chunks_sb]).await;
+    let data = read_from_gpu_test(&device, &queue, encoder, vec![point_x_sb, point_y_sb, scalar_chunks_sb]).await;
 
     // Destroy the GPU device object.
     device.destroy();
 
-    println!("Data: {:?}", data[0]);
+    // println!("Data: {:?}", data[0]);
 
     let p_x = u8s_to_fields_without_assertion::<
        C::Base,
@@ -115,35 +112,54 @@ pub async fn decompose<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> V
         C::Base,
     >(&data[1], num_words, WORD_SIZE);
 
-    zip(p_x, p_y).map(|(x, y)| C::from_xy(x, y).unwrap()).collect::<Vec<_>>()
-    
+    let p = zip(p_x, p_y).enumerate().map(|(i, (x, y))| {
+        let p = C::from_xy(x, y).unwrap();
+        if p.is_identity().into() {
+            println!("x: {:?}, y: {:?}", x, y);
+            println!("i: {:?}", i);
+            assert!(false);
+        }
+        p
+    }).collect::<Vec<_>>();
+    (p, data[2].clone())
 
 }
 
-pub fn run_webgpu_decompose<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> Vec<C> {
+pub fn run_webgpu_decompose<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> (Vec<C>, Vec<u8>) {
     pollster::block_on(run_webgpu_decompose_async(points, scalars))
 }
 
-pub async fn run_webgpu_decompose_async<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> Vec<C> {
+pub async fn run_webgpu_decompose_async<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> (Vec<C>, Vec<u8>) {
     let now = Instant::now();
-    let result = decompose::<C>(points, scalars).await;
+    let result = decompose_shader::<C>(points, scalars).await;
     println!("Decompose time: {:?}", now.elapsed());
     result
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::cuzk::lib::{sample_points, sample_scalars};
+    use crate::cuzk::{lib::{sample_points, sample_scalars}, test::cuzk::decompose_scalars_signed};
 
     use super::*;
     use halo2curves::bn256::{Fr, G1Affine};
 
     #[test]
     fn test_webgpu_decompose() {
-        let scalars = sample_scalars::<Fr>(10);
-        let points = sample_points::<G1Affine>(10);
+        let input_size = 1 << 16;
+        let scalars = sample_scalars::<Fr>(input_size);
+        let points = sample_points::<G1Affine>(input_size);
 
-        let result = run_webgpu_decompose::<G1Affine>(&points, &scalars);
-        assert_eq!(result, points);
+        let chunk_size: usize = 16;
+        let num_columns = 1 << chunk_size;
+        let num_rows = (input_size + num_columns - 1) / num_columns;
+        let num_chunks_per_scalar = (256 + chunk_size - 1) / chunk_size;
+        let num_subtasks = num_chunks_per_scalar;
+
+        let (result_points, result_scalars) = run_webgpu_decompose::<G1Affine>(&points, &scalars);
+
+        assert_eq!(result_points, points);
+
+        let decomposed_scalars = decompose_scalars_signed(&scalars, num_subtasks, chunk_size);
+        println!("Decomposed scalars: {:?}", decomposed_scalars);
     }
 }

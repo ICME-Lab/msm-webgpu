@@ -1,8 +1,4 @@
-use std::collections::BTreeMap;
-
 use handlebars::Handlebars;
-use num_bigint::{BigInt, BigUint};
-use num_traits::{Num, One};
 use once_cell::sync::Lazy;
 use serde_json::json;
 
@@ -14,9 +10,14 @@ pub static EXTRACT_WORD_FROM_BYTES_LE_FUNCS: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/cuzk/extract_word_from_bytes_le.template.wgsl").to_string()
 });
 pub static MONTGOMERY_PRODUCT_FUNCS: Lazy<String> = Lazy::new(|| {
-    include_str!("wgsl/montgomery/mont_pro_product.template.wgsl").to_string()
+    include_str!("wgsl/montgomery/mont_product.template.wgsl").to_string()
 });
-// pub const MONTGOMERY_PRODUCT_FUNCS: &str = "src/cuzk/wgsl/montgomery/mont_product.template.wgsl";
+// pub static MONTGOMERY_PRODUCT_FUNCS: Lazy<String> = Lazy::new(|| {
+//     include_str!("wgsl/montgomery/mont_pro_product.template.wgsl").to_string()
+// });
+// pub static MONTGOMERY_PRODUCT_FUNCS: Lazy<String> = Lazy::new(|| {
+//     include_str!("wgsl/montgomery/mont_pro_cios.template.wgsl").to_string()
+// });
 pub static EC_FUNCS: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/curve/ec.template.wgsl").to_string()
 });
@@ -40,7 +41,6 @@ pub static SMVP_SHADER: Lazy<String> = Lazy::new(|| {
 pub static BPR_SHADER: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/cuzk/bpr.template.wgsl").to_string()
 });
-// pub const DECOMPOSE_SCALARS_SHADER: &str = "src/cuzk/wgsl/cuzk/decompose_scalars.template.wgsl";
 pub static TEST_FIELD_SHADER: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/test/test_field.wgsl").to_string()
 });
@@ -172,6 +172,10 @@ impl ShaderManager {
         num_subtasks: usize,
         num_columns: usize,
     ) -> String {
+        println!("num_columns: {:?}", num_columns);
+        println!("num_y_workgroups: {:?}", num_y_workgroups);
+        println!("num_subtasks: {:?}", num_subtasks);
+        println!("workgroup_size: {:?}", workgroup_size);
         let mut handlebars = Handlebars::new();
         handlebars
             .register_template_string("decomp_scalars", DECOMPOSE_SCALARS_SHADER.as_str())

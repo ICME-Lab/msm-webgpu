@@ -42,7 +42,7 @@ fn get_paf() -> Point {
 /// https://github.com/demox-labs/webgpu-msm/blob/main/src/reference/webgpu/wgsl/Curve.ts#L78.
 fn double_and_add(point: Point, scalar: u32) -> Point {
     /// Set result to the point at infinity.
-    var result: Point = get_paf();
+    var result: Point = POINT_IDENTITY; // get_paf();
 
     var s = scalar;
     var temp = point;

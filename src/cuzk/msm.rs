@@ -1,15 +1,12 @@
-use ff::PrimeField;
-use group::{Curve, Group};
-use halo2curves::bn256::G1Affine;
+use group::Group;
 use halo2curves::CurveAffine;
 use halo2curves::CurveExt;
-use num_bigint::{BigInt, BigUint};
+use num_bigint::BigInt;
 use num_traits::Num;
 use once_cell::sync::Lazy;
 use web_sys::console;
 use wgpu::{Buffer, CommandEncoder, CommandEncoderDescriptor, Device, Queue};
 
-use crate::cuzk::gpu::create_storage_and_copy_buffer;
 use crate::cuzk::gpu::{
     create_and_write_storage_buffer, create_and_write_uniform_buffer, create_bind_group,
     create_bind_group_layout, create_compute_pipeline, create_storage_buffer, execute_pipeline,
@@ -17,10 +14,11 @@ use crate::cuzk::gpu::{
 };
 use crate::cuzk::lib::{points_to_bytes, scalars_to_bytes};
 use crate::cuzk::shader_manager::ShaderManager;
+use crate::cuzk::utils::debug;
 
 use super::utils::{compute_misc_params, u8s_to_fields_without_assertion, MiscParams};
 
-// TODO: HARDCODE THE VALUE FOR BN256
+// TODO: HARDCODE THE VALUE FOR BN256 FOR EFFICIENCY
 pub fn calc_num_words(word_size: usize) -> usize {
     let p_width = 254;
     let mut num_words = p_width / word_size;
@@ -133,8 +131,8 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
 
     let c_shader = shader_manager.gen_decomp_scalars_shader(
         c_workgroup_size,
-        c_num_x_workgroups,
         c_num_y_workgroups,
+        num_subtasks,
         num_columns,
     );
 
@@ -156,10 +154,6 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     )
     .await;
 
-    println!("Point X buffer: {:?}", point_x_sb.size());
-    println!("Point Y buffer: {:?}", point_y_sb.size());
-    println!("Scalar chunks buffer: {:?}", scalar_chunks_sb.size());
-
     ////////////////////////////////////////////////////////////////////////////////////////////
     // 2. Sparse Matrix Transposition                                                         /
     //                                                                                        /
@@ -180,7 +174,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
 
     let t_shader = shader_manager.gen_transpose_shader(num_subtasks);
 
-    println!("T shader: {}", t_shader);
+    debug(&format!("T shader: {}", t_shader));
 
     let (all_csc_col_ptr_sb, all_csc_val_idxs_sb) = transpose_gpu(
         &t_shader,
@@ -197,10 +191,6 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         scalar_chunks_sb,
     )
     .await;
-
-    println!("All CSC col ptr buffer: {:?}", all_csc_col_ptr_sb.size());
-    println!("All CSC val idxs buffer: {:?}", all_csc_val_idxs_sb.size());
-
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     // 3. Sparse Matrix Vector Product (SMVP)                                                 /
@@ -369,31 +359,32 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         vec![g_points_x_sb, g_points_y_sb, g_points_z_sb],
     ).await;
 
-    console::log_1(&format!("Data: {:?}", data).into());
+    debug(&format!("Data: {:?}", data));
     // Destroy the GPU device object.
     device.destroy();
-    console::log_1(&format!("Device destroyed").into());
+    debug(&format!("Device destroyed"));
 
     let mut points = vec![];
 
     let g_points_x = u8s_to_fields_without_assertion::<
         <<C as CurveAffine>::CurveExt as CurveExt>::Base,
     >(&data[0], num_words, WORD_SIZE);
-    console::log_1(&format!("G points x: {:?}", g_points_x).into());
+    debug(&format!("G points x: {:?}", g_points_x));
     let g_points_y = u8s_to_fields_without_assertion::<
         <<C as CurveAffine>::CurveExt as CurveExt>::Base,
     >(&data[1], num_words, WORD_SIZE);
-    console::log_1(&format!("G points y: {:?}", g_points_y).into());
+    debug(&format!("G points y: {:?}", g_points_y));
     let g_points_z = u8s_to_fields_without_assertion::<
         <<C as CurveAffine>::CurveExt as CurveExt>::Base,
     >(&data[2], num_words, WORD_SIZE);
-    console::log_1(&format!("G points z: {:?}", g_points_z).into());
+    debug(&format!("G points z: {:?}", g_points_z));
     for i in 0..num_subtasks {
         let mut point = C::Curve::identity();
         for j in 0..b_workgroup_size {
             let reduced_point = C::Curve::new_jacobian(
                 g_points_x[i * b_workgroup_size + j],
                 g_points_y[i * b_workgroup_size + j],
+                // <<C as CurveAffine>::CurveExt as CurveExt>::Base::from(1),
                 g_points_z[i * b_workgroup_size + j],
             )
             .unwrap();
@@ -402,7 +393,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         points.push(point);
     }
 
-    console::log_1(&format!("Points: {:?}", points).into());
+    debug(&format!("Points: {:?}", points));
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     // 5. Horner's Method                                                                     /
@@ -410,13 +401,13 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     // Calculate the final result using Horner's method (Formula 3 of the cuZK paper)         /
     ////////////////////////////////////////////////////////////////////////////////////////////
 
-    console::log_1(&format!("Horner's method").into());
+    debug(&format!("Horner's method"));
     let m = C::ScalarExt::from(1 << chunk_size);
     let mut result = points[points.len() - 1];
     for i in (0..points.len() - 2).rev() {
         result = result * m + points[i];
     }
-    console::log_1(&format!("Result: {:?}", result).into());
+    debug(&format!("Result: {:?}", result));
     result
 }
 
@@ -460,6 +451,7 @@ pub async fn convert_point_coords_and_decompose_shaders(
     let points_sb = create_and_write_storage_buffer(Some("Points buffer"), device, points_bytes);
     let scalars_sb = create_and_write_storage_buffer(Some("Scalars buffer"), device, scalars_bytes);
 
+    debug(&format!("Input size: {:?}", input_size));
     let points_x_sb = create_storage_buffer(
         Some("Point X buffer"),
         device,
@@ -637,8 +629,13 @@ pub async fn smvp_gpu(
     bucket_sum_y_sb: &Buffer,
     bucket_sum_z_sb: &Buffer,
 ) {
+    println!("Input size: {:?}", input_size);
+    println!("num_y_workgroups: {:?}", num_y_workgroups);
+    println!("num_z_workgroups: {:?}", num_z_workgroups);
+    println!("offset: {:?}", offset);
     // Uniform Storage Buffer.
     let params_bytes = to_u8s_for_gpu(vec![input_size, num_y_workgroups, num_z_workgroups, offset]);
+    println!("Params bytes: {:?}", params_bytes);
     let params_ub = create_and_write_uniform_buffer(None, device, queue, &params_bytes);
 
     let bind_group_layout = create_bind_group_layout(

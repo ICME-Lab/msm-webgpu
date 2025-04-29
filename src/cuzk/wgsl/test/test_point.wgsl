@@ -20,23 +20,3 @@ fn test_point_add(
     result = point_add(a, b);
 }
 
-
-// @compute @workgroup_size(1)
-// fn test_field_add(
-//     @builtin(global_invocation_id) global_id: vec3<u32>,
-//     @builtin(local_invocation_id) local_id: vec3<u32>
-// ) {
-//     var x = a;
-//     var y = b;
-//     result = field_add(&x, &y);
-// }
-
-// @compute @workgroup_size(1)
-// fn test_field_sub(
-//     @builtin(global_invocation_id) global_id: vec3<u32>,
-//     @builtin(local_invocation_id) local_id: vec3<u32>
-// ) {
-//     var x = a;
-//     var y = b;
-//     result = field_sub(&x, &y);   
-// }

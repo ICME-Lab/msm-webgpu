@@ -55,20 +55,12 @@ pub fn create_storage_buffer(label: Option<&str>, device: &Device, size: u64) ->
     device.create_buffer(&BufferDescriptor {
         label: label,
         size: size,
-        // usage: BufferUsages::STORAGE,
         usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     })
 }
 
-pub fn create_storage_and_copy_buffer(label: Option<&str>, device: &Device, size: u64) -> Buffer {
-    device.create_buffer(&BufferDescriptor {
-        label: label,
-        size: size,
-        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    })
-}
+
 
 pub fn create_and_write_storage_buffer(
     label: Option<&str>,
@@ -132,6 +124,7 @@ pub async fn read_from_gpu(
 
 
     queue.submit(vec![command_buffer]);
+    device.poll(wgpu::Maintain::Wait);
 
     console::log_1(&format!("After submit").into());
     console::log_1(&format!("Staging buffers: {:?}", staging_buffers).into());
@@ -140,6 +133,7 @@ pub async fn read_from_gpu(
     for staging_buffer in staging_buffers {
         let staging_slice = staging_buffer.slice(..);
         console::log_1(&format!("Staging slice: {:?}", staging_slice).into());
+        // let _buffer_future = staging_slice.map_async(MapMode::Read, |x| x.unwrap());
         let _buffer_future = map_buffer_async_browser(staging_slice, MapMode::Read).await;
         if let Err(e) = _buffer_future {
             console::log_1(&format!("Error mapping buffer: {:?}", e).into());
@@ -153,6 +147,51 @@ pub async fn read_from_gpu(
 
     console::log_1(&format!("Data: {:?}", data).into());
     console::log_1(&format!("After mapping").into());
+    data
+}
+
+
+
+pub async fn read_from_gpu_test(
+    device: &Device,
+    queue: &Queue,
+    mut encoder: CommandEncoder,
+    storage_buffers: Vec<Buffer>,
+) -> Vec<Vec<u8>> {
+    let mut staging_buffers = Vec::new();
+
+    for (i, storage_buffer) in storage_buffers.iter().enumerate() {
+        let size = storage_buffer.size();
+        let staging_buffer = device.create_buffer(&BufferDescriptor {
+            label: Some(&format!("Staging Buffer {}", i)),
+            size: size,
+            usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        encoder.copy_buffer_to_buffer(
+            &storage_buffer,
+            0,
+            &staging_buffer,
+            0,
+            size,
+        );
+        staging_buffers.push(staging_buffer);
+    }
+
+    let command_buffer = encoder.finish();
+
+
+    queue.submit(vec![command_buffer]);
+
+    let mut data = Vec::new();
+    for staging_buffer in staging_buffers {
+        let staging_slice = staging_buffer.slice(..);
+        let _buffer_future = staging_slice.map_async(MapMode::Read, |x| x.unwrap());
+        device.poll(wgpu::Maintain::Wait);
+        let result_data = staging_slice.get_mapped_range();
+        data.push(result_data.to_vec());
+    }
+
     data
 }
 

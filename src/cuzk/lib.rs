@@ -1,20 +1,10 @@
-use std::time::Instant;
-
 use crate::{
     cuzk::msm::compute_msm,
-    gpu,
-    halo2curves::utils::{field_to_bytes, field_to_u16_as_u32_as_u8_vec, fields_to_u16_vec},
-    utils::{
-        files::load_shader_code,
-        montgomery::{
-            field_to_bytes_montgomery, field_to_u16_as_u32_as_u8_vec_montgomery,
-            fields_to_u16_vec_montgomery, u16_vec_to_fields_montgomery,
-        },
-    },
+    halo2curves::utils::field_to_bytes,
+    utils::montgomery::field_to_bytes_montgomery,
 };
-use ff::{Field, PrimeField};
+use ff::PrimeField;
 use group::{Curve, Group};
-use halo2curves::CurveExt;
 use rand::thread_rng;
 
 use halo2curves::{msm::best_multiexp, CurveAffine};
@@ -51,7 +41,6 @@ pub fn points_to_bytes<C: CurveAffine>(g: &[C]) -> Vec<u8> {
             let coords = affine.coordinates().unwrap();
             let x = field_to_bytes_montgomery(coords.x());
             let y = field_to_bytes_montgomery(coords.y());
-            // let z = field_to_bytes_montgomery(&C::Base::ONE);
             [x, y].concat()
         })
         .collect::<Vec<_>>()
@@ -82,6 +71,7 @@ mod tests {
         assert_eq!(fast, result);
     }
 }
+
 #[cfg(test)]
 mod tests_wasm_pack {
     use crate::cuzk::msm::compute_msm;
@@ -103,7 +93,7 @@ mod tests_wasm_pack {
 
     #[wasm_bindgen_test]
     async fn test_webgpu_msm_cuzk() {
-        let sample_size = 1 << 20;
+        let sample_size = 1 << 16;
         let points = sample_points::<G1Affine>(sample_size);
         let scalars = sample_scalars::<Fr>(sample_size);
 

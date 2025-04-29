@@ -56,7 +56,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     /// Convert the byte arrays to BigInts with word_size limbs.
     var x_bigint: BigInt;
     var y_bigint: BigInt;
-    for (var i = 0u; i < NUM_WORDS - 1u; i ++) {
+    for (var i = 0u; i < NUM_WORDS - 1u; i++) {
         x_bigint.limbs[i] = extract_word_from_bytes_le(x_bytes, i, WORD_SIZE);
         y_bigint.limbs[i] = extract_word_from_bytes_le(y_bytes, i, WORD_SIZE);
     }
