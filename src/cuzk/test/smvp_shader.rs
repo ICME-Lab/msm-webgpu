@@ -1,12 +1,18 @@
 use std::{iter::zip, time::Instant};
 
-use halo2curves::CurveAffine;
+use halo2curves::{CurveAffine, CurveExt};
+use group::Curve;
 use wgpu::CommandEncoderDescriptor;
 
 use crate::cuzk::{
-    gpu::{
-        create_storage_buffer, get_adapter, get_device, read_from_gpu_test
-    }, lib::{points_to_bytes, scalars_to_bytes}, msm::{convert_point_coords_and_decompose_shaders, smvp_gpu, transpose_gpu, PARAMS, WORD_SIZE}, shader_manager::ShaderManager, utils::{debug, field_to_u8_vec_montgomery_for_gpu, u8s_to_field_without_assertion, u8s_to_fields_without_assertion}
+    gpu::{create_storage_buffer, get_adapter, get_device, read_from_gpu_test},
+    lib::{points_to_bytes, scalars_to_bytes},
+    msm::{convert_point_coords_and_decompose_shaders, smvp_gpu, transpose_gpu, PARAMS, WORD_SIZE},
+    shader_manager::ShaderManager,
+    utils::{
+        debug, field_to_u8_vec_montgomery_for_gpu, u8s_to_field_without_assertion,
+        u8s_to_fields_without_assertion,
+    },
 };
 
 pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> Vec<Vec<u8>> {
@@ -35,7 +41,6 @@ pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
         label: Some("Decompose Encoder"),
     });
-
 
     // Total thread count = workgroup_size * #x workgroups * #y workgroups * #z workgroups.
     let mut c_workgroup_size = 64;
@@ -82,22 +87,22 @@ pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
 
     // println!("C shader: {}", c_shader);
 
-    let (point_x_sb, point_y_sb, scalar_chunks_sb) = convert_point_coords_and_decompose_shaders(
-        &c_shader,
-        c_num_x_workgroups,
-        c_num_y_workgroups,
-        c_num_z_workgroups,
-        &device,
-        &queue,
-        &mut encoder,
-        &point_bytes,
-        &scalar_bytes,
-        num_subtasks,
-        chunk_size,
-        num_words,
-    )
-    .await;
-
+    let (point_x_sb, point_y_sb, point_z_sb, scalar_chunks_sb) =
+        convert_point_coords_and_decompose_shaders(
+            &c_shader,
+            c_num_x_workgroups,
+            c_num_y_workgroups,
+            c_num_z_workgroups,
+            &device,
+            &queue,
+            &mut encoder,
+            &point_bytes,
+            &scalar_bytes,
+            num_subtasks,
+            chunk_size,
+            num_words,
+        )
+        .await;
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     // 2. Sparse Matrix Transposition                                                         /
@@ -118,8 +123,6 @@ pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     let t_num_z_workgroups = 1;
 
     let t_shader = shader_manager.gen_transpose_shader(num_subtasks);
-
-    debug(&format!("T shader: {}", t_shader));
 
     let (all_csc_col_ptr_sb, all_csc_val_idxs_sb) = transpose_gpu(
         &t_shader,
@@ -203,6 +206,7 @@ pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
             &all_csc_col_ptr_sb,
             &point_x_sb,
             &point_y_sb,
+            &point_z_sb,
             &all_csc_val_idxs_sb,
             &bucket_sum_x_sb,
             &bucket_sum_y_sb,
@@ -211,33 +215,64 @@ pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         .await;
     }
     // Map results back from GPU to CPU.
-    let data = read_from_gpu_test(&device, &queue, encoder, vec![bucket_sum_x_sb, bucket_sum_y_sb, bucket_sum_z_sb]).await;
+    let data = read_from_gpu_test(
+        &device,
+        &queue,
+        encoder,
+        vec![bucket_sum_x_sb, bucket_sum_y_sb, bucket_sum_z_sb],
+    )
+    .await;
 
     // Destroy the GPU device object.
     device.destroy();
 
-    // debug(&format!("bucket_sum_x_sb: {:?}", data[0].iter().filter(|x| **x != 0).collect::<Vec<_>>()));
-    // debug(&format!("bucket_sum_y_sb: {:?}", data[1].iter().filter(|x| **x != 0).collect::<Vec<_>>()));
-    debug(&format!("bucket_sum_z_sb: {:?}", data[2].iter().filter(|x| **x != 0).collect::<Vec<_>>()));
+    let p_x = u8s_to_fields_without_assertion::<C::Base>(
+        &data[0], num_words, WORD_SIZE,
+    );
+    let p_y = u8s_to_fields_without_assertion::<C::Base>(
+        &data[1], num_words, WORD_SIZE,
+    );
+    let p_z = u8s_to_fields_without_assertion::<C::Base>(
+        &data[2], num_words, WORD_SIZE,
+    );
 
+    let p = zip(zip(p_x, p_y), p_z)
+        .enumerate()
+        .map(|(i, ((x, y), z))| {
+            debug(&format!("Coordinate {} x: {:?}", i, x));
+            debug(&format!("Coordinate {} y: {:?}", i, y));
+            debug(&format!("Coordinate {} z: {:?}", i, z));
+            let p_affine = C::from_xy(x, y).unwrap();
+            debug(&format!("Point {} affine: {:?}", i, p_affine));
+            // let p = C::Curve::new_jacobian(x, y, z).unwrap();
+            // debug(&format!("Point {} p: {:?}", i, p));
+            // p.to_affine()
+            p_affine
+        })
+        .collect::<Vec<_>>();
     data
-
 }
 
 pub fn run_webgpu_smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> Vec<Vec<u8>> {
     pollster::block_on(run_webgpu_smvp_shader_async(points, scalars))
 }
 
-pub async fn run_webgpu_smvp_shader_async<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> Vec<Vec<u8>> {
+pub async fn run_webgpu_smvp_shader_async<C: CurveAffine>(
+    points: &[C],
+    scalars: &[C::Scalar],
+) -> Vec<Vec<u8>> {
     let now = Instant::now();
     let result = smvp_shader::<C>(points, scalars).await;
-    println!("Decompose time: {:?}", now.elapsed());
+    println!("SMVP time: {:?}", now.elapsed());
     result
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::cuzk::{lib::{sample_points, sample_scalars}, test::cuzk::decompose_scalars_signed};
+    use crate::cuzk::{
+        lib::{sample_points, sample_scalars},
+        test::cuzk::decompose_scalars_signed,
+    };
 
     use super::*;
     use halo2curves::bn256::{Fr, G1Affine};

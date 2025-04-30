@@ -100,17 +100,45 @@ fn scalar_mul(p: Point, k: BigInt) -> Point {
     return r;
 }
 
-fn small_scalar_mul(p: Point, k: u32) -> Point {
-    var r: Point = POINT_IDENTITY;
-    var t: Point = p;
-    var k_s = k;
-    for (var j = 0u; j < WORD_SIZE; j = j + 1u) {
-        if ((k_s & 1) == 1u) {
-            r = point_add(r, t);
-        }
-        t = point_double(t);
-        k_s = k_s >> 1;
-    }
+/// Point negation only involves multiplying the X and T coordinates by -1 in
+/// the field.
+fn negate_point(point: Point) -> Point {
+    var p = get_p();
+    var y = point.y;
+    var neg_y: BigInt;
+    bigint_sub(&p, &y, &neg_y);
+    return Point(point.x, neg_y, point.z);
+}
+
+fn get_r() -> BigInt {
+    var r: BigInt;
+{{{ r_limbs }}}
     return r;
+}
+
+fn get_paf() -> Point {
+    var result: Point;
+    let r = get_r();
+    result.y = r;
+    result.z = r;
+    return result;
+}
+/// This double-and-add code is adapted from the ZPrize test harness:
+/// https://github.com/demox-labs/webgpu-msm/blob/main/src/reference/webgpu/wgsl/Curve.ts#L78.
+fn double_and_add(point: Point, scalar: u32) -> Point {
+    /// Set result to the point at infinity.
+    var result: Point = POINT_IDENTITY; // get_paf();
+
+    var s = scalar;
+    var temp = point;
+
+    while (s != 0u) {
+        if ((s & 1u) == 1u) {
+            result = point_add(result, temp);
+        }
+        temp = point_double(temp);
+        s = s >> 1u;
+    }
+    return result;
 }
 

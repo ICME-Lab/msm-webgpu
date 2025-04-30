@@ -102,6 +102,8 @@ impl ShaderManager {
     }
 
     pub fn gen_smvp_shader(&self, workgroup_size: usize, num_csr_cols: usize) -> String {
+        println!("num_csr_cols: {:?}", num_csr_cols);
+        println!("workgroup_size: {:?}", workgroup_size);
         let mut handlebars = Handlebars::new();
         handlebars
             .register_template_string("smvp", SMVP_SHADER.as_str())

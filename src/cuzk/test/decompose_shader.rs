@@ -1,6 +1,7 @@
 use std::{iter::zip, time::Instant};
 
-use halo2curves::CurveAffine;
+use halo2curves::{CurveAffine, CurveExt};
+use group::Curve;
 use wgpu::CommandEncoderDescriptor;
 
 use crate::cuzk::{
@@ -82,7 +83,7 @@ pub async fn decompose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar
 
     // println!("C shader: {}", c_shader);
 
-    let (point_x_sb, point_y_sb, scalar_chunks_sb) = convert_point_coords_and_decompose_shaders(
+    let (point_x_sb, point_y_sb, point_z_sb, scalar_chunks_sb) = convert_point_coords_and_decompose_shaders(
         &c_shader,
         c_num_x_workgroups,
         c_num_y_workgroups,
@@ -98,30 +99,28 @@ pub async fn decompose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar
     )
     .await;
     // Map results back from GPU to CPU.
-    let data = read_from_gpu_test(&device, &queue, encoder, vec![point_x_sb, point_y_sb, scalar_chunks_sb]).await;
+    let data = read_from_gpu_test(&device, &queue, encoder, 
+        vec![point_x_sb, point_y_sb, point_z_sb, scalar_chunks_sb]).await;
 
     // Destroy the GPU device object.
     device.destroy();
 
-    // println!("Data: {:?}", data[0]);
 
     let p_x = u8s_to_fields_without_assertion::<
-       C::Base,
+        <<C as CurveAffine>::CurveExt as CurveExt>::Base,
     >(&data[0], num_words, WORD_SIZE);
     let p_y = u8s_to_fields_without_assertion::<
-        C::Base,
+        <<C as CurveAffine>::CurveExt as CurveExt>::Base,
     >(&data[1], num_words, WORD_SIZE);
+    let p_z = u8s_to_fields_without_assertion::<
+        <<C as CurveAffine>::CurveExt as CurveExt>::Base,
+    >(&data[2], num_words, WORD_SIZE);
 
-    let p = zip(p_x, p_y).enumerate().map(|(i, (x, y))| {
-        let p = C::from_xy(x, y).unwrap();
-        if p.is_identity().into() {
-            println!("x: {:?}, y: {:?}", x, y);
-            println!("i: {:?}", i);
-            assert!(false);
-        }
-        p
+    let p = zip(zip(p_x, p_y), p_z).map(|((x, y), z)| {
+        let p = C::Curve::new_jacobian(x, y, z);
+        p.unwrap().to_affine()
     }).collect::<Vec<_>>();
-    (p, data[2].clone())
+    (p, data[3].clone())
 
 }
 
@@ -138,7 +137,7 @@ pub async fn run_webgpu_decompose_async<C: CurveAffine>(points: &[C], scalars: &
 
 #[cfg(test)]
 mod tests {
-    use crate::cuzk::{lib::{sample_points, sample_scalars}, test::cuzk::decompose_scalars_signed};
+    use crate::cuzk::{lib::{sample_points, sample_scalars}, test::cuzk::decompose_scalars_signed, utils::to_words_le_from_le_bytes};
 
     use super::*;
     use halo2curves::bn256::{Fr, G1Affine};
@@ -155,11 +154,7 @@ mod tests {
         let num_chunks_per_scalar = (256 + chunk_size - 1) / chunk_size;
         let num_subtasks = num_chunks_per_scalar;
 
-        let (result_points, result_scalars) = run_webgpu_decompose::<G1Affine>(&points, &scalars);
-
+        let (result_points, _result_scalars) = run_webgpu_decompose::<G1Affine>(&points, &scalars);
         assert_eq!(result_points, points);
-
-        let decomposed_scalars = decompose_scalars_signed(&scalars, num_subtasks, chunk_size);
-        println!("Decomposed scalars: {:?}", decomposed_scalars);
     }
 }

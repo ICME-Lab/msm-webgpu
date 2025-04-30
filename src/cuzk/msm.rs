@@ -29,7 +29,7 @@ pub fn calc_num_words(word_size: usize) -> usize {
 }
 
 /// 13-bit limbs.
-pub const WORD_SIZE: usize = 13;
+pub const WORD_SIZE: usize = 16;
 
 pub static P: Lazy<BigInt> = Lazy::new(|| {
     BigInt::from_str_radix(
@@ -138,7 +138,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
 
     // println!("C shader: {}", c_shader);
 
-    let (point_x_sb, point_y_sb, scalar_chunks_sb) = convert_point_coords_and_decompose_shaders(
+    let (point_x_sb, point_y_sb, point_z_sb, scalar_chunks_sb) = convert_point_coords_and_decompose_shaders(
         &c_shader,
         c_num_x_workgroups,
         c_num_y_workgroups,
@@ -173,8 +173,6 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     let t_num_z_workgroups = 1;
 
     let t_shader = shader_manager.gen_transpose_shader(num_subtasks);
-
-    debug(&format!("T shader: {}", t_shader));
 
     let (all_csc_col_ptr_sb, all_csc_val_idxs_sb) = transpose_gpu(
         &t_shader,
@@ -258,6 +256,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
             &all_csc_col_ptr_sb,
             &point_x_sb,
             &point_y_sb,
+            &point_z_sb,
             &all_csc_val_idxs_sb,
             &bucket_sum_x_sb,
             &bucket_sum_y_sb,
@@ -359,32 +358,31 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         vec![g_points_x_sb, g_points_y_sb, g_points_z_sb],
     ).await;
 
-    debug(&format!("Data: {:?}", data));
     // Destroy the GPU device object.
     device.destroy();
-    debug(&format!("Device destroyed"));
 
     let mut points = vec![];
 
     let g_points_x = u8s_to_fields_without_assertion::<
         <<C as CurveAffine>::CurveExt as CurveExt>::Base,
     >(&data[0], num_words, WORD_SIZE);
-    debug(&format!("G points x: {:?}", g_points_x));
     let g_points_y = u8s_to_fields_without_assertion::<
         <<C as CurveAffine>::CurveExt as CurveExt>::Base,
     >(&data[1], num_words, WORD_SIZE);
-    debug(&format!("G points y: {:?}", g_points_y));
     let g_points_z = u8s_to_fields_without_assertion::<
         <<C as CurveAffine>::CurveExt as CurveExt>::Base,
     >(&data[2], num_words, WORD_SIZE);
-    debug(&format!("G points z: {:?}", g_points_z));
     for i in 0..num_subtasks {
         let mut point = C::Curve::identity();
         for j in 0..b_workgroup_size {
+            debug(&format!("i: {:?}", i));
+            debug(&format!("j: {:?}", j));
+            debug(&format!("G points x: {:?}", g_points_x[i * b_workgroup_size + j]));
+            debug(&format!("G points y: {:?}", g_points_y[i * b_workgroup_size + j]));
+            debug(&format!("G points z: {:?}", g_points_z[i * b_workgroup_size + j]));
             let reduced_point = C::Curve::new_jacobian(
                 g_points_x[i * b_workgroup_size + j],
                 g_points_y[i * b_workgroup_size + j],
-                // <<C as CurveAffine>::CurveExt as CurveExt>::Base::from(1),
                 g_points_z[i * b_workgroup_size + j],
             )
             .unwrap();
@@ -445,13 +443,12 @@ pub async fn convert_point_coords_and_decompose_shaders(
     num_subtasks: usize,
     chunk_size: usize,
     num_words: usize,
-) -> (Buffer, Buffer, Buffer) {
+) -> (Buffer, Buffer, Buffer, Buffer) {
     assert!(num_subtasks * chunk_size == 256);
     let input_size = scalars_bytes.len() / 32;
     let points_sb = create_and_write_storage_buffer(Some("Points buffer"), device, points_bytes);
     let scalars_sb = create_and_write_storage_buffer(Some("Scalars buffer"), device, scalars_bytes);
 
-    debug(&format!("Input size: {:?}", input_size));
     let points_x_sb = create_storage_buffer(
         Some("Point X buffer"),
         device,
@@ -459,6 +456,11 @@ pub async fn convert_point_coords_and_decompose_shaders(
     );
     let points_y_sb = create_storage_buffer(
         Some("Point Y buffer"),
+        device,
+        (input_size * num_words * 4) as u64,
+    );
+    let points_z_sb = create_storage_buffer(
+        Some("Point Z buffer"),
         device,
         (input_size * num_words * 4) as u64,
     );
@@ -478,7 +480,7 @@ pub async fn convert_point_coords_and_decompose_shaders(
         Some("Bind group layout"),
         device,
         vec![&points_sb, &scalars_sb],
-        vec![&points_x_sb, &points_y_sb, &scalar_chunks_sb],
+        vec![&points_x_sb, &points_y_sb, &points_z_sb, &scalar_chunks_sb],
         vec![&params_ub],
     );
 
@@ -487,7 +489,7 @@ pub async fn convert_point_coords_and_decompose_shaders(
         Some("Bind group"),
         device,
         &bind_group_layout,
-        vec![&points_sb, &scalars_sb, &points_x_sb, &points_y_sb, &scalar_chunks_sb, &params_ub],
+        vec![&points_sb, &scalars_sb, &points_x_sb, &points_y_sb, &points_z_sb, &scalar_chunks_sb, &params_ub],
     );
 
 
@@ -510,7 +512,7 @@ pub async fn convert_point_coords_and_decompose_shaders(
     )
     .await;
 
-    (points_x_sb, points_y_sb, scalar_chunks_sb)
+    (points_x_sb, points_y_sb, points_z_sb, scalar_chunks_sb)
 }
 
 /*
@@ -532,6 +534,15 @@ pub async fn transpose_gpu(
     num_subtasks: usize,
     scalar_chunks_sb: Buffer,
 ) -> (Buffer, Buffer) {
+    debug(&format!("Transpose GPU"));
+    debug(&format!("Input size: {:?}", input_size));
+    debug(&format!("Num columns: {:?}", num_columns));
+    debug(&format!("Num rows: {:?}", num_rows));
+    debug(&format!("Num subtasks: {:?}", num_subtasks));
+    debug(&format!("Num x workgroups: {:?}", num_x_workgroups));
+    debug(&format!("Num y workgroups: {:?}", num_y_workgroups));
+    debug(&format!("Num z workgroups: {:?}", num_z_workgroups));
+
     // Input storage buffers.
     let all_csc_col_ptr_sb = create_storage_buffer(
         Some("All CSC col"),
@@ -548,6 +559,7 @@ pub async fn transpose_gpu(
 
     // Uniform storage buffer.
     let params_bytes = to_u8s_for_gpu([num_rows, num_columns, input_size].to_vec());
+    debug(&format!("Params bytes: {:?}", params_bytes));
     let params_ub = create_and_write_uniform_buffer(
         Some("Transpose GPU Uniform Params"),
         device,
@@ -624,18 +636,14 @@ pub async fn smvp_gpu(
     all_csc_col_ptr_sb: &Buffer,
     point_x_sb: &Buffer,
     point_y_sb: &Buffer,
+    point_z_sb: &Buffer,
     all_csc_val_idxs_sb: &Buffer,
     bucket_sum_x_sb: &Buffer,
     bucket_sum_y_sb: &Buffer,
     bucket_sum_z_sb: &Buffer,
 ) {
-    println!("Input size: {:?}", input_size);
-    println!("num_y_workgroups: {:?}", num_y_workgroups);
-    println!("num_z_workgroups: {:?}", num_z_workgroups);
-    println!("offset: {:?}", offset);
     // Uniform Storage Buffer.
     let params_bytes = to_u8s_for_gpu(vec![input_size, num_y_workgroups, num_z_workgroups, offset]);
-    println!("Params bytes: {:?}", params_bytes);
     let params_ub = create_and_write_uniform_buffer(None, device, queue, &params_bytes);
 
     let bind_group_layout = create_bind_group_layout(
@@ -646,12 +654,12 @@ pub async fn smvp_gpu(
             &all_csc_val_idxs_sb,
             &point_x_sb,
             &point_y_sb,
+            &point_z_sb,
         ],
         vec![&bucket_sum_x_sb, &bucket_sum_y_sb, &bucket_sum_z_sb],
         vec![&params_ub],
     );
 
-    println!("SMVP Bind group layout: {:?}", bind_group_layout);
 
     let bind_group = create_bind_group(
         Some("Bind group"),
@@ -662,6 +670,7 @@ pub async fn smvp_gpu(
             &all_csc_val_idxs_sb,
             &point_x_sb,
             &point_y_sb,
+            &point_z_sb,
             &bucket_sum_x_sb,
             &bucket_sum_y_sb,
             &bucket_sum_z_sb,
@@ -669,7 +678,6 @@ pub async fn smvp_gpu(
         ],
     );
 
-    println!("SMVP Bind group: {:?}", bind_group);
 
     let compute_pipeline = create_compute_pipeline(
         Some("Compute pipeline"),
@@ -710,7 +718,6 @@ pub async fn bpr_1(
 ) {
     // Uniform storage buffer.
     let params_bytes = to_u8s_for_gpu(vec![subtask_idx, num_columns, num_x_workgroups]);
-    println!("Params bytes: {:?}", params_bytes);
     let params_ub = create_and_write_uniform_buffer(None, device, queue, &params_bytes);
 
     let bind_group_layout = create_bind_group_layout(

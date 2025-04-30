@@ -41,7 +41,8 @@ pub fn points_to_bytes<C: CurveAffine>(g: &[C]) -> Vec<u8> {
             let coords = affine.coordinates().unwrap();
             let x = field_to_bytes_montgomery(coords.x());
             let y = field_to_bytes_montgomery(coords.y());
-            [x, y].concat()
+            let z = field_to_bytes_montgomery(&C::Base::from(1u64));
+            [x, y, z].concat()
         })
         .collect::<Vec<_>>()
 }

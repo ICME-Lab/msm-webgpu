@@ -1,23 +1,23 @@
 use std::time::Instant;
 
 use halo2curves::{CurveAffine, CurveExt};
+use group::Curve;
 use wgpu::CommandEncoderDescriptor;
 
 use crate::cuzk::{
     gpu::{
-        create_and_write_storage_buffer, create_bind_group, create_bind_group_layout,
-        create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device,
-        read_from_gpu, read_from_gpu_test,
+        create_and_write_storage_buffer, create_and_write_uniform_buffer, create_bind_group, create_bind_group_layout, create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device, read_from_gpu, read_from_gpu_test
     },
     msm::{PARAMS, WORD_SIZE},
     shader_manager::ShaderManager,
-    utils::{points_to_bytes_for_gpu, u8s_to_fields_without_assertion},
+    utils::{field_to_u8_vec_for_gpu, field_to_u8_vec_montgomery_for_gpu, points_to_bytes_for_gpu, u8s_to_fields_without_assertion},
 };
 
-pub async fn point_op<C: CurveAffine>(op: &str, a: C, b: C) -> C::Curve {
+pub async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve {
     let a_bytes = points_to_bytes_for_gpu(&vec![a], PARAMS.num_words, WORD_SIZE);
     let b_bytes = points_to_bytes_for_gpu(&vec![b], PARAMS.num_words, WORD_SIZE);
-
+    // let scalar_bytes = field_to_u8_vec_for_gpu(&scalar, PARAMS.num_words, WORD_SIZE);
+    let scalar_bytes = scalar.to_le_bytes();
     let input_size = 1;
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_words = PARAMS.num_words;
@@ -42,19 +42,20 @@ pub async fn point_op<C: CurveAffine>(op: &str, a: C, b: C) -> C::Curve {
 
     let result_sb = create_storage_buffer(Some("Result buffer"), &device, 240);
 
+    let scalar_sb = create_and_write_uniform_buffer(Some("Scalar buffer"), &device, &queue, &scalar_bytes);
     let bind_group_layout = create_bind_group_layout(
         Some("Bind group layout"),
         &device,
         vec![],
         vec![&a_sb, &b_sb, &result_sb],
-        vec![],
+        vec![&scalar_sb],
     );
 
     let bind_group = create_bind_group(
         Some("Bind group"),
         &device,
         &bind_group_layout,
-        vec![&a_sb, &b_sb, &result_sb],
+        vec![&a_sb, &b_sb, &result_sb, &scalar_sb],
     );
 
     let compute_pipeline = create_compute_pipeline(
@@ -80,13 +81,13 @@ pub async fn point_op<C: CurveAffine>(op: &str, a: C, b: C) -> C::Curve {
     C::Curve::new_jacobian(result[0].clone(), result[1].clone(), result[2].clone()).unwrap()
 }
 
-pub fn run_webgpu_point_op<C: CurveAffine>(op: &str, a: C, b: C) -> C::Curve {
-    pollster::block_on(run_webgpu_point_op_async(op, a, b))
+pub fn run_webgpu_point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve {
+    pollster::block_on(run_webgpu_point_op_async(op, a, b, scalar))
 }
 
-pub async fn run_webgpu_point_op_async<C: CurveAffine>(op: &str, a: C, b: C) -> C::Curve {
+pub async fn run_webgpu_point_op_async<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve {
     let now = Instant::now();
-    let result = point_op::<C>(op, a, b).await;
+    let result = point_op::<C>(op, a, b, scalar).await;
     println!("Point op time: {:?}", now.elapsed());
     result
 }
@@ -94,9 +95,10 @@ pub async fn run_webgpu_point_op_async<C: CurveAffine>(op: &str, a: C, b: C) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ff::Field;
     use group::cofactor::CofactorCurveAffine;
-    use halo2curves::bn256::G1Affine;
-    use rand::thread_rng;
+    use halo2curves::bn256::{Fr, G1Affine};
+    use rand::{thread_rng, Rng};
 
     #[test]
     fn test_webgpu_point_add() {
@@ -108,7 +110,7 @@ mod tests {
 
         let fast = a + b;
 
-        let result = run_webgpu_point_op::<G1Affine>("test_point_add", a, b);
+        let result = run_webgpu_point_op::<G1Affine>("test_point_add", a, b, 0);
 
         println!("Result: {:?}", result);
         assert_eq!(fast, result);
@@ -124,7 +126,39 @@ mod tests {
 
         let fast = a + b;
 
-        let result = run_webgpu_point_op::<G1Affine>("test_point_add", a, b);
+        let result = run_webgpu_point_op::<G1Affine>("test_point_add", a, b, 0);
+
+        println!("Result: {:?}", result);
+        assert_eq!(fast, result);
+    }
+
+
+    #[test]
+    fn test_webgpu_point_negate() {
+        let mut rng = thread_rng();
+        let a = G1Affine::random(&mut rng);
+        println!("a: {:?}", a);
+
+        let fast = -a;
+
+        let result = run_webgpu_point_op::<G1Affine>("test_negate_point", a, a, 0);
+
+        println!("Result: {:?}", result);
+        assert_eq!(fast, result.to_affine());
+    }
+
+    #[test]
+    fn test_webgpu_point_double_and_add() {
+        let mut rng = thread_rng();
+        let a = G1Affine::random(&mut rng);
+        println!("a: {:?}", a);
+        // random u32
+        let scalar = rng.gen_range(0..u32::MAX);
+        println!("scalar: {:?}", scalar);
+
+        let fast = a * Fr::from(scalar as u64);
+
+        let result = run_webgpu_point_op::<G1Affine>("test_double_and_add", a, a, scalar);
 
         println!("Result: {:?}", result);
         assert_eq!(fast, result);

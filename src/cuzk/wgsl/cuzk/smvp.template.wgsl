@@ -13,17 +13,19 @@ var<storage, read> val_idx: array<u32>;
 var<storage, read> new_point_x: array<BigInt>;
 @group(0) @binding(3)
 var<storage, read> new_point_y: array<BigInt>;
+@group(0) @binding(4)
+var<storage, read> new_point_z: array<BigInt>;
 
 /// Output storage buffers.
-@group(0) @binding(4)
-var<storage, read_write> bucket_x: array<BigInt>;
 @group(0) @binding(5)
-var<storage, read_write> bucket_y: array<BigInt>;
+var<storage, read_write> bucket_x: array<BigInt>;
 @group(0) @binding(6)
+var<storage, read_write> bucket_y: array<BigInt>;
+@group(0) @binding(7)
 var<storage, read_write> bucket_z: array<BigInt>;
 
 /// Uniform storage buffer.
-@group(0) @binding(7)
+@group(0) @binding(8)
 var<uniform> params: vec4<u32>;
 
 fn get_r() -> BigInt {
@@ -40,15 +42,6 @@ fn get_paf() -> Point {
     return result;
 }
 
-/// Point negation only involves multiplying the X and T coordinates by -1 in
-/// the field.
-fn negate_point(point: Point) -> Point {
-    var p = get_p();
-    var y = point.y;
-    var neg_y: BigInt;
-    bigint_sub(&p, &y, &neg_y);
-    return Point(point.x, neg_y, point.z);
-}
 
 @compute
 @workgroup_size({{ workgroup_size }})
@@ -95,14 +88,14 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
             var x = new_point_x[idx];
             var y = new_point_y[idx];
-
+            var z = new_point_z[idx];
             /// We didn't compute the t and z coordiantes in the previous shader
             /// because there is a limit to the number of buffers that may be
             /// bound to a shader, so we do so here. Fortunately the computation
             /// is relatively simple: t = xyr and z = 1r.
             // var t = montgomery_product(&x, &y);
             // var z = get_r();
-            var z = ZERO;
+            // var z = ZERO;
 
             let pt = Point(x, y, z);
             sum = point_add(sum, pt);
