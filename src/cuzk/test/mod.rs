@@ -3,3 +3,4 @@ pub mod point;
 pub mod cuzk;
 pub mod decompose_shader;
 pub mod smvp_shader;
+pub mod diff_impl;

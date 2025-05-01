@@ -1,3 +1,8 @@
+const NUM_WORDS = {{ num_words }}u;
+const WORD_SIZE = {{ word_size }}u;
+const W_MASK = {{ w_mask }}u;
+const N0 = {{ n0 }}u;
+
 const ZERO: BigInt = BigInt(
     array({{ zero_limbs }})
 );
@@ -14,6 +19,11 @@ fn get_p_limbs_plus_one() -> BigIntMediumWide {
     return p;
 }
 
+fn get_r() -> BigInt {
+    var r: BigInt;
+{{{ r_limbs }}}
+    return r;
+}
 
 fn field_add(a: ptr<function, BigInt>, b: ptr<function, BigInt>) -> BigInt { 
     var res: BigInt;
@@ -111,3 +121,4 @@ fn field_small_scalar_shift(l: u32, a: BigInt) -> BigInt { // max shift allowed 
     var output = field_reduce_medium_wide(res, (1u << l)); // can probably be optimised
     return output;
 }
+

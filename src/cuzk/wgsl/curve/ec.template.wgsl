@@ -110,19 +110,15 @@ fn negate_point(point: Point) -> Point {
     return Point(point.x, neg_y, point.z);
 }
 
-fn get_r() -> BigInt {
-    var r: BigInt;
-{{{ r_limbs }}}
-    return r;
-}
 
-fn get_paf() -> Point {
-    var result: Point;
-    let r = get_r();
-    result.y = r;
-    result.z = r;
-    return result;
-}
+
+// fn get_paf() -> Point {
+//     var result: Point;
+//     let r = get_r();
+//     result.y = r;
+//     result.z = r;
+//     return result;
+// }
 /// This double-and-add code is adapted from the ZPrize test harness:
 /// https://github.com/demox-labs/webgpu-msm/blob/main/src/reference/webgpu/wgsl/Curve.ts#L78.
 fn double_and_add(point: Point, scalar: u32) -> Point {

@@ -1,8 +1,4 @@
 
-const NUM_WORDS = {{ num_words }}u;
-const WORD_SIZE = {{ word_size }}u;
-const W_MASK = {{ w_mask }}u;
-const N0 = {{ n0 }}u;
 
 
 

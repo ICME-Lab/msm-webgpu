@@ -28,20 +28,6 @@ var<storage, read_write> bucket_z: array<BigInt>;
 @group(0) @binding(8)
 var<uniform> params: vec4<u32>;
 
-fn get_r() -> BigInt {
-    var r: BigInt;
-{{{ r_limbs }}}
-    return r;
-}
-
-fn get_paf() -> Point {
-    var result: Point;
-    let r = get_r();
-    result.y = r;
-    result.z = r;
-    return result;
-}
-
 
 @compute
 @workgroup_size({{ workgroup_size }})

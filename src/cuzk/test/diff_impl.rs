@@ -14,10 +14,10 @@ use crate::{cuzk::{
     utils::{field_to_u8_vec_for_gpu, field_to_u8_vec_montgomery_for_gpu, u8s_to_field_without_assertion},
 }, utils::montgomery::field_to_bytes_montgomery};
 
-pub async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
-    let a_bytes = field_to_u8_vec_for_gpu(&a, PARAMS.num_words, WORD_SIZE);
+pub async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> (F, F) {
+    let a_bytes = field_to_u8_vec_montgomery_for_gpu(&a, PARAMS.num_words, WORD_SIZE);
     println!("A bytes: {:?}", a_bytes);
-    let b_bytes = field_to_u8_vec_for_gpu(&b, PARAMS.num_words, WORD_SIZE);
+    let b_bytes = field_to_u8_vec_montgomery_for_gpu(&b, PARAMS.num_words, WORD_SIZE);
     println!("B bytes: {:?}", b_bytes);
 
     // let t = field_to_bytes_montgomery(&a);
@@ -39,18 +39,19 @@ pub async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
         label: Some("Field Encoder"),
     });
 
-    let shader_code = shader_manager.gen_test_field_shader();
+    let shader_code = shader_manager.gen_test_diff_impl_shader();
 
     let a_sb = create_and_write_storage_buffer(Some("A buffer"), &device, &a_bytes);
     let b_sb = create_and_write_storage_buffer(Some("B buffer"), &device, &b_bytes);
 
-    let result_sb = create_storage_buffer(Some("Result buffer"), &device, (num_words * 4) as u64);
+    let result_1_sb = create_storage_buffer(Some("Result buffer 1"), &device, (num_words * 4) as u64);
+    let result_2_sb = create_storage_buffer(Some("Result buffer 2"), &device, (num_words * 4) as u64);
 
     let bind_group_layout = create_bind_group_layout(
         Some("Bind group layout"),
         &device,
         vec![],
-        vec![&a_sb, &b_sb, &result_sb],
+        vec![&a_sb, &b_sb, &result_1_sb, &result_2_sb],
         vec![],
     );
 
@@ -58,7 +59,7 @@ pub async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
         Some("Bind group"),
         &device,
         &bind_group_layout,
-        vec![&a_sb, &b_sb, &result_sb],
+        vec![&a_sb, &b_sb, &result_1_sb, &result_2_sb],
     );
 
     let compute_pipeline = create_compute_pipeline(
@@ -73,22 +74,23 @@ pub async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
     execute_pipeline(&mut encoder, compute_pipeline, bind_group, 1, 1, 1).await;
 
     // Map results back from GPU to CPU.
-    let data = read_from_gpu_test(&device, &queue, encoder, vec![result_sb]).await;
+    let data = read_from_gpu_test(&device, &queue, encoder, vec![result_1_sb, result_2_sb]).await;
 
     // Destroy the GPU device object.
     device.destroy();
 
 
-    let result = u8s_to_field_without_assertion::<F>(&data[0], num_words, WORD_SIZE);
+    let result_1 = u8s_to_field_without_assertion::<F>(&data[0], num_words, WORD_SIZE);
+    let result_2 = u8s_to_field_without_assertion::<F>(&data[1], num_words, WORD_SIZE);
 
-    result
+    (result_1, result_2)
 }
 
-pub fn run_webgpu_field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
+pub fn run_webgpu_field_op<F: PrimeField>(op: &str, a: F, b: F) -> (F, F) {
     pollster::block_on(run_webgpu_field_op_async(op, a, b))
 }
 
-pub async fn run_webgpu_field_op_async<F: PrimeField>(op: &str, a: F, b: F) -> F {
+pub async fn run_webgpu_field_op_async<F: PrimeField>(op: &str, a: F, b: F) -> (F, F) {
     let now = Instant::now();
     let result = field_op::<F>(op, a, b).await;
     println!("Field add time: {:?}", now.elapsed());
@@ -97,59 +99,19 @@ pub async fn run_webgpu_field_op_async<F: PrimeField>(op: &str, a: F, b: F) -> F
 
 #[cfg(test)]
 mod tests {
-    use crate::cuzk::{lib::sample_scalars, utils::field_to_u8_vec_for_gpu};
-
     use super::*;
     use ff::Field;
     use halo2curves::bn256::Fq;
     use rand::thread_rng;
 
     #[test]
-    fn test_webgpu_field_add() {
-        let scalars = sample_scalars::<Fq>(50);
-        for scalar in scalars.chunks(2) {
-            let a = scalar[0];
-            let b = scalar[1];
-
-            let fast = a + b;
-            let fast_bytes = field_to_u8_vec_montgomery_for_gpu(&fast, PARAMS.num_words, WORD_SIZE);
-            println!("Fast bytes: {:?}", fast_bytes);
-
-            let result = run_webgpu_field_op::<Fq>("test_field_add", a, b);
-
-            println!("Result: {:?}", result);
-            assert_eq!(fast, result);
-        }
-    }
-
-    #[test]
-    fn test_webgpu_field_sub() {
-        let scalars = sample_scalars::<Fq>(50);
-        for scalar in scalars.chunks(2) {
-            let a = scalar[0];
-            let b = scalar[1];
-
-            let fast = a - b;
-            let fast_bytes = field_to_u8_vec_montgomery_for_gpu(&fast, PARAMS.num_words, WORD_SIZE);
-            println!("Fast bytes: {:?}", fast_bytes);
-
-            let result = run_webgpu_field_op::<Fq>("test_field_sub", a, b);
-
-            println!("Result: {:?}", result);
-            assert_eq!(fast, result);
-        }
-    }
-
-    #[test]
-    fn test_webgpu_field_mul() {
+    fn test_webgpu_diff_impl() {
         let mut rng = thread_rng();
         let a = Fq::random(&mut rng);
         let b = Fq::random(&mut rng);
 
-        let fast = a * b;
-        let result = run_webgpu_field_op::<Fq>("test_field_mul", a, b);
+        let (result_1, result_2) = run_webgpu_field_op::<Fq>("test_diff_impl", a, b);
 
-        println!("Result: {:?}", result);
-        assert_eq!(fast, result);
+        assert_eq!(result_1, result_2);
     }
 }

@@ -4,7 +4,7 @@ use num_bigint::{BigInt, BigUint, Sign};
 use num_traits::{One, FromPrimitive};
 use num_integer::Integer;
 use web_sys::console;
-use crate::{cuzk::msm::{calc_num_words, P}, halo2curves::utils::field_to_bytes, utils::montgomery::{bytes_to_field_montgomery, field_to_bytes_montgomery}};
+use crate::{cuzk::msm::{calc_num_words, P}, halo2curves::utils::{bytes_to_field, field_to_bytes}, utils::montgomery::{bytes_to_field_montgomery, field_to_bytes_montgomery}};
 
   
 pub fn field_to_u8_vec_montgomery_for_gpu<F: PrimeField>(
@@ -13,11 +13,7 @@ pub fn field_to_u8_vec_montgomery_for_gpu<F: PrimeField>(
     word_size: usize,
 ) -> Vec<u8> {
     let bytes = field_to_bytes_montgomery(field);
-
-    // TODO: Avoid this step
-    let v = BigInt::from_bytes_le(Sign::Plus, &bytes);
-
-    let limbs = to_words_le(&v, num_words, word_size);
+    let limbs = to_words_le_from_le_bytes(&bytes, num_words, word_size);
     let mut u8_vec = vec![0u8; num_words * 4];
 
     for (i, limb) in limbs.iter().enumerate() {
@@ -209,9 +205,7 @@ pub fn from_words_le_without_assertion<F: PrimeField>(
     let mut val = BigInt::ZERO;
     for i in 0..num_words {
         let exponent = (num_words - i - 1) * word_size;
-        // debug(&format!("exponent: {:?}", exponent));
         let limb = limbs[num_words - i - 1];
-        // debug(&format!("limb: {:?}", limb));
         val += BigInt::from(2).pow(exponent as u32) * BigInt::from(limb);
         if val == *P {
             val = BigInt::ZERO;
@@ -221,6 +215,7 @@ pub fn from_words_le_without_assertion<F: PrimeField>(
     let bytes = val.to_bytes_le().1;
     // debug(&format!("bytes: {:?}", bytes));
     let field = bytes_to_field_montgomery(&bytes);
+    // let field = bytes_to_field(&bytes);
     // debug(&format!("field: {:?}", field));
     field
 }
@@ -308,7 +303,7 @@ pub fn compute_misc_params(
     let n0_u32 = n0.to_u32_digits();
     assert!(n0_u32.1.len() == 1);
     assert!(n0_u32.0 == Sign::Plus);
-    MiscParams { num_words, n0: n0_u32.1[0], r }
+    MiscParams { num_words, n0: n0_u32.1[0], r: r % p }
 }
 
 pub fn debug(s: &str) {
@@ -322,9 +317,11 @@ pub fn debug(s: &str) {
 
 #[cfg(test)]
 mod tests {
-    use halo2curves::bn256::Fr;
+    use halo2curves::bn256::{Fq, Fr};
+    use num_traits::Num;
+    use rand::{thread_rng, Rng};
 
-    use crate::cuzk::lib::sample_scalars;
+    use crate::cuzk::{lib::sample_scalars, msm::{PARAMS, WORD_SIZE}};
 
     use super::*;
     
@@ -341,4 +338,35 @@ mod tests {
             assert_eq!(limbs, limbs_from_le_bytes);
         }
     }
+
+    #[test]
+    fn test_gen_p_limbs() {
+        let p = P.clone();
+        let num_words = calc_num_words(13);
+        let p_limbs = gen_p_limbs(&p, num_words, 13);
+        println!("{}", p_limbs);
+    }
+
+    #[test]
+    fn test_gen_r_limbs() {
+        let r = PARAMS.r.clone();
+        let num_words = calc_num_words(WORD_SIZE);
+        let r_limbs = gen_r_limbs(&r, num_words, WORD_SIZE);
+        println!("{}", r_limbs);
+    }
+
+    #[test]
+    fn test_field_to_u8_vec_montgomery_for_gpu() {
+        // random
+        let mut rng = thread_rng();
+        let a = Fq::random(&mut rng);
+        for word_size in 13..17 {
+            let num_words = calc_num_words(word_size);
+            let bytes = field_to_u8_vec_montgomery_for_gpu(&a, num_words, word_size);
+            let a_from_bytes = u8s_to_field_without_assertion(&bytes, num_words, word_size);
+            assert_eq!(a, a_from_bytes);
+        }
+    }
+
+
 }

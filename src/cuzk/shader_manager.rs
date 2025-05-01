@@ -9,15 +9,15 @@ pub static DECOMPOSE_SCALARS_SHADER: Lazy<String> = Lazy::new(|| {
 pub static EXTRACT_WORD_FROM_BYTES_LE_FUNCS: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/cuzk/extract_word_from_bytes_le.template.wgsl").to_string()
 });
-pub static MONTGOMERY_PRODUCT_FUNCS: Lazy<String> = Lazy::new(|| {
+pub static MONTGOMERY_PRODUCT_FUNCS_2: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/montgomery/mont_product.template.wgsl").to_string()
 });
-// pub static MONTGOMERY_PRODUCT_FUNCS: Lazy<String> = Lazy::new(|| {
-//     include_str!("wgsl/montgomery/mont_pro_product.template.wgsl").to_string()
-// });
-// pub static MONTGOMERY_PRODUCT_FUNCS: Lazy<String> = Lazy::new(|| {
-//     include_str!("wgsl/montgomery/mont_pro_cios.template.wgsl").to_string()
-// });
+pub static MONTGOMERY_PRODUCT_FUNCS: Lazy<String> = Lazy::new(|| {
+    include_str!("wgsl/montgomery/mont_pro_product.template.wgsl").to_string()
+});
+pub static MONTGOMERY_PRODUCT_FUNCS_CIOS: Lazy<String> = Lazy::new(|| {
+    include_str!("wgsl/montgomery/mont_pro_cios.template.wgsl").to_string()
+});
 pub static EC_FUNCS: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/curve/ec.template.wgsl").to_string()
 });
@@ -43,6 +43,9 @@ pub static BPR_SHADER: Lazy<String> = Lazy::new(|| {
 });
 pub static TEST_FIELD_SHADER: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/test/test_field.wgsl").to_string()
+});
+pub static TEST_DIFF_IMPL_SHADER: Lazy<String> = Lazy::new(|| {
+    include_str!("wgsl/test/test_diff_impl.wgsl").to_string()
 });
 pub static TEST_POINT_SHADER: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/test/test_point.wgsl").to_string()
@@ -72,6 +75,10 @@ impl ShaderManager {
         let p_bit_length = 254; // TODO: Parameterise
         let num_words = PARAMS.num_words;
         let r = PARAMS.r.clone();
+        println!("P: {:?}", P);
+        println!("P limbs: {}", gen_p_limbs(&P, num_words, word_size));
+        println!("W_MASK: {:?}", (1 << word_size) - 1);
+        println!("R limbs: {}", gen_r_limbs(&r, num_words, word_size));
         Self {
             word_size,
             chunk_size,
@@ -241,6 +248,33 @@ impl ShaderManager {
             "n0": self.n0,
         });
         handlebars.render("test_field", &data).unwrap()
+    }
+
+    pub fn gen_test_diff_impl_shader(&self) -> String {
+        let mut handlebars = Handlebars::new();
+        handlebars.register_template_string("test_diff_impl", TEST_DIFF_IMPL_SHADER.as_str()).unwrap();
+        
+
+        handlebars.register_template_string("structs", STRUCTS.as_str()).unwrap();
+        handlebars.register_template_string("bigint_funcs", BIGINT_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string("field_funcs", FIELD_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string("montgomery_product_funcs_2", MONTGOMERY_PRODUCT_FUNCS_2.as_str()).unwrap();
+
+        let data = json!({
+            "word_size": self.word_size,
+            "num_words": self.num_words,
+            "p_limbs": self.p_limbs,
+            "p_limbs_plus_one": self.p_limbs_plus_one,
+            "zero_limbs": self.zero_limbs,
+            "r_limbs": self.r_limbs,
+            "mask": self.mask,
+            "w_mask": self.w_mask,
+            "num_words_mul_two": self.num_words * 2,
+            "num_words_plus_one": self.num_words + 1,
+            "n0": self.n0,
+        });
+        handlebars.render("test_diff_impl", &data).unwrap()
     }
 
     pub fn gen_test_point_shader(&self) -> String {
