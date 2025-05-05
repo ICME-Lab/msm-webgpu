@@ -233,6 +233,7 @@ impl ShaderManager {
         handlebars.register_template_string("bigint_funcs", BIGINT_FUNCS.as_str()).unwrap();
         handlebars.register_template_string("field_funcs", FIELD_FUNCS.as_str()).unwrap();
         handlebars.register_template_string("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string("montgomery_product_funcs_2", MONTGOMERY_PRODUCT_FUNCS_2.as_str()).unwrap();
 
         let data = json!({
             "word_size": self.word_size,

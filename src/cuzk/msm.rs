@@ -2,6 +2,7 @@ use group::Group;
 use halo2curves::CurveAffine;
 use halo2curves::CurveExt;
 use num_bigint::BigInt;
+use num_bigint::BigUint;
 use num_traits::Num;
 use once_cell::sync::Lazy;
 use web_sys::console;
@@ -31,8 +32,8 @@ pub fn calc_num_words(word_size: usize) -> usize {
 /// 13-bit limbs.
 pub const WORD_SIZE: usize = 13;
 
-pub static P: Lazy<BigInt> = Lazy::new(|| {
-    BigInt::from_str_radix(
+pub static P: Lazy<BigUint> = Lazy::new(|| {
+    BigUint::from_str_radix(
         "21888242871839275222246405745257275088696311157297823662689037894645226208583",
         10,
     )

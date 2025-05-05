@@ -79,13 +79,48 @@ pub fn fields_to_u8_vec_for_gpu<F: PrimeField>(
     fields.iter().flat_map(|field| field_to_u8_vec_for_gpu(field, num_words, word_size)).collect::<Vec<_>>()
 }
 
+pub fn from_biguint_le(val: &BigUint, num_limbs: usize, log_limb_size: u32) -> Vec<u32> {
+    let mut res = vec![0u32; num_limbs];
+    let mask_u32 = 2u32.pow(log_limb_size as u32) - 1u32;
+    let mask = BigUint::from(mask_u32);
+
+    for i in 0..num_limbs {
+        let idx = num_limbs - 1 - i;
+        let shift = (idx as u32) * log_limb_size;
+        let w = (val.clone() >> shift) & mask.clone();
+
+        if w != BigUint::ZERO {
+            res[idx] = w.to_u32_digits()[0];
+        }
+    }
+
+    res
+}
+
+/// Converts a vector of limbs into a num_bigint::BigUint.
+pub fn to_biguint_le(limbs: &Vec<u32>, num_limbs: usize, log_limb_size: u32) -> BigUint {
+    assert!(limbs.len() == num_limbs);
+    let mut res = BigUint::from(0u32);
+    let max = 2u32.pow(log_limb_size);
+
+    for i in 0..num_limbs {
+        assert!(limbs[i] < max);
+        let idx = (num_limbs - 1 - i) as u32;
+        let a = idx * log_limb_size;
+        let b = BigUint::from(2u32).pow(a) * BigUint::from(limbs[idx as usize]);
+
+        res += BigUint::from(b);
+    }
+
+    res
+}
+
 pub fn field_to_u8_vec_for_gpu<F: PrimeField>(
     field: &F,
     num_words: usize,
     word_size: usize,
 ) -> Vec<u8> {
     let bytes = field_to_bytes(field);
-
     let limbs = to_words_le_from_le_bytes(&bytes, num_words, word_size);
     let mut u8_vec = vec![0u8; num_words * 4];
 
@@ -99,18 +134,18 @@ pub fn field_to_u8_vec_for_gpu<F: PrimeField>(
 }
 
 pub fn to_words_le(
-    val: &BigInt,
+    val: &BigUint,
     num_words: usize,
     word_size: usize,
 ) -> Vec<u32> {
     let mut limbs = vec![0u32; num_words];
 
-    let mask = BigInt::from((1u32 << word_size) - 1);
+    let mask = BigUint::from((1u32 << word_size) - 1);
     for i in 0..num_words {
         let idx = num_words - 1 - i;
         let shift = idx * word_size;
         let w = (val >> shift) & mask.clone();
-        let digits = w.to_u32_digits().1;
+        let digits = w.to_u32_digits();
         if digits.len() > 0 {
             limbs[idx] = digits[0] as u32;
         }
@@ -202,17 +237,17 @@ pub fn from_words_le_without_assertion<F: PrimeField>(
 ) -> F {
     assert!(num_words == limbs.len());
 
-    let mut val = BigInt::ZERO;
+    let mut val = BigUint::ZERO;
     for i in 0..num_words {
         let exponent = (num_words - i - 1) * word_size;
         let limb = limbs[num_words - i - 1];
-        val += BigInt::from(2).pow(exponent as u32) * BigInt::from(limb);
+        val += BigUint::from(2u32).pow(exponent as u32) * BigUint::from(limb);
         if val == *P {
-            val = BigInt::ZERO;
+            val = BigUint::ZERO;
         }
     }
     // debug(&format!("val: {:?}", val));
-    let bytes = val.to_bytes_le().1;
+    let bytes = val.to_bytes_le();
     // debug(&format!("bytes: {:?}", bytes));
     let field = bytes_to_field_montgomery(&bytes);
     // let field = bytes_to_field(&bytes);
@@ -221,7 +256,7 @@ pub fn from_words_le_without_assertion<F: PrimeField>(
 }
 
 pub fn gen_p_limbs(
-    p: &BigInt,
+    p: &BigUint,
     num_words: usize,
     word_size: usize,
 ) -> String {
@@ -234,7 +269,7 @@ pub fn gen_p_limbs(
 }
 
 pub fn gen_p_limbs_plus_one(
-    p: &BigInt,
+    p: &BigUint,
     num_words: usize,
     word_size: usize,
 ) -> String {
@@ -259,7 +294,7 @@ pub fn gen_zero_limbs(
 }
 
 pub fn gen_r_limbs(
-    r: &BigInt,
+    r: &BigUint,
     num_words: usize,
     word_size: usize,
 ) -> String {
@@ -271,39 +306,97 @@ pub fn gen_r_limbs(
     r
 }
 
+fn egcd(a: &BigInt, b: &BigInt) -> (BigInt, BigInt, BigInt) {
+    if *a == BigInt::from(0u32) {
+        return (b.clone(), BigInt::from(0u32), BigInt::from(1u32));
+    }
+    let (g, x, y) = egcd(&(b % a), a);
+
+    (g, y - (b / a) * x.clone(), x.clone())
+}
+
+pub fn calc_inv_and_pprime(
+    p: &BigUint,
+    r: &BigUint,
+) -> (BigUint, BigUint) {
+    assert!(*r != BigUint::from(0u32));
+
+    let p_bigint = BigInt::from_biguint(Sign::Plus, p.clone());
+    let r_bigint = BigInt::from_biguint(Sign::Plus, r.clone());
+    let one = BigInt::from(1u32);
+    let (_, mut rinv, mut pprime) = egcd(
+        &BigInt::from_biguint(Sign::Plus, r.clone()),
+        &BigInt::from_biguint(Sign::Plus, p.clone())
+    );
+
+    if rinv.sign() == Sign::Minus {
+        rinv = BigInt::from_biguint(Sign::Plus, p.clone()) + rinv;
+    }
+
+    if pprime.sign() == Sign::Minus {
+        pprime = BigInt::from_biguint(Sign::Plus, r.clone()) + pprime;
+    }
+
+    // r * rinv - p * pprime == 1
+    assert!(
+        (BigInt::from_biguint(Sign::Plus, r.clone()) * &rinv % &p_bigint) -
+            (&p_bigint * &pprime % &p_bigint)
+        == one
+    );
+
+    // r * rinv % p == 1
+    assert!((BigInt::from_biguint(Sign::Plus, r.clone()) * &rinv % &p_bigint) == one);
+
+    // p * pprime % r == 1
+    assert!(
+        (&p_bigint * &pprime % &r_bigint) == one
+    );
+
+    (
+        rinv.to_biguint().unwrap(),
+        pprime.to_biguint().unwrap(),
+    )
+}
+
+
+pub fn calc_rinv_and_n0(
+    p: &BigUint,
+    r: &BigUint,
+    log_limb_size: u32
+) -> (BigUint, u32) {
+    let (rinv, pprime) = calc_inv_and_pprime(p, r);
+    let pprime = BigInt::from_biguint(Sign::Plus, pprime);
+
+    let neg_n_inv = BigInt::from_biguint(Sign::Plus, r.clone()) - pprime;
+    let n0 = neg_n_inv % BigInt::from(2u32.pow(log_limb_size as u32));
+    let n0 = n0.to_biguint().unwrap().to_u32_digits()[0];
+
+    (rinv, n0)
+}
+
 #[derive(Debug)]
 pub struct MiscParams {
     pub num_words: usize,
     pub n0: u32,
-    pub r: BigInt,
+    pub r: BigUint,
+    pub rinv: BigUint,
 }
 
 pub fn compute_misc_params(
-    p: &BigInt,
+    p: &BigUint,
     word_size: usize,
 ) -> MiscParams {
     assert!(word_size > 0);
     let num_words = calc_num_words(word_size);
-    let r = BigInt::one() << (num_words * word_size);
-    let gcd = r.extended_gcd(p);
-    let rinv = gcd.x;
-    let pprime = gcd.y;
-
-    if rinv < BigInt::ZERO {
-        assert_eq!(((r.clone() * rinv.clone() - p.clone() * pprime.clone()) % p) + p, BigInt::one());
-        assert_eq!(((r.clone() * rinv.clone()) % p) + p, BigInt::one());
-        assert_eq!((p.clone() * pprime.clone()) % r.clone(), BigInt::one());
-      } else {
-        assert_eq!((r.clone() * rinv.clone() - p.clone() * pprime.clone()) % p, BigInt::one());
-        assert_eq!((r.clone() * rinv.clone()) % p, BigInt::one());
-        assert_eq!(((p.clone() * pprime.clone()) % r.clone()) + r.clone(), BigInt::one());
-      }
-    let neg_n_inv = r.clone() - pprime.clone();
-    let n0 = neg_n_inv % (BigInt::one() << word_size);
-    let n0_u32 = n0.to_u32_digits();
-    assert!(n0_u32.1.len() == 1);
-    assert!(n0_u32.0 == Sign::Plus);
-    MiscParams { num_words, n0: n0_u32.1[0], r: r % p }
+    let r = BigUint::one() << (num_words * word_size);
+    // let r = BigUint::one() << 256;
+    println!("r: {:?}", r);
+    let res = calc_rinv_and_n0(&p, &r, word_size as u32);
+    let rinv = res.0;
+    println!("rinv: {:?}", rinv);
+    let n0 = res.1;
+    println!("n0: {:?}", n0);
+    MiscParams { num_words, n0, r: r % p, rinv }
 }
 
 pub fn debug(s: &str) {
@@ -332,7 +425,7 @@ mod tests {
         for word_size in 13..17 {
             let num_words = calc_num_words(word_size);
 
-            let v = BigInt::from_bytes_le(Sign::Plus, &bytes);
+            let v = BigUint::from_bytes_le(&bytes);
             let limbs = to_words_le(&v, num_words, word_size);
             let limbs_from_le_bytes = to_words_le_from_le_bytes(&bytes, num_words, word_size);
             assert_eq!(limbs, limbs_from_le_bytes);
@@ -368,5 +461,14 @@ mod tests {
         }
     }
 
-
+    #[test]
+    fn test_to_words_le() {
+        let a = BigUint::from_str_radix("12ab655e9a2ca55660b44d1e5c37b00159aa76fed00000010a11800000000001", 16).unwrap();
+        let limbs = to_words_le(&a, 20, 13);
+        let expected = vec![
+            1, 0, 0, 768, 4257, 0, 0, 8154, 2678, 2765, 3072, 6255, 4581, 6694,
+            6530, 5290, 6700, 2804, 2777, 37,
+          ];
+        assert_eq!(limbs, expected);
+    }
 }
