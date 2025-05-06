@@ -139,7 +139,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
 
     // println!("C shader: {}", c_shader);
 
-    let (point_x_sb, point_y_sb, point_z_sb, scalar_chunks_sb) = convert_point_coords_and_decompose_shaders(
+    let (point_x_sb, point_y_sb, scalar_chunks_sb) = convert_point_coords_and_decompose_shaders(
         &c_shader,
         c_num_x_workgroups,
         c_num_y_workgroups,
@@ -257,7 +257,6 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
             &all_csc_col_ptr_sb,
             &point_x_sb,
             &point_y_sb,
-            &point_z_sb,
             &all_csc_val_idxs_sb,
             &bucket_sum_x_sb,
             &bucket_sum_y_sb,
@@ -444,7 +443,7 @@ pub async fn convert_point_coords_and_decompose_shaders(
     num_subtasks: usize,
     chunk_size: usize,
     num_words: usize,
-) -> (Buffer, Buffer, Buffer, Buffer) {
+) -> (Buffer, Buffer, Buffer) {
     assert!(num_subtasks * chunk_size == 256);
     let input_size = scalars_bytes.len() / 32;
     let points_sb = create_and_write_storage_buffer(Some("Points buffer"), device, points_bytes);
@@ -457,11 +456,6 @@ pub async fn convert_point_coords_and_decompose_shaders(
     );
     let points_y_sb = create_storage_buffer(
         Some("Point Y buffer"),
-        device,
-        (input_size * num_words * 4) as u64,
-    );
-    let points_z_sb = create_storage_buffer(
-        Some("Point Z buffer"),
         device,
         (input_size * num_words * 4) as u64,
     );
@@ -481,7 +475,7 @@ pub async fn convert_point_coords_and_decompose_shaders(
         Some("Bind group layout"),
         device,
         vec![&points_sb, &scalars_sb],
-        vec![&points_x_sb, &points_y_sb, &points_z_sb, &scalar_chunks_sb],
+        vec![&points_x_sb, &points_y_sb, &scalar_chunks_sb],
         vec![&params_ub],
     );
 
@@ -490,7 +484,7 @@ pub async fn convert_point_coords_and_decompose_shaders(
         Some("Bind group"),
         device,
         &bind_group_layout,
-        vec![&points_sb, &scalars_sb, &points_x_sb, &points_y_sb, &points_z_sb, &scalar_chunks_sb, &params_ub],
+        vec![&points_sb, &scalars_sb, &points_x_sb, &points_y_sb, &scalar_chunks_sb, &params_ub],
     );
 
 
@@ -513,7 +507,7 @@ pub async fn convert_point_coords_and_decompose_shaders(
     )
     .await;
 
-    (points_x_sb, points_y_sb, points_z_sb, scalar_chunks_sb)
+    (points_x_sb, points_y_sb, scalar_chunks_sb)
 }
 
 /*
@@ -637,7 +631,6 @@ pub async fn smvp_gpu(
     all_csc_col_ptr_sb: &Buffer,
     point_x_sb: &Buffer,
     point_y_sb: &Buffer,
-    point_z_sb: &Buffer,
     all_csc_val_idxs_sb: &Buffer,
     bucket_sum_x_sb: &Buffer,
     bucket_sum_y_sb: &Buffer,
@@ -655,7 +648,6 @@ pub async fn smvp_gpu(
             &all_csc_val_idxs_sb,
             &point_x_sb,
             &point_y_sb,
-            &point_z_sb,
         ],
         vec![&bucket_sum_x_sb, &bucket_sum_y_sb, &bucket_sum_z_sb],
         vec![&params_ub],
@@ -671,7 +663,6 @@ pub async fn smvp_gpu(
             &all_csc_val_idxs_sb,
             &point_x_sb,
             &point_y_sb,
-            &point_z_sb,
             &bucket_sum_x_sb,
             &bucket_sum_y_sb,
             &bucket_sum_z_sb,

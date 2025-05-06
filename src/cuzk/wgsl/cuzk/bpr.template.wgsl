@@ -1,6 +1,7 @@
 {{> structs }}
 {{> montgomery_product_funcs }}
 {{> field_funcs }}
+{{> barrett_funcs }}
 {{> bigint_funcs }}
 {{> ec_funcs }}
 

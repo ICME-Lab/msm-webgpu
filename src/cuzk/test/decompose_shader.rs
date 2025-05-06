@@ -4,11 +4,11 @@ use halo2curves::{CurveAffine, CurveExt};
 use group::Curve;
 use wgpu::CommandEncoderDescriptor;
 
-use crate::cuzk::{
+use crate::{cuzk::{
     gpu::{
         get_adapter, get_device, read_from_gpu_test,
-    }, lib::{points_to_bytes, scalars_to_bytes}, msm::{convert_point_coords_and_decompose_shaders, PARAMS, WORD_SIZE}, shader_manager::ShaderManager, utils::{debug, field_to_u8_vec_montgomery_for_gpu, u8s_to_field_without_assertion, u8s_to_fields_without_assertion}
-};
+    }, lib::{points_to_bytes, scalars_to_bytes}, msm::{convert_point_coords_and_decompose_shaders, P, PARAMS, WORD_SIZE}, shader_manager::ShaderManager, utils::{debug, field_to_u8_vec_montgomery_for_gpu, to_biguint_le, u8s_to_field_without_assertion, u8s_to_fields_without_assertion}
+}, halo2curves::utils::bytes_to_field};
 
 pub async fn decompose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> (Vec<C>, Vec<u8>) {
     let input_size = scalars.len();
@@ -83,7 +83,7 @@ pub async fn decompose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar
 
     // println!("C shader: {}", c_shader);
 
-    let (point_x_sb, point_y_sb, point_z_sb, scalar_chunks_sb) = convert_point_coords_and_decompose_shaders(
+    let (point_x_sb, point_y_sb, scalar_chunks_sb) = convert_point_coords_and_decompose_shaders(
         &c_shader,
         c_num_x_workgroups,
         c_num_y_workgroups,
@@ -100,27 +100,29 @@ pub async fn decompose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar
     .await;
     // Map results back from GPU to CPU.
     let data = read_from_gpu_test(&device, &queue, encoder, 
-        vec![point_x_sb, point_y_sb, point_z_sb, scalar_chunks_sb]).await;
+        vec![point_x_sb, point_y_sb, scalar_chunks_sb]).await;
 
     // Destroy the GPU device object.
     device.destroy();
 
 
-    let p_x = u8s_to_fields_without_assertion::<
-        <<C as CurveAffine>::CurveExt as CurveExt>::Base,
-    >(&data[0], num_words, WORD_SIZE);
-    let p_y = u8s_to_fields_without_assertion::<
-        <<C as CurveAffine>::CurveExt as CurveExt>::Base,
-    >(&data[1], num_words, WORD_SIZE);
-    let p_z = u8s_to_fields_without_assertion::<
-        <<C as CurveAffine>::CurveExt as CurveExt>::Base,
-    >(&data[2], num_words, WORD_SIZE);
+    let p_x = bytemuck::cast_slice::<u8, u32>(&data[0]).chunks(20);
+    let p_y = bytemuck::cast_slice::<u8, u32>(&data[1]).chunks(20);
 
-    let p = zip(zip(p_x, p_y), p_z).map(|((x, y), z)| {
-        let p = C::Curve::new_jacobian(x, y, z);
-        p.unwrap().to_affine()
+    let p = zip(p_x, p_y).map(|(x, y)| {
+    
+        let p_x_biguint_montgomery = to_biguint_le(&x.to_vec(), num_words, WORD_SIZE as u32);
+        let p_y_biguint_montgomery = to_biguint_le(&y.to_vec(), num_words, WORD_SIZE as u32);
+    
+        let p_x_biguint = p_x_biguint_montgomery * &PARAMS.rinv % P.clone();
+        let p_y_biguint = p_y_biguint_montgomery * &PARAMS.rinv % P.clone();
+        let p_x_field = bytes_to_field(&p_x_biguint.to_bytes_le());
+        let p_y_field = bytes_to_field(&p_y_biguint.to_bytes_le());
+    
+        let p = C::from_xy(p_x_field, p_y_field);
+        p.unwrap()
     }).collect::<Vec<_>>();
-    (p, data[3].clone())
+    (p, data[2].clone())
 
 }
 

@@ -87,7 +87,7 @@ pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
 
     // println!("C shader: {}", c_shader);
 
-    let (point_x_sb, point_y_sb, point_z_sb, scalar_chunks_sb) =
+    let (point_x_sb, point_y_sb, scalar_chunks_sb) =
         convert_point_coords_and_decompose_shaders(
             &c_shader,
             c_num_x_workgroups,
@@ -206,7 +206,6 @@ pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
             &all_csc_col_ptr_sb,
             &point_x_sb,
             &point_y_sb,
-            &point_z_sb,
             &all_csc_val_idxs_sb,
             &bucket_sum_x_sb,
             &bucket_sum_y_sb,

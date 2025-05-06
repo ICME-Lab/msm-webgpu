@@ -83,6 +83,7 @@ pub async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::C
     let results = data_u32.chunks(20)
         .map(|chunk| {
         let biguint = to_biguint_le(&chunk.to_vec(), num_words, WORD_SIZE as u32);
+
         let field: <<C as CurveAffine>::CurveExt as CurveExt>::Base = bytes_to_field(&biguint.to_bytes_le());
         field
     }).collect::<Vec<_>>();

@@ -1,8 +1,9 @@
 {{> structs }}
 {{> bigint_funcs }}
 {{> field_funcs }}
+{{> barrett_funcs }}
 {{> montgomery_product_funcs }}
-{{> extract_word_from_bytes_le_funcs }}
+{{ > extract_word_from_bytes_le_funcs }}
 
 /// Input storage buffers.
 @group(0) @binding(0)
@@ -16,14 +17,11 @@ var<storage, read_write> point_x: array<BigInt>;
 @group(0) @binding(3)
 var<storage, read_write> point_y: array<BigInt>;
 @group(0) @binding(4)
-var<storage, read_write> point_z: array<BigInt>;
-@group(0) @binding(5)
 var<storage, read_write> chunks: array<u32>;
 
 /// Uniform storage buffer.
-@group(0) @binding(6)
+@group(0) @binding(5)
 var<uniform> input_size: u32;
-
 const NUM_SUBTASKS = {{ num_subtasks }}u;
 
 /// Scalar chunk bitwidth.
@@ -38,50 +36,39 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     let INPUT_SIZE = input_size;
 
-
     // Store the x and y coordinates as byte arrays ([x8, y8, x8, y8]) 
     /// for easier indexing, where id = [0, ..., num_points].
-    var x_bytes : array<u32, 16>;
-    var y_bytes : array<u32, 16>;
-    var z_bytes : array<u32, 16>;      
-
-    let offset = id * 24u;             // 8 (x) + 8 (y) + 8 (z) = 24
-
+    var x_bytes: array<u32, 16>;
+    var y_bytes: array<u32, 16>;
     for (var i = 0u; i < 8u; i++) {
-        /* ---- x component ---- */
+        let offset = id * 16u;
+
         let x = coords[offset + i];
-        x_bytes[15 - i * 2]     = x & 0xFFFFu;
-        x_bytes[14 - i * 2]     = x >> 16u;
+        x_bytes[15 - (i * 2)] = x & 65535u;
+        x_bytes[15 - (i * 2) - 1] = x >> 16u;
 
-        /* ---- y component ---- */
-        let y = coords[offset + 8u + i];
-        y_bytes[15 - i * 2]     = y & 0xFFFFu;
-        y_bytes[14 - i * 2]     = y >> 16u;
-
-        /* ---- z component ---- */
-        let z = coords[offset + 16u + i];
-        z_bytes[15 - i * 2]     = z & 0xFFFFu;
-        z_bytes[14 - i * 2]     = z >> 16u;
+        let y = coords[offset + 8 + i];
+        y_bytes[15 - (i * 2)] = y & 65535u;
+        y_bytes[15 - (i * 2) - 1] = y >> 16u;
     }
 
     /// Convert the byte arrays to BigInts with word_size limbs.
     var x_bigint: BigInt;
     var y_bigint: BigInt;
-    var z_bigint: BigInt;
-    for (var i = 0u; i < NUM_WORDS - 1u; i++) {
+    for (var i = 0u; i < NUM_WORDS - 1u; i ++) {
         x_bigint.limbs[i] = extract_word_from_bytes_le(x_bytes, i, WORD_SIZE);
         y_bigint.limbs[i] = extract_word_from_bytes_le(y_bytes, i, WORD_SIZE);
-        z_bigint.limbs[i] = extract_word_from_bytes_le(z_bytes, i, WORD_SIZE);
     }
 
     let shift = (((NUM_WORDS * WORD_SIZE - 256u) + 16u) - WORD_SIZE);
     x_bigint.limbs[NUM_WORDS - 1u] = x_bytes[0] >> shift;
     y_bigint.limbs[NUM_WORDS - 1u] = y_bytes[0] >> shift;
-    z_bigint.limbs[NUM_WORDS - 1u] = z_bytes[0] >> shift;
 
-    point_x[id] = x_bigint;
-    point_y[id] = y_bigint;
-    point_z[id] = z_bigint;
+    /// Convert x and y coordinates to Montgomery form.
+    var r = get_r();
+    point_x[id] = field_mul(&x_bigint, &r);
+    point_y[id] = field_mul(&y_bigint, &r);
+
     /// Decompose scalars.
     var scalar_bytes: array<u32, 16>;
     for (var i = 0u; i < 8u; i++) {
@@ -98,10 +85,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let offset = i * INPUT_SIZE;
         chunks_arr[i] = extract_word_from_bytes_le(scalar_bytes, i, CHUNK_SIZE);
     }
-    let div = i32(NUM_SUBTASKS) * i32(CHUNK_SIZE) - 256 + 16 - i32(CHUNK_SIZE);
-    if (div >= 0) {
-        chunks_arr[NUM_SUBTASKS - 1u] = scalar_bytes[0] >> u32(div);
-    }
+    chunks_arr[NUM_SUBTASKS - 1] = scalar_bytes[0] >> (((NUM_SUBTASKS * CHUNK_SIZE - 256u) + 16u) - CHUNK_SIZE);
 
     /// Iterate through chunks_arr to compute the signed indices.
     let l = {{ num_columns }}u;
