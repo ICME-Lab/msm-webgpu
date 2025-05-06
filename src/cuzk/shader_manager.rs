@@ -54,7 +54,7 @@ pub static TEST_POINT_SHADER: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/test/test_point.wgsl").to_string()
 });
 
-use crate::cuzk::utils::{calc_bitwidth, gen_mu_limbs, gen_p_limbs};
+use crate::cuzk::utils::{calc_bitwidth, gen_mu_limbs, gen_p_limbs, gen_rinv_limbs};
 
 use super::{msm::{P, PARAMS}, utils::{gen_p_limbs_plus_one, gen_r_limbs, gen_zero_limbs}};
 pub struct ShaderManager {
@@ -72,6 +72,7 @@ pub struct ShaderManager {
     w_mask: usize,
     n0: u32,
     mu_limbs: String,
+    rinv_limbs: String,
 }
 
 impl ShaderManager {
@@ -79,6 +80,7 @@ impl ShaderManager {
         let p_bit_length = calc_bitwidth(&P); 
         let num_words = PARAMS.num_words;
         let r = PARAMS.r.clone();
+        let rinv = PARAMS.rinv.clone();
         println!("P: {:?}", P);
         println!("P limbs: {}", gen_p_limbs(&P, num_words, word_size));
         println!("W_MASK: {:?}", (1 << word_size) - 1);
@@ -98,6 +100,7 @@ impl ShaderManager {
             n0: PARAMS.n0.clone(),
             r_limbs: gen_r_limbs(&r, num_words, word_size),
             mu_limbs: gen_mu_limbs(&P, num_words, word_size),
+            rinv_limbs: gen_rinv_limbs(&rinv, num_words, word_size),
         }
     }
 
@@ -146,6 +149,7 @@ impl ShaderManager {
             "num_words_plus_one": self.num_words + 1,
             "mu_limbs": self.mu_limbs,
             "slack": self.slack,
+            "rinv_limbs": self.rinv_limbs,
         });
         // TODO: Add recompile
         handlebars.render("smvp", &data).unwrap()
@@ -179,6 +183,7 @@ impl ShaderManager {
             "num_words_plus_one": self.num_words + 1,
             "mu_limbs": self.mu_limbs,
             "slack": self.slack,
+            "rinv_limbs": self.rinv_limbs,
         });
         // TODO: Add recompile
         handlebars.render("bpr", &data).unwrap()
@@ -230,6 +235,7 @@ impl ShaderManager {
             "r_limbs": self.r_limbs,
             "mu_limbs": self.mu_limbs,
             "slack": self.slack,
+            "rinv_limbs": self.rinv_limbs,
         });
         // TODO: Add recompile
         handlebars.render("decomp_scalars", &data).unwrap()
@@ -262,6 +268,7 @@ impl ShaderManager {
             "n0": self.n0,
             "mu_limbs": self.mu_limbs,
             "slack": self.slack,
+            "rinv_limbs": self.rinv_limbs,
         });
         handlebars.render("test_field", &data).unwrap()
     }
@@ -292,6 +299,7 @@ impl ShaderManager {
             "n0": self.n0,
             "mu_limbs": self.mu_limbs,
             "slack": self.slack,
+            "rinv_limbs": self.rinv_limbs,
         });
         handlebars.render("test_diff_impl", &data).unwrap()
     }
@@ -321,6 +329,7 @@ impl ShaderManager {
             "n0": self.n0,
             "mu_limbs": self.mu_limbs,
             "slack": self.slack,
+            "rinv_limbs": self.rinv_limbs,
         });
         handlebars.render("test_point", &data).unwrap()
     }

@@ -2,16 +2,17 @@ use std::time::Instant;
 
 use halo2curves::{CurveAffine, CurveExt};
 use group::Curve;
+use itertools::Itertools;
 use wgpu::CommandEncoderDescriptor;
 
-use crate::cuzk::{
+use crate::{cuzk::{
     gpu::{
         create_and_write_storage_buffer, create_and_write_uniform_buffer, create_bind_group, create_bind_group_layout, create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device, read_from_gpu, read_from_gpu_test
     },
     msm::{PARAMS, WORD_SIZE},
     shader_manager::ShaderManager,
-    utils::{field_to_u8_vec_for_gpu, field_to_u8_vec_montgomery_for_gpu, points_to_bytes_for_gpu, u8s_to_fields_without_assertion},
-};
+    utils::{field_to_u8_vec_for_gpu, field_to_u8_vec_montgomery_for_gpu, points_to_bytes_for_gpu, to_biguint_le, u8s_to_fields_without_assertion},
+}, halo2curves::utils::bytes_to_field};
 
 pub async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve {
     let a_bytes = points_to_bytes_for_gpu(&vec![a], PARAMS.num_words, WORD_SIZE);
@@ -75,10 +76,41 @@ pub async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::C
     // Destroy the GPU device object.
     device.destroy();
 
-    let result = u8s_to_fields_without_assertion::<<<C as CurveAffine>::CurveExt as CurveExt>::Base>(&data[0], num_words, WORD_SIZE);
+    let data_u32 = bytemuck::cast_slice::<u8, u32>(&data[0]);
+    println!("Data u32: {:?}", data_u32);
+    println!("Data length: {:?}", data_u32.len());
 
-    println!("Result: {:?}", result);
-    C::Curve::new_jacobian(result[0].clone(), result[1].clone(), result[2].clone()).unwrap()
+    let results = data_u32.chunks(20)
+        .map(|chunk| {
+        let biguint = to_biguint_le(&chunk.to_vec(), num_words, WORD_SIZE as u32);
+        let field: <<C as CurveAffine>::CurveExt as CurveExt>::Base = bytes_to_field(&biguint.to_bytes_le());
+        field
+    }).collect::<Vec<_>>();
+
+    println!("Results: {:?}", results);
+
+    // let result_x_biguint = to_biguint_le(&data_x_u32.to_vec(), num_words, WORD_SIZE as u32);
+
+    // let result_x = bytes_to_field(&result_x_biguint.to_bytes_le());
+
+    // let data_y_u32 = bytemuck::cast_slice::<u8, u32>(&data[1]);
+    // println!("Data y u32: {:?}", data_y_u32);
+
+    // let result_y_biguint = to_biguint_le(&data_y_u32.to_vec(), num_words, WORD_SIZE as u32);
+
+    // let result_y = bytes_to_field(&result_y_biguint.to_bytes_le());
+
+    // let data_z_u32 = bytemuck::cast_slice::<u8, u32>(&data[2]);
+    // println!("Data z u32: {:?}", data_z_u32);
+
+    // let result_z_biguint = to_biguint_le(&data_z_u32.to_vec(), num_words, WORD_SIZE as u32);
+
+    // let result_z = bytes_to_field(&result_z_biguint.to_bytes_le());
+
+    // let result = u8s_to_fields_without_assertion::<<<C as CurveAffine>::CurveExt as CurveExt>::Base>(&data[0], num_words, WORD_SIZE);
+
+    // println!("Result: {:?}", result);
+    C::Curve::new_jacobian(results[0].clone(), results[1].clone(), results[2].clone()).unwrap()
 }
 
 pub fn run_webgpu_point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve {

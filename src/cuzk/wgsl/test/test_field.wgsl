@@ -19,8 +19,13 @@ fn test_field_mul(
     /// Convert x and y coordinates to Montgomery form.
     var r = get_r();
     var x = a;
-    var y = b;
-    result = montgomery_product(&x, &y);
+    var x_r = field_mul(&x, &r);
+    var y = b;  
+    var y_r = field_mul(&y, &r);
+    var tmp = montgomery_product(&x_r, &y_r);
+
+    var rinv = get_rinv();
+    result = field_mul(&tmp, &rinv);
 }
 
 
@@ -52,5 +57,7 @@ fn test_barret_mul(
     /// Convert x and y coordinates to Montgomery form.
     var r = get_r();
     var x = a;
-    result = field_mul(&x, &r);
+    var x_r = field_mul(&x, &r);
+    var rinv = get_rinv();
+    result = field_mul(&x_r, &rinv);
 }

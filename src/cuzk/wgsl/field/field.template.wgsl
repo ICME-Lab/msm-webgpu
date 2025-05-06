@@ -25,6 +25,12 @@ fn get_r() -> BigInt {
     return r;
 }
 
+fn get_rinv() -> BigInt {
+    var rinv: BigInt;
+{{{ rinv_limbs }}}
+    return rinv;
+}
+
 
 
 fn field_add(a: ptr<function, BigInt>, b: ptr<function, BigInt>) -> BigInt { 

@@ -33,9 +33,9 @@ pub fn points_to_bytes_for_gpu<C: CurveAffine>(
     g.into_iter()
         .flat_map(|affine| {
             let coords = affine.coordinates().unwrap();
-            let x = field_to_u8_vec_montgomery_for_gpu(coords.x(), num_words, word_size);
-            let y = field_to_u8_vec_montgomery_for_gpu(coords.y(), num_words, word_size);
-            let z = field_to_u8_vec_montgomery_for_gpu(&C::Base::ONE, num_words, word_size);
+            let x = field_to_u8_vec_for_gpu(coords.x(), num_words, word_size);
+            let y = field_to_u8_vec_for_gpu(coords.y(), num_words, word_size);
+            let z = field_to_u8_vec_for_gpu(&C::Base::ONE, num_words, word_size);
             [x, y, z].concat()
         })
         .collect::<Vec<_>>()
@@ -56,12 +56,12 @@ pub fn points_to_bytes_for_gpu_x_y<C: CurveAffine>(
     for affine in g {
         let coords = affine.coordinates().unwrap();
 
-        xs.extend(field_to_u8_vec_montgomery_for_gpu(
+        xs.extend(field_to_u8_vec_for_gpu(
             coords.x(),
             num_words,
             word_size,
         ));
-        ys.extend(field_to_u8_vec_montgomery_for_gpu(
+        ys.extend(field_to_u8_vec_for_gpu(
             coords.y(),
             num_words,
             word_size,
@@ -249,8 +249,8 @@ pub fn from_words_le_without_assertion<F: PrimeField>(
     // debug(&format!("val: {:?}", val));
     let bytes = val.to_bytes_le();
     // debug(&format!("bytes: {:?}", bytes));
-    let field = bytes_to_field_montgomery(&bytes);
-    // let field = bytes_to_field(&bytes);
+    // let field = bytes_to_field_montgomery(&bytes);
+    let field = bytes_to_field(&bytes);
     // debug(&format!("field: {:?}", field));
     field
 }
@@ -302,6 +302,19 @@ pub fn gen_r_limbs(
     let mut r = String::new();
     for (i, limb) in limbs.iter().enumerate() {
         r += &format!("    r.limbs[{}u] = {}u;\n", i, limb);
+    }
+    r
+}
+
+pub fn gen_rinv_limbs(
+    rinv: &BigUint,
+    num_words: usize,
+    word_size: usize,
+) -> String {
+    let limbs = to_words_le(rinv, num_words, word_size);
+    let mut r = String::new();
+    for (i, limb) in limbs.iter().enumerate() {
+        r += &format!("    rinv.limbs[{}u] = {}u;\n", i, limb);
     }
     r
 }
