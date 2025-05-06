@@ -4,16 +4,15 @@ use halo2curves::{CurveAffine, CurveExt};
 use group::Curve;
 use wgpu::CommandEncoderDescriptor;
 
-use crate::cuzk::{
+use crate::{cuzk::{
     gpu::{create_storage_buffer, get_adapter, get_device, read_from_gpu_test},
     lib::{points_to_bytes, scalars_to_bytes},
-    msm::{convert_point_coords_and_decompose_shaders, smvp_gpu, transpose_gpu, PARAMS, WORD_SIZE},
+    msm::{convert_point_coords_and_decompose_shaders, smvp_gpu, transpose_gpu, P, PARAMS, WORD_SIZE},
     shader_manager::ShaderManager,
     utils::{
-        debug, field_to_u8_vec_montgomery_for_gpu, u8s_to_field_without_assertion,
-        u8s_to_fields_without_assertion,
+        debug, field_to_u8_vec_montgomery_for_gpu, to_biguint_le, u8s_to_field_without_assertion, u8s_to_fields_without_assertion
     },
-};
+}, halo2curves::utils::bytes_to_field};
 
 pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> Vec<Vec<u8>> {
     let input_size = scalars.len();
@@ -225,28 +224,25 @@ pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     // Destroy the GPU device object.
     device.destroy();
 
-    let p_x = u8s_to_fields_without_assertion::<C::Base>(
-        &data[0], num_words, WORD_SIZE,
-    );
-    let p_y = u8s_to_fields_without_assertion::<C::Base>(
-        &data[1], num_words, WORD_SIZE,
-    );
-    let p_z = u8s_to_fields_without_assertion::<C::Base>(
-        &data[2], num_words, WORD_SIZE,
-    );
+    let p_x = bytemuck::cast_slice::<u8, u32>(&data[0]).chunks(20);
+    let p_y = bytemuck::cast_slice::<u8, u32>(&data[1]).chunks(20);
+    let p_z = bytemuck::cast_slice::<u8, u32>(&data[2]).chunks(20);
 
     let p = zip(zip(p_x, p_y), p_z)
         .enumerate()
         .map(|(i, ((x, y), z))| {
-            debug(&format!("Coordinate {} x: {:?}", i, x));
-            debug(&format!("Coordinate {} y: {:?}", i, y));
-            debug(&format!("Coordinate {} z: {:?}", i, z));
-            let p_affine = C::from_xy(x, y).unwrap();
-            debug(&format!("Point {} affine: {:?}", i, p_affine));
-            // let p = C::Curve::new_jacobian(x, y, z).unwrap();
-            // debug(&format!("Point {} p: {:?}", i, p));
-            // p.to_affine()
-            p_affine
+            let p_x_biguint_montgomery = to_biguint_le(&x.to_vec(), num_words, WORD_SIZE as u32);
+            let p_y_biguint_montgomery = to_biguint_le(&y.to_vec(), num_words, WORD_SIZE as u32);
+            let p_z_biguint_montgomery = to_biguint_le(&z.to_vec(), num_words, WORD_SIZE as u32);
+        
+            let p_x_biguint = p_x_biguint_montgomery * &PARAMS.rinv % P.clone();
+            let p_y_biguint = p_y_biguint_montgomery * &PARAMS.rinv % P.clone();
+            let p_z_biguint = p_z_biguint_montgomery * &PARAMS.rinv % P.clone();
+            let p_x_field = bytes_to_field(&p_x_biguint.to_bytes_le());
+            let p_y_field = bytes_to_field(&p_y_biguint.to_bytes_le());
+            let p_z_field = bytes_to_field(&p_z_biguint.to_bytes_le());
+            let p = C::Curve::new_jacobian(p_x_field, p_y_field, p_z_field).unwrap();
+            p.to_affine()
         })
         .collect::<Vec<_>>();
     data
