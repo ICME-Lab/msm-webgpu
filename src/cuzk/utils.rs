@@ -306,6 +306,41 @@ pub fn gen_r_limbs(
     r
 }
 
+pub fn gen_mu(
+    p: &BigUint
+) -> BigUint {
+  let mut x = 1u32;
+  let two = BigUint::from(2u32);
+
+  while two.pow(x) < *p {
+    x += 1;
+  }
+
+  BigUint::from(4u32).pow(x) / p
+}
+
+pub fn gen_mu_limbs(
+    p: &BigUint,
+    num_words: usize,
+    word_size: usize,
+) -> String {
+    let mu = gen_mu(p);
+    let limbs = to_words_le(&mu, num_words, word_size);
+    let mut r = String::new();
+    for (i, limb) in limbs.iter().enumerate() {
+        r += &format!("    mu.limbs[{}u] = {}u;\n", i, limb);
+    }
+    r
+}
+
+pub fn calc_bitwidth(p: &BigUint) -> usize {
+    if *p == BigUint::from(0u32) {
+        return 0;
+    }
+
+    p.to_radix_le(2).len()
+}
+
 fn egcd(a: &BigInt, b: &BigInt) -> (BigInt, BigInt, BigInt) {
     if *a == BigInt::from(0u32) {
         return (b.clone(), BigInt::from(0u32), BigInt::from(1u32));

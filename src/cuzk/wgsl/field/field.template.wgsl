@@ -25,6 +25,8 @@ fn get_r() -> BigInt {
     return r;
 }
 
+
+
 fn field_add(a: ptr<function, BigInt>, b: ptr<function, BigInt>) -> BigInt { 
     var res: BigInt;
     bigint_add(a, b, &res);

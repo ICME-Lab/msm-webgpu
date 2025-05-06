@@ -15,6 +15,9 @@ pub static MONTGOMERY_PRODUCT_FUNCS_2: Lazy<String> = Lazy::new(|| {
 pub static MONTGOMERY_PRODUCT_FUNCS: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/montgomery/mont_pro_product.template.wgsl").to_string()
 });
+pub static BARRETT_FUNCS: Lazy<String> = Lazy::new(|| {
+    include_str!("wgsl/field/barrett.template.wgsl").to_string()
+});
 pub static MONTGOMERY_PRODUCT_FUNCS_CIOS: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/montgomery/mont_pro_cios.template.wgsl").to_string()
 });
@@ -51,7 +54,7 @@ pub static TEST_POINT_SHADER: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/test/test_point.wgsl").to_string()
 });
 
-use crate::cuzk::utils::gen_p_limbs;
+use crate::cuzk::utils::{calc_bitwidth, gen_mu_limbs, gen_p_limbs};
 
 use super::{msm::{P, PARAMS}, utils::{gen_p_limbs_plus_one, gen_r_limbs, gen_zero_limbs}};
 pub struct ShaderManager {
@@ -68,11 +71,12 @@ pub struct ShaderManager {
     slack: usize,
     w_mask: usize,
     n0: u32,
+    mu_limbs: String,
 }
 
 impl ShaderManager {
     pub fn new(word_size: usize, chunk_size: usize, input_size: usize) -> Self {
-        let p_bit_length = 254; // TODO: Parameterise
+        let p_bit_length = calc_bitwidth(&P); 
         let num_words = PARAMS.num_words;
         let r = PARAMS.r.clone();
         println!("P: {:?}", P);
@@ -92,7 +96,8 @@ impl ShaderManager {
             slack: num_words * word_size - p_bit_length,
             w_mask: (1 << word_size) - 1,
             n0: PARAMS.n0.clone(),
-            r_limbs: gen_r_limbs(&r, num_words, word_size)
+            r_limbs: gen_r_limbs(&r, num_words, word_size),
+            mu_limbs: gen_mu_limbs(&P, num_words, word_size),
         }
     }
 
@@ -121,6 +126,7 @@ impl ShaderManager {
         handlebars.register_template_string("ec_funcs", EC_FUNCS.as_str()).unwrap();
         handlebars.register_template_string("field_funcs", FIELD_FUNCS.as_str()).unwrap();
         handlebars.register_template_string("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS.as_str()).unwrap();
+        handlebars.register_template_string("barrett_funcs", BARRETT_FUNCS.as_str()).unwrap();
 
         let data = json!({
             "word_size": self.word_size,
@@ -138,6 +144,8 @@ impl ShaderManager {
             "half_num_columns": num_csr_cols / 2,
             "num_words_mul_two": self.num_words * 2,
             "num_words_plus_one": self.num_words + 1,
+            "mu_limbs": self.mu_limbs,
+            "slack": self.slack,
         });
         // TODO: Add recompile
         handlebars.render("smvp", &data).unwrap()
@@ -154,7 +162,7 @@ impl ShaderManager {
         handlebars.register_template_string("ec_funcs", EC_FUNCS.as_str()).unwrap();
         handlebars.register_template_string("field_funcs", FIELD_FUNCS.as_str()).unwrap();
         handlebars.register_template_string("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS.as_str()).unwrap();
-
+        handlebars.register_template_string("barrett_funcs", BARRETT_FUNCS.as_str()).unwrap();
         let data = json!({
             "workgroup_size": workgroup_size,
             "word_size": self.word_size,
@@ -169,6 +177,8 @@ impl ShaderManager {
             "index_shift": self.index_shift,
             "num_words_mul_two": self.num_words * 2,
             "num_words_plus_one": self.num_words + 1,
+            "mu_limbs": self.mu_limbs,
+            "slack": self.slack,
         });
         // TODO: Add recompile
         handlebars.render("bpr", &data).unwrap()
@@ -198,7 +208,7 @@ impl ShaderManager {
             "extract_word_from_bytes_le_funcs",
             EXTRACT_WORD_FROM_BYTES_LE_FUNCS.as_str(),
         ).unwrap();
-
+        handlebars.register_template_string("barrett_funcs", BARRETT_FUNCS.as_str()).unwrap();
         let data = json!({
             "workgroup_size": workgroup_size,
             "word_size": self.word_size,
@@ -217,7 +227,9 @@ impl ShaderManager {
             "index_shift": self.index_shift,
             "num_words_mul_two": self.num_words * 2,
             "num_words_plus_one": self.num_words + 1,
-            "r_limbs": self.r_limbs
+            "r_limbs": self.r_limbs,
+            "mu_limbs": self.mu_limbs,
+            "slack": self.slack,
         });
         // TODO: Add recompile
         handlebars.render("decomp_scalars", &data).unwrap()
@@ -234,6 +246,7 @@ impl ShaderManager {
         handlebars.register_template_string("field_funcs", FIELD_FUNCS.as_str()).unwrap();
         handlebars.register_template_string("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS.as_str()).unwrap();
         handlebars.register_template_string("montgomery_product_funcs_2", MONTGOMERY_PRODUCT_FUNCS_2.as_str()).unwrap();
+        handlebars.register_template_string("barrett_funcs", BARRETT_FUNCS.as_str()).unwrap();
 
         let data = json!({
             "word_size": self.word_size,
@@ -247,6 +260,8 @@ impl ShaderManager {
             "num_words_mul_two": self.num_words * 2,
             "num_words_plus_one": self.num_words + 1,
             "n0": self.n0,
+            "mu_limbs": self.mu_limbs,
+            "slack": self.slack,
         });
         handlebars.render("test_field", &data).unwrap()
     }
@@ -261,6 +276,7 @@ impl ShaderManager {
         handlebars.register_template_string("field_funcs", FIELD_FUNCS.as_str()).unwrap();
         handlebars.register_template_string("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS.as_str()).unwrap();
         handlebars.register_template_string("montgomery_product_funcs_2", MONTGOMERY_PRODUCT_FUNCS_2.as_str()).unwrap();
+        handlebars.register_template_string("barrett_funcs", BARRETT_FUNCS.as_str()).unwrap();
 
         let data = json!({
             "word_size": self.word_size,
@@ -274,6 +290,8 @@ impl ShaderManager {
             "num_words_mul_two": self.num_words * 2,
             "num_words_plus_one": self.num_words + 1,
             "n0": self.n0,
+            "mu_limbs": self.mu_limbs,
+            "slack": self.slack,
         });
         handlebars.render("test_diff_impl", &data).unwrap()
     }
@@ -288,7 +306,7 @@ impl ShaderManager {
         handlebars.register_template_string("field_funcs", FIELD_FUNCS.as_str()).unwrap();
         handlebars.register_template_string("montgomery_product_funcs", MONTGOMERY_PRODUCT_FUNCS.as_str()).unwrap();
         handlebars.register_template_string("ec_funcs", EC_FUNCS.as_str()).unwrap();
-
+        handlebars.register_template_string("barrett_funcs", BARRETT_FUNCS.as_str()).unwrap();
         let data = json!({
             "word_size": self.word_size,
             "num_words": self.num_words,
@@ -301,6 +319,8 @@ impl ShaderManager {
             "num_words_mul_two": self.num_words * 2,
             "num_words_plus_one": self.num_words + 1,
             "n0": self.n0,
+            "mu_limbs": self.mu_limbs,
+            "slack": self.slack,
         });
         handlebars.render("test_point", &data).unwrap()
     }
