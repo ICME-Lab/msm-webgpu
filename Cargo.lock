@@ -146,9 +146,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.20"
+version = "1.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04da6a0d40b948dfc4fa8f5bbf402b0fc1a64a28dbf7d12ffd683550f2c1b63a"
+checksum = "8691782945451c1c383942c4874dbe63814f61cb57ef773cda2972682b7bb3c0"
 dependencies = [
  "shlex",
 ]
@@ -352,7 +352,8 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 [[package]]
 name = "ff"
 version = "0.13.1"
-source = "git+https://github.com/ICME-Lab/ff?branch=main#19733c03ff95f27950bff9a44aaedf83c63ccff8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0b50bfb653653f9ca9095b427bed08ab8d75a137839d9ad64eb11810d5b6393"
 dependencies = [
  "bitvec",
  "rand_core",
@@ -524,7 +525,7 @@ dependencies = [
 [[package]]
 name = "halo2curves"
 version = "0.6.0"
-source = "git+https://github.com/ICME-Lab/halo2curves?branch=main#b606565198df9dfd7626011dfc5ee0a6bdafe643"
+source = "git+https://github.com/ICME-Lab/halo2curves?branch=main#129994dfcaa872070692e0200a9e35b3cd2bd3e8"
 dependencies = [
  "blake2b_simd",
  "ff",
@@ -1093,9 +1094,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.5.11"
+version = "0.5.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2f103c6d277498fbceb16e84d317e2a400f160f46904d5f5410848c829511a3"
+checksum = "928fca9cf2aa042393a8325b9ead81d2f0df4cb12e1e24cef072922ccd99c5af"
 dependencies = [
  "bitflags 2.9.0",
 ]
