@@ -1,11 +1,9 @@
 use group::Group;
 use halo2curves::CurveAffine;
 use halo2curves::CurveExt;
-use num_bigint::BigInt;
 use num_bigint::BigUint;
 use num_traits::Num;
 use once_cell::sync::Lazy;
-use web_sys::console;
 use wgpu::{Buffer, CommandEncoder, CommandEncoderDescriptor, Device, Queue};
 
 use crate::cuzk::gpu::{
@@ -15,11 +13,10 @@ use crate::cuzk::gpu::{
 };
 use crate::cuzk::lib::{points_to_bytes, scalars_to_bytes};
 use crate::cuzk::shader_manager::ShaderManager;
-use crate::cuzk::utils::debug;
 use crate::cuzk::utils::to_biguint_le;
 
 use super::utils::bytes_to_field;
-use super::utils::{compute_misc_params, u8s_to_fields_without_assertion, MiscParams};
+use super::utils::{compute_misc_params, MiscParams};
 
 // TODO: HARDCODE THE VALUE FOR BN256 FOR EFFICIENCY
 pub fn calc_num_words(word_size: usize) -> usize {

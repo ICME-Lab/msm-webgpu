@@ -1,11 +1,8 @@
 use ff::PrimeField;
-use group::{Curve, Group};
+use group::Group;
 use halo2curves::bn256::{Fr, G1Affine, G1};
 
-use crate::cuzk::{
-    lib::{sample_points, sample_scalars},
-    utils::to_words_le_from_field,
-};
+use crate::cuzk::utils::to_words_le_from_field;
 
 /// Rust implementation of serial transpose algorithm from
 /// https://synergy.cs.vt.edu/pubs/papers/wang-transposition-ics16.pdf.
@@ -312,8 +309,8 @@ pub fn parallel_bucket_reduction_2(
 }
 #[cfg(test)]
 mod tests {
-    use crate::cuzk::lib::fast_msm;
-
+    use crate::cuzk::lib::{fast_msm, sample_points, sample_scalars};
+    use group::Curve;
     use super::*;
 
     #[test]

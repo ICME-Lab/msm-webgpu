@@ -1,48 +1,21 @@
 use std::time::Instant;
 
 use ff::PrimeField;
-use num_bigint::BigUint;
 use wgpu::CommandEncoderDescriptor;
 
 use crate::cuzk::{
     gpu::{
         create_and_write_storage_buffer, create_bind_group, create_bind_group_layout,
-        create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device,
-        read_from_gpu, read_from_gpu_test,
+        create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device, read_from_gpu_test,
     },
-    msm::{P, PARAMS, WORD_SIZE},
+    msm::{PARAMS, WORD_SIZE},
     shader_manager::ShaderManager,
-    utils::{bytes_to_field, field_to_u8_vec_for_gpu, from_biguint_le, to_biguint_le, u8s_to_field_without_assertion},
+    utils::{bytes_to_field, field_to_u8_vec_for_gpu, to_biguint_le},
 };
 
 pub async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
-
-    // let a_biguint: BigUint = BigUint::from_bytes_le(&field_to_bytes(&a));
-    // let a_limbs = from_biguint_le(&a_biguint, PARAMS.num_words, WORD_SIZE as u32);
-    // println!("A limbs: {:?}", a_limbs);
-    // let ar = &a_biguint * &PARAMS.r % P.clone();
-    // println!("Ar: {:?}", ar);
-    // let ar_limbs = from_biguint_le(&ar, PARAMS.num_words, WORD_SIZE as u32);
-    // println!("Ar limbs: {:?}", ar_limbs);
-
-    // let a_bytes = bytemuck::cast_slice::<u32, u8>(&ar_limbs);
-    // println!("A bytes: {:?}", a_bytes);
-
     let a_bytes = field_to_u8_vec_for_gpu(&a, PARAMS.num_words, WORD_SIZE);
-
-    // let b_biguint: BigUint = BigUint::from_bytes_le(&field_to_bytes(&b));
-    // let b_limbs = from_biguint_le(&b_biguint, PARAMS.num_words, WORD_SIZE as u32);
-    // println!("B limbs: {:?}", b_limbs);
-    // let br = &b_biguint * &PARAMS.r % P.clone();
-    // println!("Br: {:?}", br);
-    // let br_limbs = from_biguint_le(&br, PARAMS.num_words, WORD_SIZE as u32);
-    // println!("Br limbs: {:?}", br_limbs);
-    // let b_bytes = bytemuck::cast_slice::<u32, u8>(&br_limbs);
-    // println!("B bytes: {:?}", b_bytes);
-
     let b_bytes = field_to_u8_vec_for_gpu(&b, PARAMS.num_words, WORD_SIZE);
-    // let t = field_to_bytes_montgomery(&a);
-    // println!("T bytes: {:?}", t);
     let input_size = 1;
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_words = PARAMS.num_words;
@@ -99,10 +72,7 @@ pub async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
     // Destroy the GPU device object.
     device.destroy();
 
-    println!("Data: {:?}", data);
-
     let data_u32 = bytemuck::cast_slice::<u8, u32>(&data[0]);
-    println!("Data u32: {:?}", data_u32);
 
     let result_biguint = to_biguint_le(&data_u32.to_vec(), num_words, WORD_SIZE as u32);
 
@@ -125,7 +95,7 @@ pub async fn run_webgpu_field_op_async<F: PrimeField>(op: &str, a: F, b: F) -> F
 
 #[cfg(test)]
 mod tests {
-    use crate::cuzk::{lib::sample_scalars, utils::field_to_u8_vec_for_gpu};
+    use crate::cuzk::lib::sample_scalars;
 
     use super::*;
     use ff::Field;

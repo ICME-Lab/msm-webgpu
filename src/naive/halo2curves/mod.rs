@@ -4,7 +4,7 @@ pub mod test;
 use std::time::Instant;
 
 use crate::naive::{
-    gpu, halo2curves::utils::fields_to_u16_vec, utils::{files::{load_shader_code}, montgomery::{field_to_u16_as_u32_as_u8_vec_montgomery, fields_to_u16_vec_montgomery, u16_vec_to_fields_montgomery}}
+    gpu, utils::{files::{load_shader_code}, montgomery::{field_to_u16_as_u32_as_u8_vec_montgomery, u16_vec_to_fields_montgomery}}
 };
 use ff::{Field, PrimeField};
 use group::{Group, Curve};
@@ -91,6 +91,8 @@ pub async fn run_webgpu_msm_async_browser<C: CurveAffine>(g: &Vec<C>, v: &Vec<C:
 
 #[cfg(test)]
 mod tests {
+    use crate::naive::utils::montgomery::fields_to_u16_vec_montgomery;
+
     use super::*;
     use halo2curves::{bn256::{Fq, G1Affine}, CurveAffine};
 

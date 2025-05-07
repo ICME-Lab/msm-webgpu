@@ -1,13 +1,12 @@
 use std::{iter::zip, time::Instant};
 
-use halo2curves::{CurveAffine, CurveExt};
-use group::Curve;
+use halo2curves::CurveAffine;
 use wgpu::CommandEncoderDescriptor;
 
 use crate::cuzk::{
     gpu::{
         get_adapter, get_device, read_from_gpu_test,
-    }, lib::{points_to_bytes, scalars_to_bytes}, msm::{convert_point_coords_and_decompose_shaders, P, PARAMS, WORD_SIZE}, shader_manager::ShaderManager, utils::{bytes_to_field, debug, to_biguint_le, u8s_to_field_without_assertion, u8s_to_fields_without_assertion}
+    }, lib::{points_to_bytes, scalars_to_bytes}, msm::{convert_point_coords_and_decompose_shaders, P, PARAMS, WORD_SIZE}, shader_manager::ShaderManager, utils::{bytes_to_field, debug, to_biguint_le}
 };
 
 pub async fn decompose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> (Vec<C>, Vec<u8>) {
@@ -139,7 +138,7 @@ pub async fn run_webgpu_decompose_async<C: CurveAffine>(points: &[C], scalars: &
 
 #[cfg(test)]
 mod tests {
-    use crate::cuzk::{lib::{sample_points, sample_scalars}, test::cuzk::decompose_scalars_signed, utils::to_words_le_from_le_bytes};
+    use crate::cuzk::lib::{sample_points, sample_scalars};
 
     use super::*;
     use halo2curves::bn256::{Fr, G1Affine};
@@ -149,12 +148,6 @@ mod tests {
         let input_size = 1 << 16;
         let scalars = sample_scalars::<Fr>(input_size);
         let points = sample_points::<G1Affine>(input_size);
-
-        let chunk_size: usize = 16;
-        let num_columns = 1 << chunk_size;
-        let num_rows = (input_size + num_columns - 1) / num_columns;
-        let num_chunks_per_scalar = (256 + chunk_size - 1) / chunk_size;
-        let num_subtasks = num_chunks_per_scalar;
 
         let (result_points, _result_scalars) = run_webgpu_decompose::<G1Affine>(&points, &scalars);
         assert_eq!(result_points, points);

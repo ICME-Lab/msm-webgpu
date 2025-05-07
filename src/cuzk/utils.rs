@@ -428,7 +428,7 @@ pub fn debug(s: &str) {
 mod tests {
     use halo2curves::bn256::{Fq, Fr};
     use num_traits::Num;
-    use rand::{thread_rng, Rng};
+    use rand::thread_rng;
 
     use crate::cuzk::{lib::sample_scalars, msm::{PARAMS, WORD_SIZE}};
 

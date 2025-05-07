@@ -110,7 +110,6 @@ impl ShaderManager {
         let data = json!({
             "workgroup_size": workgroup_size,
         });
-        // TODO: Add recompile
         handlebars.render("transpose", &data).unwrap()
     }
 
@@ -148,8 +147,8 @@ impl ShaderManager {
             "mu_limbs": self.mu_limbs,
             "slack": self.slack,
             "rinv_limbs": self.rinv_limbs,
+            "input_size": self.input_size,
         });
-        // TODO: Add recompile
         handlebars.render("smvp", &data).unwrap()
     }
 
@@ -182,8 +181,8 @@ impl ShaderManager {
             "mu_limbs": self.mu_limbs,
             "slack": self.slack,
             "rinv_limbs": self.rinv_limbs,
+            "input_size": self.input_size,
         });
-        // TODO: Add recompile
         handlebars.render("bpr", &data).unwrap()
     }
 
@@ -235,7 +234,6 @@ impl ShaderManager {
             "slack": self.slack,
             "rinv_limbs": self.rinv_limbs,
         });
-        // TODO: Add recompile
         handlebars.render("decomp_scalars", &data).unwrap()
     }
 

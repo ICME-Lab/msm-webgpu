@@ -452,12 +452,10 @@ mod tests {
 
 #[cfg(test)]
 mod tests_wasm_pack {
-    use crate::naive::halo2curves::*;
-
-    use halo2curves::bn256::{Fq, Fr, G1Affine, G1};
     use wasm_bindgen_test::*;
     use wasm_bindgen::prelude::*;
-    use web_sys::console;
+    // #[cfg(target_arch = "wasm32")]
+    // use web_sys::console;
 
     wasm_bindgen_test_configure!(run_in_browser);
 

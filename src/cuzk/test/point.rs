@@ -1,17 +1,15 @@
 use std::time::Instant;
 
 use halo2curves::{CurveAffine, CurveExt};
-use group::Curve;
-use itertools::Itertools;
 use wgpu::CommandEncoderDescriptor;
 
 use crate::cuzk::{
     gpu::{
-        create_and_write_storage_buffer, create_and_write_uniform_buffer, create_bind_group, create_bind_group_layout, create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device, read_from_gpu, read_from_gpu_test
+        create_and_write_storage_buffer, create_and_write_uniform_buffer, create_bind_group, create_bind_group_layout, create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device, read_from_gpu_test
     },
     msm::{P, PARAMS, WORD_SIZE},
     shader_manager::ShaderManager,
-    utils::{bytes_to_field, field_to_u8_vec_for_gpu, points_to_bytes_for_gpu, to_biguint_le, u8s_to_fields_without_assertion},
+    utils::{bytes_to_field, points_to_bytes_for_gpu, to_biguint_le},
 };
 
 pub async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve {
@@ -106,10 +104,10 @@ pub async fn run_webgpu_point_op_async<C: CurveAffine>(op: &str, a: C, b: C, sca
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ff::Field;
     use group::cofactor::CofactorCurveAffine;
     use halo2curves::bn256::{Fr, G1Affine};
     use rand::{thread_rng, Rng};
+    use group::Curve;
 
     #[test]
     fn test_webgpu_point_add() {

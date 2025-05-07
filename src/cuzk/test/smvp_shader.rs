@@ -1,7 +1,7 @@
 use std::{iter::zip, time::Instant};
 
 use halo2curves::{CurveAffine, CurveExt};
-use group::{Curve, Group};
+use group::Group;
 use wgpu::CommandEncoderDescriptor;
 
 use crate::cuzk::{
@@ -10,7 +10,7 @@ use crate::cuzk::{
     msm::{convert_point_coords_and_decompose_shaders, smvp_gpu, transpose_gpu, P, PARAMS, WORD_SIZE},
     shader_manager::ShaderManager,
     utils::{
-        bytes_to_field, debug, to_biguint_le, u8s_to_field_without_assertion, u8s_to_fields_without_assertion
+        bytes_to_field, debug, to_biguint_le
     },
 };
 
@@ -292,8 +292,7 @@ mod tests {
     };
 
     use super::*;
-    use group::Group;
-    use halo2curves::bn256::{Fr, G1Affine, G1};
+    use halo2curves::bn256::{Fr, G1Affine};
 
     #[test]
     fn test_webgpu_smvp_shader() {
@@ -338,12 +337,9 @@ mod tests {
                 &all_csc_val_idxs,
                 &points,
             );
-            // println!("Bucket sums: {:?}", buckets);
             println!("Bucket sums length: {:?}", buckets.len());
             bucket_sums.extend(buckets);
         }
-        let p_identity = G1::identity();
-
         assert_eq!(result_bucket_sums, bucket_sums);
     }
 }

@@ -1,6 +1,4 @@
-use std::panic;
 
-use web_sys::console;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt}, Adapter, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, Buffer, BufferAsyncError, BufferDescriptor, BufferSlice, BufferUsages, CommandEncoder, ComputePipeline, ComputePipelineDescriptor, Device, Features, Instance, Limits, MapMode, MemoryHints, PipelineCompilationOptions, PipelineLayoutDescriptor, PowerPreference, Queue, ShaderModuleDescriptor, ShaderSource
 };

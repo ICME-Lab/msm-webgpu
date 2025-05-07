@@ -4,13 +4,13 @@
 #[cfg(test)]
 mod tests {
     use std::time::Instant;
-    use ff::{Field, PrimeField};
+    use ff::Field;
     use group::{Group, Curve};
     use halo2curves::{pasta::pallas::{Affine, Base as Fq, Point, Scalar as Fr}, CurveExt};
     use rand::thread_rng;
-    use crate::naive::{ gpu, halo2curves::utils::{fields_to_u16_vec, u16_vec_to_fields}, utils::files::{load_pallas_field_shader_code, load_pallas_point_msm_shader_code, load_pallas_point_shader_code, load_shader_code_pallas}
-    };
-    use crate::naive::halo2curves::*;
+    use crate::naive::{ gpu, halo2curves::utils::{fields_to_u16_vec, u16_vec_to_fields}, utils::files::{load_pallas_field_shader_code, load_pallas_point_msm_shader_code, load_pallas_point_shader_code}
+        };
+        use crate::naive::halo2curves::*;
     
     #[test]
     fn test_pallas() {

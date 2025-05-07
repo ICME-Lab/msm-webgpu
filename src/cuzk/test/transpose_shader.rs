@@ -1,18 +1,15 @@
-use std::{iter::zip, time::Instant};
+use std::time::Instant;
 
-use halo2curves::{CurveAffine, CurveExt};
-use group::Curve;
+use halo2curves::CurveAffine;
 use wgpu::CommandEncoderDescriptor;
 
-use crate::{cuzk::{
-    gpu::{create_storage_buffer, get_adapter, get_device, read_from_gpu_test},
+use crate::cuzk::{
+    gpu::{get_adapter, get_device, read_from_gpu_test},
     lib::{points_to_bytes, scalars_to_bytes},
-    msm::{convert_point_coords_and_decompose_shaders, smvp_gpu, transpose_gpu, P, PARAMS, WORD_SIZE},
+    msm::{convert_point_coords_and_decompose_shaders, transpose_gpu, PARAMS, WORD_SIZE},
     shader_manager::ShaderManager,
-    utils::{
-        debug, to_biguint_le, u8s_to_field_without_assertion, u8s_to_fields_without_assertion
-    },
-}};
+    utils::debug,
+};
 
 pub async fn transpose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> (Vec<i32>, Vec<i32>) {
     let input_size = scalars.len();
@@ -84,9 +81,7 @@ pub async fn transpose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar
         num_columns,
     );
 
-    // println!("C shader: {}", c_shader);
-
-    let (point_x_sb, point_y_sb, scalar_chunks_sb) =
+    let (_point_x_sb, _point_y_sb, scalar_chunks_sb) =
         convert_point_coords_and_decompose_shaders(
             &c_shader,
             c_num_x_workgroups,
@@ -175,7 +170,7 @@ pub async fn run_webgpu_transpose_shader_async<C: CurveAffine>(
 mod tests {
     use crate::cuzk::{
         lib::{sample_points, sample_scalars},
-        test::cuzk::{cpu_smvp_signed, cpu_transpose, decompose_scalars_signed},
+        test::cuzk::{cpu_transpose, decompose_scalars_signed},
     };
 
     use super::*;

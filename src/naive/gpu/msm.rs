@@ -1,12 +1,9 @@
-use std::any::Any;
-use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crate::naive::gpu::*;
 use crate::naive::gpu::{run_webgpu, setup_webgpu};
 use crate::naive::halo2curves::utils::cast_u8_to_u16;
 use wgpu::util::DeviceExt;
-use gloo_timers::future::sleep;
 
 
 pub const WORKGROUP_SIZE: usize = 64;
@@ -144,9 +141,7 @@ pub async fn run_msm(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8
 
     output_u16
 }
-use web_sys::console;
 use wasm_bindgen::prelude::*;
-use wgpu::BufferView;
 
 
 #[wasm_bindgen]
@@ -198,37 +193,3 @@ pub fn map_buffer_async_browser(
     }
 }
 
-async fn wait_for_mapping(buffer_slice: wgpu::BufferSlice<'_>) -> Result<BufferView<'_>, wgpu::BufferAsyncError> {
-    // Start the async mapping
-    buffer_slice.map_async(wgpu::MapMode::Read, |res| {
-        // You may log or process the result here if needed.
-        // Do not unwrap here; propagate the error if desired.
-        if let Err(e) = res {
-            web_sys::console::log_1(&format!("map_async error: {:?}", e).into());
-        } else {
-            res.unwrap()
-        }
-    });
-    
-    // Poll until the mapping is complete.
-    // device.poll(wgpu::Maintain::Wait) can be called before awaiting.
-    // But since that call blocks until all GPU work is done, in a browser you typically await the mapping future.
-    // Here, instead of sleeping, try awaiting the mapping future:
-    let mapping_result = async {
-        loop {
-            // Give control back to the browser so that the mapping callback can run.
-            sleep(Duration::from_millis(10)).await;
-            if let Ok(v) = safe_get_mapped_range(&buffer_slice) {
-                return v;
-            }
-        }
-    }.await;
-    Ok(mapping_result)
-}
-
-fn safe_get_mapped_range<'a>(slice: &BufferSlice<'a>) -> Result<BufferView<'a>, Box<dyn Any + Send>> {
-    catch_unwind(AssertUnwindSafe(|| {
-        // This will panic if the slice is not mapped properly.
-        slice.get_mapped_range()
-    }))
-}
