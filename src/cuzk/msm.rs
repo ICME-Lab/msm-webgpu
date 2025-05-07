@@ -17,8 +17,8 @@ use crate::cuzk::lib::{points_to_bytes, scalars_to_bytes};
 use crate::cuzk::shader_manager::ShaderManager;
 use crate::cuzk::utils::debug;
 use crate::cuzk::utils::to_biguint_le;
-use crate::halo2curves::utils::bytes_to_field;
 
+use super::utils::bytes_to_field;
 use super::utils::{compute_misc_params, u8s_to_fields_without_assertion, MiscParams};
 
 // TODO: HARDCODE THE VALUE FOR BN256 FOR EFFICIENCY
@@ -47,22 +47,6 @@ pub static PARAMS: Lazy<MiscParams> = Lazy::new(|| compute_misc_params(&P, WORD_
 /*
  * End-to-end implementation of the modified cuZK MSM algorithm by Lu et al,
  * 2022: https://eprint.iacr.org/2022/1321.pdf
- *
- * Many aspects of cuZK were adapted and modified, and some
- * aspects were omitted. As such, please refer to the documentation
- * (https://hackmd.io/HNH0DcSqSka4hAaIfJNHEA) we have written for a more accurate
- * description of our work. We also used techniques by previous ZPrize contestations.
- * In summary, we took the following approach:
- *
- * 1. Perform as much of the computation within the GPU as possible, in order
- *    to minimse CPU-GPU and GPU-CPU data transfer, which is slow.
- * 2. Use optimizations inspired by previous years' submissions, such as:
- *    - Signed bucket indices
- * 3. Careful memory management to stay within WebGPU's default buffer size
- *    limits.
- * 4. Perform the final computation of (Horner's rule) in the CPU instead of the GPU,
- *    as the number of points is small, and the time taken to compile a shader to
- *    perform this computation is greater than the time it takes for the CPU to do so.
  */
 pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> C::Curve {
     let input_size = scalars.len();
@@ -71,15 +55,6 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     let num_rows = (input_size + num_columns - 1) / num_columns;
     let num_subtasks = (256 + chunk_size - 1) / chunk_size;
     let num_words = PARAMS.num_words;
-    println!("Input size: {}", input_size);
-    println!("Chunk size: {}", chunk_size);
-    println!("Num columns: {}", num_columns);
-    println!("Num rows: {}", num_rows);
-    println!("Num subtasks: {}", num_subtasks);
-    println!("Num words: {}", num_words);
-    println!("Word size: {}", WORD_SIZE);
-    println!("Params: {:?}", PARAMS);
-
     let point_bytes = points_to_bytes(points);
     let scalar_bytes = scalars_to_bytes(scalars);
 
@@ -139,7 +114,6 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         num_columns,
     );
 
-    // println!("C shader: {}", c_shader);
 
     let (point_x_sb, point_y_sb, scalar_chunks_sb) = convert_point_coords_and_decompose_shaders(
         &c_shader,
@@ -366,7 +340,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     let mut points = vec![];
 
     let g_points_x = bytemuck::cast_slice::<u8, u32>(&data[0])
-        .chunks(20)
+        .chunks(num_words)
         .map(|x| {
             let x_biguint_montgomery = to_biguint_le(&x.to_vec(), num_words, WORD_SIZE as u32);
             let x_biguint = x_biguint_montgomery * &PARAMS.rinv % P.clone();
@@ -375,7 +349,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         })
         .collect::<Vec<_>>();
     let g_points_y = bytemuck::cast_slice::<u8, u32>(&data[1])
-        .chunks(20)
+        .chunks(num_words)
         .map(|y| {
             let y_biguint_montgomery = to_biguint_le(&y.to_vec(), num_words, WORD_SIZE as u32);
             let y_biguint = y_biguint_montgomery * &PARAMS.rinv % P.clone();
@@ -384,7 +358,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         })
         .collect::<Vec<_>>();
     let g_points_z = bytemuck::cast_slice::<u8, u32>(&data[2])
-        .chunks(20)
+        .chunks(num_words)
         .map(|z| {
             let z_biguint_montgomery = to_biguint_le(&z.to_vec(), num_words, WORD_SIZE as u32);
             let z_biguint = z_biguint_montgomery * &PARAMS.rinv % P.clone();

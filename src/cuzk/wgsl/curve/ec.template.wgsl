@@ -112,13 +112,10 @@ fn negate_point(point: Point) -> Point {
 }
 
 
-
 fn get_paf() -> Point {
     var result: Point;
-    // let r = get_r();
-    // result.y = r;
     result.x = ZERO;
-    result.y = ZERO;
+    result.y = ONE;
     result.z = ZERO;
     return result;
 }

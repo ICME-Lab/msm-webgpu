@@ -5,23 +5,23 @@ mod tests {
     use group::cofactor::CofactorCurveAffine;
     use rand::Rng;
 
-    use crate::gpu::test::pippenger::{
+    use crate::naive::gpu::test::pippenger::{
         emulate_bucket_accumulation, emulate_bucket_reduction, emulate_pippenger_gpu,
     };
 
-    use crate::halo2curves::utils::{
+    use crate::naive::halo2curves::{fast_msm, fields_to_bytes_montgomery, points_to_bytes, run_webgpu_msm, sample_points, sample_scalars, scalars_to_bytes};
+    use crate::naive::halo2curves::utils::{
         cast_u8_to_u16, cast_u8_to_u32, fields_to_u32_vec, u16_vec_to_fields, u32_vec_to_fields,
     };
-    use crate::utils::files::{
+    use crate::naive::utils::files::{
         load_bn254_constants_shader_code, load_bn254_field_shader_code,
         load_bn254_field_to_bytes_shader_code, load_bn254_pippenger_phases_shader_code,
         load_bn254_point_msm_shader_code, load_bn254_point_shader_code,
         load_bn254_sum_of_sums_shader_code,
     };
-    use crate::utils::montgomery::{field_to_bytes_montgomery, u16_vec_to_fields_montgomery};
+    use crate::naive::utils::montgomery::{field_to_bytes_montgomery, u16_vec_to_fields_montgomery};
 
-    use crate::halo2curves::*;
-    use crate::{gpu, halo2curves::utils::fields_to_u16_vec};
+    use crate::naive::{gpu, halo2curves::utils::fields_to_u16_vec};
     use ff::{Field, PrimeField};
     use group::{Curve, Group};
     use halo2curves::{
@@ -452,7 +452,7 @@ mod tests {
 
 #[cfg(test)]
 mod tests_wasm_pack {
-    use crate::halo2curves::*;
+    use crate::naive::halo2curves::*;
 
     use halo2curves::bn256::{Fq, Fr, G1Affine, G1};
     use wasm_bindgen_test::*;

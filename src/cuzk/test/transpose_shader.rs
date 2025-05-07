@@ -10,9 +10,9 @@ use crate::{cuzk::{
     msm::{convert_point_coords_and_decompose_shaders, smvp_gpu, transpose_gpu, P, PARAMS, WORD_SIZE},
     shader_manager::ShaderManager,
     utils::{
-        debug, field_to_u8_vec_montgomery_for_gpu, to_biguint_le, u8s_to_field_without_assertion, u8s_to_fields_without_assertion
+        debug, to_biguint_le, u8s_to_field_without_assertion, u8s_to_fields_without_assertion
     },
-}, halo2curves::utils::bytes_to_field};
+}};
 
 pub async fn transpose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> (Vec<i32>, Vec<i32>) {
     let input_size = scalars.len();

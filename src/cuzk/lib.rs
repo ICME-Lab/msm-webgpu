@@ -1,13 +1,13 @@
 use crate::{
     cuzk::msm::compute_msm,
-    halo2curves::utils::field_to_bytes,
-    utils::montgomery::field_to_bytes_montgomery,
 };
 use ff::PrimeField;
 use group::{Curve, Group};
 use rand::thread_rng;
 
 use halo2curves::{msm::best_multiexp, CurveAffine};
+
+use super::utils::field_to_bytes;
 
 pub fn sample_scalars<F: PrimeField>(n: usize) -> Vec<F> {
     let mut rng = thread_rng();
@@ -29,11 +29,6 @@ pub fn scalars_to_bytes<F: PrimeField>(v: &[F]) -> Vec<u8> {
     v.iter().flat_map(|x| field_to_bytes(x)).collect::<Vec<_>>()
 }
 
-pub fn fields_to_bytes_montgomery<F: PrimeField>(v: &[F]) -> Vec<u8> {
-    v.iter()
-        .flat_map(|x| field_to_bytes_montgomery(x))
-        .collect::<Vec<_>>()
-}
 
 pub fn points_to_bytes<C: CurveAffine>(g: &[C]) -> Vec<u8> {
     g.into_iter()
@@ -67,7 +62,6 @@ mod tests {
 
         let result = run_webgpu_msm::<G1Affine>(&points, &scalars);
 
-        println!("Result: {:?}", result);
         assert_eq!(fast, result);
     }
 }

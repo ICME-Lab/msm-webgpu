@@ -4,15 +4,15 @@ use halo2curves::{CurveAffine, CurveExt};
 use group::{Curve, Group};
 use wgpu::CommandEncoderDescriptor;
 
-use crate::{cuzk::{
+use crate::cuzk::{
     gpu::{create_storage_buffer, get_adapter, get_device, read_from_gpu_test},
     lib::{points_to_bytes, scalars_to_bytes},
     msm::{convert_point_coords_and_decompose_shaders, smvp_gpu, transpose_gpu, P, PARAMS, WORD_SIZE},
     shader_manager::ShaderManager,
     utils::{
-        debug, field_to_u8_vec_montgomery_for_gpu, to_biguint_le, u8s_to_field_without_assertion, u8s_to_fields_without_assertion
+        bytes_to_field, debug, to_biguint_le, u8s_to_field_without_assertion, u8s_to_fields_without_assertion
     },
-}, halo2curves::utils::bytes_to_field};
+};
 
 pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> Vec<C::Curve> {
     let input_size = scalars.len();

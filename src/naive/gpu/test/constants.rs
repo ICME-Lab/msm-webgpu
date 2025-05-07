@@ -1,6 +1,6 @@
-use crate::gpu::*;
-use crate::gpu::{run_webgpu, setup_webgpu};
-use crate::halo2curves::utils::cast_u8_to_u32;
+use crate::naive::gpu::*;
+use crate::naive::gpu::{run_webgpu, setup_webgpu};
+use crate::naive::halo2curves::utils::cast_u8_to_u32;
 
 
 pub const WORKGROUP_SIZE: usize = 64;

@@ -5,19 +5,18 @@ use group::Curve;
 use itertools::Itertools;
 use wgpu::CommandEncoderDescriptor;
 
-use crate::{cuzk::{
+use crate::cuzk::{
     gpu::{
         create_and_write_storage_buffer, create_and_write_uniform_buffer, create_bind_group, create_bind_group_layout, create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device, read_from_gpu, read_from_gpu_test
     },
     msm::{P, PARAMS, WORD_SIZE},
     shader_manager::ShaderManager,
-    utils::{field_to_u8_vec_for_gpu, field_to_u8_vec_montgomery_for_gpu, points_to_bytes_for_gpu, to_biguint_le, u8s_to_fields_without_assertion},
-}, halo2curves::utils::bytes_to_field};
+    utils::{bytes_to_field, field_to_u8_vec_for_gpu, points_to_bytes_for_gpu, to_biguint_le, u8s_to_fields_without_assertion},
+};
 
 pub async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve {
     let a_bytes = points_to_bytes_for_gpu(&vec![a], PARAMS.num_words, WORD_SIZE);
     let b_bytes = points_to_bytes_for_gpu(&vec![b], PARAMS.num_words, WORD_SIZE);
-    // let scalar_bytes = field_to_u8_vec_for_gpu(&scalar, PARAMS.num_words, WORD_SIZE);
     let scalar_bytes = scalar.to_le_bytes();
     let input_size = 1;
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };

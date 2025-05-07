@@ -1,30 +1,25 @@
 use ff::{PrimeField, Field};
 use halo2curves::CurveAffine;
 use num_bigint::{BigInt, BigUint, Sign};
-use num_traits::{One, FromPrimitive};
-use num_integer::Integer;
+use num_traits::One;
+use crate::cuzk::msm::{calc_num_words, P};
+#[cfg(target_arch = "wasm32")]
 use web_sys::console;
-use crate::{cuzk::msm::{calc_num_words, P}, halo2curves::utils::{bytes_to_field, field_to_bytes}, utils::montgomery::{bytes_to_field_montgomery, field_to_bytes_montgomery}};
 
-  
-pub fn field_to_u8_vec_montgomery_for_gpu<F: PrimeField>(
-    field: &F,
-    num_words: usize,
-    word_size: usize,
-) -> Vec<u8> {
-    let bytes = field_to_bytes_montgomery(field);
-    let limbs = to_words_le_from_le_bytes(&bytes, num_words, word_size);
-    let mut u8_vec = vec![0u8; num_words * 4];
-
-    for (i, limb) in limbs.iter().enumerate() {
-        let i4 = i * 4;
-        u8_vec[i4] = (limb & 255) as u8;
-        u8_vec[i4 + 1] = (limb >> 8) as u8;
-    }
-
-    u8_vec
+pub fn field_to_bytes<F: PrimeField>(value: &F) -> Vec<u8> {
+    let s_bytes = value.to_repr();
+    let s_bytes_ref = s_bytes.as_ref();
+    s_bytes_ref.to_vec()
 }
 
+pub fn bytes_to_field<F: PrimeField>(bytes: &[u8]) -> F {
+    let mut repr = F::Repr::default();
+    repr.as_mut()[..bytes.len()].copy_from_slice(bytes);
+    F::from_repr(repr).unwrap()
+}
+
+// ------------------------------------------------------------
+ 
 pub fn points_to_bytes_for_gpu<C: CurveAffine>(
     g: &Vec<C>,
     num_words: usize,
@@ -41,36 +36,6 @@ pub fn points_to_bytes_for_gpu<C: CurveAffine>(
         .collect::<Vec<_>>()
 }
 
-pub fn points_to_bytes_for_gpu_x_y<C: CurveAffine>(
-    g: &[C],            
-    num_words: usize,
-    word_size: usize,
-) -> (Vec<u8>, Vec<u8>) {
-    // each coordinate is num_words * word_size bytes long
-    let bytes_per_coord = num_words * 4;
-
-    // pre‑allocate the exact size we need to avoid reallocations
-    let mut xs = Vec::with_capacity(g.len() * bytes_per_coord);
-    let mut ys = Vec::with_capacity(g.len() * bytes_per_coord);
-
-    for affine in g {
-        let coords = affine.coordinates().unwrap();
-
-        xs.extend(field_to_u8_vec_for_gpu(
-            coords.x(),
-            num_words,
-            word_size,
-        ));
-        ys.extend(field_to_u8_vec_for_gpu(
-            coords.y(),
-            num_words,
-            word_size,
-        ));
-    }
-
-    (xs, ys)
-}
-
 pub fn fields_to_u8_vec_for_gpu<F: PrimeField>(
     fields: &[F],
     num_words: usize,
@@ -78,6 +43,56 @@ pub fn fields_to_u8_vec_for_gpu<F: PrimeField>(
 ) -> Vec<u8> {
     fields.iter().flat_map(|field| field_to_u8_vec_for_gpu(field, num_words, word_size)).collect::<Vec<_>>()
 }
+
+pub fn field_to_u8_vec_for_gpu<F: PrimeField>(
+    field: &F,
+    num_words: usize,
+    word_size: usize,
+) -> Vec<u8> {
+    let bytes = field_to_bytes(field);
+    let limbs = to_words_le_from_le_bytes(&bytes, num_words, word_size);
+    let mut u8_vec = vec![0u8; num_words * 4];
+
+    for (i, limb) in limbs.iter().enumerate() {
+        let i4 = i * 4;
+        u8_vec[i4] = (limb & 255) as u8;
+        u8_vec[i4 + 1] = (limb >> 8) as u8;
+    }
+
+    u8_vec
+}
+
+pub fn to_words_le_from_le_bytes(
+    val: &[u8],
+    num_words: usize,
+    word_size: usize,
+) -> Vec<u32> {
+    assert!(word_size <= 32, "u32 supports up to 32 bits");
+
+    let mut limbs = vec![0u32; num_words];
+
+    for idx in 0..num_words {
+        let mut word = 0u32;
+
+        // Pick out `word_size` bits that start at bit `idx * word_size`
+        for bit_in_word in 0..word_size {
+            let global_bit = idx * word_size + bit_in_word;
+            let byte_idx   = global_bit / 8;          // 0 = least-significant byte
+            if byte_idx >= val.len() { break; }       // past the supplied data → 0
+
+            let bit_in_byte = global_bit % 8;
+            let bit = (val[byte_idx] >> bit_in_byte) & 1;
+            word |= (bit as u32) << bit_in_word;
+        }
+
+        limbs[idx] = word;
+    }
+
+    limbs
+}
+
+// ------------------------------------------------------------
+
 
 pub fn from_biguint_le(val: &BigUint, num_limbs: usize, log_limb_size: u32) -> Vec<u32> {
     let mut res = vec![0u32; num_limbs];
@@ -115,23 +130,6 @@ pub fn to_biguint_le(limbs: &Vec<u32>, num_limbs: usize, log_limb_size: u32) -> 
     res
 }
 
-pub fn field_to_u8_vec_for_gpu<F: PrimeField>(
-    field: &F,
-    num_words: usize,
-    word_size: usize,
-) -> Vec<u8> {
-    let bytes = field_to_bytes(field);
-    let limbs = to_words_le_from_le_bytes(&bytes, num_words, word_size);
-    let mut u8_vec = vec![0u8; num_words * 4];
-
-    for (i, limb) in limbs.iter().enumerate() {
-        let i4 = i * 4;
-        u8_vec[i4] = (limb & 255) as u8;
-        u8_vec[i4 + 1] = (limb >> 8) as u8;
-    }
-
-    u8_vec
-}
 
 pub fn to_words_le(
     val: &BigUint,
@@ -154,6 +152,8 @@ pub fn to_words_le(
     limbs
 }
 
+// ------------------------------------------------------------
+
 pub fn to_words_le_from_field<F: PrimeField>(
     val: &F,
     num_words: usize,
@@ -163,43 +163,6 @@ pub fn to_words_le_from_field<F: PrimeField>(
     to_words_le_from_le_bytes(&bytes, num_words, word_size)
 }
 
-pub fn to_words_le_from_field_montgomery<F: PrimeField>(
-    val: &F,
-    num_words: usize,
-    word_size: usize,
-) -> Vec<u32> {
-    let bytes = field_to_bytes_montgomery(val);
-    to_words_le_from_le_bytes(&bytes, num_words, word_size)
-}
-
-pub fn to_words_le_from_le_bytes(
-    val: &[u8],
-    num_words: usize,
-    word_size: usize,
-) -> Vec<u32> {
-    assert!(word_size <= 32, "u32 supports up to 32 bits");
-
-    let mut limbs = vec![0u32; num_words];
-
-    for idx in 0..num_words {
-        let mut word = 0u32;
-
-        // Pick out `word_size` bits that start at bit `idx * word_size`
-        for bit_in_word in 0..word_size {
-            let global_bit = idx * word_size + bit_in_word;
-            let byte_idx   = global_bit / 8;          // 0 = least-significant byte
-            if byte_idx >= val.len() { break; }       // past the supplied data → 0
-
-            let bit_in_byte = global_bit % 8;
-            let bit = (val[byte_idx] >> bit_in_byte) & 1;
-            word |= (bit as u32) << bit_in_word;
-        }
-
-        limbs[idx] = word;
-    }
-
-    limbs
-}
 
 pub fn u8s_to_fields_without_assertion<F: PrimeField>(
     u8s: &[u8],
@@ -246,12 +209,8 @@ pub fn from_words_le_without_assertion<F: PrimeField>(
             val = BigUint::ZERO;
         }
     }
-    // debug(&format!("val: {:?}", val));
     let bytes = val.to_bytes_le();
-    // debug(&format!("bytes: {:?}", bytes));
-    // let field = bytes_to_field_montgomery(&bytes);
     let field = bytes_to_field(&bytes);
-    // debug(&format!("field: {:?}", field));
     field
 }
 
@@ -450,13 +409,9 @@ pub fn compute_misc_params(
     assert!(word_size > 0);
     let num_words = calc_num_words(word_size);
     let r = BigUint::one() << (num_words * word_size);
-    // let r = BigUint::one() << 256;
-    println!("r: {:?}", r);
     let res = calc_rinv_and_n0(&p, &r, word_size as u32);
     let rinv = res.0;
-    println!("rinv: {:?}", rinv);
     let n0 = res.1;
-    println!("n0: {:?}", n0);
     MiscParams { num_words, n0, r: r % p, rinv }
 }
 
@@ -510,13 +465,13 @@ mod tests {
     }
 
     #[test]
-    fn test_field_to_u8_vec_montgomery_for_gpu() {
+    fn test_field_to_u8_vec_for_gpu() {
         // random
         let mut rng = thread_rng();
         let a = Fq::random(&mut rng);
         for word_size in 13..17 {
             let num_words = calc_num_words(word_size);
-            let bytes = field_to_u8_vec_montgomery_for_gpu(&a, num_words, word_size);
+            let bytes = field_to_u8_vec_for_gpu(&a, num_words, word_size);
             let a_from_bytes = u8s_to_field_without_assertion(&bytes, num_words, word_size);
             assert_eq!(a, a_from_bytes);
         }

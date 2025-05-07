@@ -3,7 +3,7 @@ pub mod test;
 
 use std::time::Instant;
 
-use crate::{
+use crate::naive::{
     gpu, halo2curves::utils::fields_to_u16_vec, utils::{files::{load_shader_code}, montgomery::{field_to_u16_as_u32_as_u8_vec_montgomery, fields_to_u16_vec_montgomery, u16_vec_to_fields_montgomery}}
 };
 use ff::{Field, PrimeField};

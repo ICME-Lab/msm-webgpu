@@ -2,9 +2,9 @@ use std::any::Any;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::time::{Duration, Instant};
 
-use crate::gpu::*;
-use crate::gpu::{run_webgpu, setup_webgpu};
-use crate::halo2curves::utils::cast_u8_to_u16;
+use crate::naive::gpu::*;
+use crate::naive::gpu::{run_webgpu, setup_webgpu};
+use crate::naive::halo2curves::utils::cast_u8_to_u16;
 use wgpu::util::DeviceExt;
 use gloo_timers::future::sleep;
 
@@ -156,35 +156,20 @@ extern "C" {
 }
 
 pub async fn run_msm_browser(wgsl_source: &str, points_bytes: &[u8], scalars_bytes: &[u8]) -> Vec<u16> {
-    let start = now();
     let (device, queue) = setup_webgpu().await;
-    console::log_1(&format!("setup_webgpu: {} ms", now() - start).into());
 
-    let start = now();
     let readback_buffer = run_msm_inner(wgsl_source, points_bytes, scalars_bytes, &device, &queue).await;
-    console::log_1(&format!("run_msm_inner: {} ms", now() - start).into());
 
-    let start = now();
-    // let buffer_slice = readback_buffer.slice(..);
     let buffer_slice = readback_buffer.slice(0..(3 * NUM_LIMBS * 4) as u64);
     let _ = map_buffer_async_browser(buffer_slice, wgpu::MapMode::Read).await;
     // let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, |x| x.unwrap());
     device.poll(wgpu::Maintain::Wait);
-    // let data = wait_for_mapping(buffer_slice).await.unwrap();
-    // Wait for one second
-    console::log_1(&format!("map_buffer_async_browser: {} ms", now() - start).into());
 
-    let start = now();
     let data = buffer_slice.get_mapped_range();
-    console::log_1(&format!("get_mapped_range: {} ms", now() - start).into());
 
-    let start = now();
     let output_u16 = cast_u8_to_u16(&data);
-    console::log_1(&format!("cast_u8_to_u16: {} ms", now() - start).into());
     drop(data);
-    let start = now();
     readback_buffer.unmap();
-    console::log_1(&format!("unmap: {} ms", now() - start).into());
 
     output_u16 
 }
@@ -214,12 +199,10 @@ pub fn map_buffer_async_browser(
 }
 
 async fn wait_for_mapping(buffer_slice: wgpu::BufferSlice<'_>) -> Result<BufferView<'_>, wgpu::BufferAsyncError> {
-    console::log_1(&format!("wait_for_mapping").into());
     // Start the async mapping
     buffer_slice.map_async(wgpu::MapMode::Read, |res| {
         // You may log or process the result here if needed.
         // Do not unwrap here; propagate the error if desired.
-        console::log_1(&format!("map_async result: {:?}", res).into());
         if let Err(e) = res {
             web_sys::console::log_1(&format!("map_async error: {:?}", e).into());
         } else {
@@ -233,7 +216,6 @@ async fn wait_for_mapping(buffer_slice: wgpu::BufferSlice<'_>) -> Result<BufferV
     // Here, instead of sleeping, try awaiting the mapping future:
     let mapping_result = async {
         loop {
-            console::log_1(&format!("waiting for safe_get_mapped_range").into());
             // Give control back to the browser so that the mapping callback can run.
             sleep(Duration::from_millis(10)).await;
             if let Ok(v) = safe_get_mapped_range(&buffer_slice) {

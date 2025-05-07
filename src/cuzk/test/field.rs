@@ -4,7 +4,7 @@ use ff::PrimeField;
 use num_bigint::BigUint;
 use wgpu::CommandEncoderDescriptor;
 
-use crate::{cuzk::{
+use crate::cuzk::{
     gpu::{
         create_and_write_storage_buffer, create_bind_group, create_bind_group_layout,
         create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device,
@@ -12,8 +12,8 @@ use crate::{cuzk::{
     },
     msm::{P, PARAMS, WORD_SIZE},
     shader_manager::ShaderManager,
-    utils::{field_to_u8_vec_for_gpu, field_to_u8_vec_montgomery_for_gpu, from_biguint_le, to_biguint_le, u8s_to_field_without_assertion},
-}, halo2curves::utils::{bytes_to_field, field_to_bytes}, utils::montgomery::field_to_bytes_montgomery};
+    utils::{bytes_to_field, field_to_u8_vec_for_gpu, from_biguint_le, to_biguint_le, u8s_to_field_without_assertion},
+};
 
 pub async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
 
@@ -140,8 +140,6 @@ mod tests {
             let b = scalar[1];
 
             let fast = a + b;
-            let fast_bytes = field_to_u8_vec_montgomery_for_gpu(&fast, PARAMS.num_words, WORD_SIZE);
-            println!("Fast bytes: {:?}", fast_bytes);
 
             let result = run_webgpu_field_op::<Fq>("test_field_add", a, b);
 
@@ -158,8 +156,6 @@ mod tests {
             let b = scalar[1];
 
             let fast = a - b;
-            let fast_bytes = field_to_u8_vec_montgomery_for_gpu(&fast, PARAMS.num_words, WORD_SIZE);
-            println!("Fast bytes: {:?}", fast_bytes);
 
             let result = run_webgpu_field_op::<Fq>("test_field_sub", a, b);
 
