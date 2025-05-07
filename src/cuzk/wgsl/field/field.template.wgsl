@@ -7,6 +7,10 @@ const ZERO: BigInt = BigInt(
     array({{ zero_limbs }})
 );
 
+const ONE: BigInt = BigInt(
+    array({{ one_limbs }})
+);
+
 fn get_p() -> BigInt {
     var p: BigInt;
 {{{ p_limbs }}}

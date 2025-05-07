@@ -293,6 +293,19 @@ pub fn gen_zero_limbs(
     r
 }
 
+pub fn gen_one_limbs(
+    num_words: usize,
+) -> String {
+    let mut r = String::new();
+    r += &format!("1u, ");
+    for _i in 0..(num_words - 2) {
+        r += &format!("0u, ");
+    }
+    r += &format!("0u");
+    r
+}
+
+
 pub fn gen_r_limbs(
     r: &BigUint,
     num_words: usize,

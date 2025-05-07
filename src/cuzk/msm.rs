@@ -407,8 +407,6 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         points.push(point);
     }
 
-    debug(&format!("Points: {:?}", points));
-    debug(&format!("Points length: {:?}", points.len()));
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     // 5. Horner's Method                                                                     /
@@ -416,14 +414,11 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     // Calculate the final result using Horner's method (Formula 3 of the cuZK paper)         /
     ////////////////////////////////////////////////////////////////////////////////////////////
 
-    debug(&format!("Horner's method"));
     let m = C::ScalarExt::from(1 << chunk_size);
     let mut result = points[points.len() - 1];
     for i in (0..points.len() - 1).rev() {
-        debug(&format!("i: {:?}", i));
         result = result * m + points[i];
     }
-    debug(&format!("Result: {:?}", result));
     result
 }
 
@@ -486,7 +481,6 @@ pub async fn convert_point_coords_and_decompose_shaders(
 
     // Uniform storage buffer.
     let params_bytes = to_u8s_for_gpu([input_size].to_vec());
-    debug(&format!("Params bytes: {:?}", params_bytes));
     let params_ub =
         create_and_write_uniform_buffer(Some("Params buffer"), device, queue, &params_bytes);
 
@@ -548,15 +542,6 @@ pub async fn transpose_gpu(
     num_subtasks: usize,
     scalar_chunks_sb: Buffer,
 ) -> (Buffer, Buffer) {
-    debug(&format!("Transpose GPU"));
-    debug(&format!("Input size: {:?}", input_size));
-    debug(&format!("Num columns: {:?}", num_columns));
-    debug(&format!("Num rows: {:?}", num_rows));
-    debug(&format!("Num subtasks: {:?}", num_subtasks));
-    debug(&format!("Num x workgroups: {:?}", num_x_workgroups));
-    debug(&format!("Num y workgroups: {:?}", num_y_workgroups));
-    debug(&format!("Num z workgroups: {:?}", num_z_workgroups));
-
     // Input storage buffers.
     let all_csc_col_ptr_sb = create_storage_buffer(
         Some("All CSC col"),
@@ -573,7 +558,6 @@ pub async fn transpose_gpu(
 
     // Uniform storage buffer.
     let params_bytes = to_u8s_for_gpu([num_rows, num_columns, input_size].to_vec());
-    debug(&format!("Params bytes: {:?}", params_bytes));
     let params_ub = create_and_write_uniform_buffer(
         Some("Transpose GPU Uniform Params"),
         device,
@@ -657,7 +641,6 @@ pub async fn smvp_gpu(
 ) {
     // Uniform Storage Buffer.
     let params_bytes = to_u8s_for_gpu(vec![input_size, num_y_workgroups, num_z_workgroups, offset]);
-    debug(&format!("Params bytes: {:?}", params_bytes));
     let params_ub = create_and_write_uniform_buffer(None, device, queue, &params_bytes);
 
     let bind_group_layout = create_bind_group_layout(
@@ -730,7 +713,6 @@ pub async fn bpr_1(
 ) {
     // Uniform storage buffer.
     let params_bytes = to_u8s_for_gpu(vec![subtask_idx, num_columns, num_x_workgroups]);
-    debug(&format!("Params bytes: {:?}", params_bytes));
     let params_ub = create_and_write_uniform_buffer(None, device, queue, &params_bytes);
 
     let bind_group_layout = create_bind_group_layout(
@@ -803,7 +785,6 @@ pub async fn bpr_2(
 ) {
     // Uniform storage buffer.
     let params_bytes = to_u8s_for_gpu(vec![subtask_idx, num_columns, num_x_workgroups]);
-    debug(&format!("Params bytes: {:?}", params_bytes));
     let params_ub = create_and_write_uniform_buffer(None, device, queue, &params_bytes);
 
     let bind_group_layout = create_bind_group_layout(

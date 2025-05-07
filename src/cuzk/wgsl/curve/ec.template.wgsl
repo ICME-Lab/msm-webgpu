@@ -1,7 +1,7 @@
 
 
 // const POINT_IDENTITY: Point = get_paf();
-const POINT_IDENTITY: Point = Point(ZERO, ZERO, ZERO);
+const POINT_IDENTITY: Point = Point(ZERO, ONE, ZERO);
 
 fn is_inf(p: Point) -> bool {
     return field_eq(p.z, ZERO);
@@ -35,10 +35,10 @@ fn point_double(p: Point) -> Point {
 
 fn point_add(p: Point, q: Point) -> Point {
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#addition-add-2007-bl
-    if (field_eq(p.y, ZERO)) {
+    if (field_eq(p.z, ZERO)) {
         return q;
     }
-    if (field_eq(q.y, ZERO)) {
+    if (field_eq(q.z, ZERO)) {
         return p;
     }
     var p1x = p.x;

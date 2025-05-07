@@ -54,7 +54,7 @@ pub static TEST_POINT_SHADER: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/test/test_point.wgsl").to_string()
 });
 
-use crate::cuzk::utils::{calc_bitwidth, gen_mu_limbs, gen_p_limbs, gen_rinv_limbs};
+use crate::cuzk::utils::{calc_bitwidth, gen_mu_limbs, gen_one_limbs, gen_p_limbs, gen_rinv_limbs};
 
 use super::{msm::{P, PARAMS}, utils::{gen_p_limbs_plus_one, gen_r_limbs, gen_zero_limbs}};
 pub struct ShaderManager {
@@ -66,6 +66,7 @@ pub struct ShaderManager {
     p_limbs: String,
     p_limbs_plus_one: String,
     zero_limbs: String,
+    one_limbs: String,
     r_limbs: String,
     slack: usize,
     w_mask: usize,
@@ -93,6 +94,7 @@ impl ShaderManager {
             p_limbs: gen_p_limbs(&P, num_words, word_size),
             p_limbs_plus_one: gen_p_limbs_plus_one(&P, num_words, word_size),
             zero_limbs: gen_zero_limbs(num_words),
+            one_limbs: gen_one_limbs(num_words),
             slack: num_words * word_size - p_bit_length,
             w_mask: (1 << word_size) - 1,
             n0: PARAMS.n0.clone(),
@@ -138,6 +140,7 @@ impl ShaderManager {
             "p_limbs": self.p_limbs,
             "p_limbs_plus_one": self.p_limbs_plus_one,
             "zero_limbs": self.zero_limbs,
+            "one_limbs": self.one_limbs,
             "r_limbs": self.r_limbs,
             "w_mask": self.w_mask,
             "index_shift": self.index_shift,
@@ -172,6 +175,7 @@ impl ShaderManager {
             "p_limbs": self.p_limbs,
             "p_limbs_plus_one": self.p_limbs_plus_one,
             "zero_limbs": self.zero_limbs,
+            "one_limbs": self.one_limbs,
             "r_limbs": self.r_limbs,
             "w_mask": self.w_mask,
             "index_shift": self.index_shift,
@@ -222,6 +226,7 @@ impl ShaderManager {
             "p_limbs": self.p_limbs,
             "p_limbs_plus_one": self.p_limbs_plus_one,
             "zero_limbs": self.zero_limbs,
+            "one_limbs": self.one_limbs,
             "slack": self.slack,
             "w_mask": self.w_mask,
             "index_shift": self.index_shift,
@@ -255,6 +260,7 @@ impl ShaderManager {
             "p_limbs": self.p_limbs,
             "p_limbs_plus_one": self.p_limbs_plus_one,
             "zero_limbs": self.zero_limbs,
+            "one_limbs": self.one_limbs,
             "r_limbs": self.r_limbs,
             "w_mask": self.w_mask,
             "num_words_mul_two": self.num_words * 2,
@@ -285,6 +291,7 @@ impl ShaderManager {
             "p_limbs": self.p_limbs,
             "p_limbs_plus_one": self.p_limbs_plus_one,
             "zero_limbs": self.zero_limbs,
+            "one_limbs": self.one_limbs,
             "r_limbs": self.r_limbs,
             "w_mask": self.w_mask,
             "num_words_mul_two": self.num_words * 2,
@@ -314,6 +321,7 @@ impl ShaderManager {
             "p_limbs": self.p_limbs,
             "p_limbs_plus_one": self.p_limbs_plus_one,
             "zero_limbs": self.zero_limbs,
+            "one_limbs": self.one_limbs,
             "r_limbs": self.r_limbs,
             "w_mask": self.w_mask,
             "num_words_mul_two": self.num_words * 2,

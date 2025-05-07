@@ -1,7 +1,7 @@
 use std::{iter::zip, time::Instant};
 
 use halo2curves::{CurveAffine, CurveExt};
-use group::Curve;
+use group::{Curve, Group};
 use wgpu::CommandEncoderDescriptor;
 
 use crate::{cuzk::{
@@ -150,14 +150,15 @@ pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     let half_num_columns = num_columns / 2;
     let mut s_workgroup_size = 256;
     let mut s_num_x_workgroups = 64;
-    let mut s_num_y_workgroups = (half_num_columns / s_workgroup_size) / s_num_x_workgroups;
+    let mut s_num_y_workgroups = half_num_columns / s_workgroup_size / s_num_x_workgroups;
     let mut s_num_z_workgroups = num_subtasks;
 
     if half_num_columns < 32768 {
         s_workgroup_size = 32;
         s_num_x_workgroups = 1;
         s_num_y_workgroups =
-            ((half_num_columns / s_workgroup_size) + s_num_x_workgroups - 1) / s_num_x_workgroups;
+    (half_num_columns + s_workgroup_size * s_num_x_workgroups - 1)
+    / (s_workgroup_size * s_num_x_workgroups);
     }
 
     if num_columns < 256 {
@@ -167,6 +168,12 @@ pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         s_num_z_workgroups = 1;
     }
 
+    debug(&format!("Half num columns: {:?}", half_num_columns));
+    debug(&format!("S workgroup size: {:?}", s_workgroup_size));
+    debug(&format!("S num x workgroups: {:?}", s_num_x_workgroups));
+    debug(&format!("S num y workgroups: {:?}", s_num_y_workgroups));
+    debug(&format!("S num z workgroups: {:?}", s_num_z_workgroups));
+
     // This is a dynamic variable that determines the number of CSR
     // matrices processed per invocation of the shader. A safe default is 1.
     let num_subtask_chunk_size = 4;
@@ -174,6 +181,7 @@ pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     // Buffers that store the SMVP result, ie. bucket sums. They are
     // overwritten per iteration.
     let bucket_sum_coord_bytelength = (num_columns / 2) * num_words * 4 * num_subtasks;
+    debug(&format!("Bucket sum coord bytelength: {:?}", bucket_sum_coord_bytelength));
     let bucket_sum_x_sb = create_storage_buffer(
         Some("Bucket sum X buffer"),
         &device,
@@ -191,7 +199,14 @@ pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     );
     let smvp_shader = shader_manager.gen_smvp_shader(s_workgroup_size, num_columns);
 
+    debug(&format!("SMVP shader: {}", smvp_shader));
+    debug(&format!("s_num_x_workgroups / (num_subtasks / num_subtask_chunk_size): {:?}", s_num_x_workgroups / (num_subtasks / num_subtask_chunk_size)));
+    debug(&format!("s_num_y_workgroups: {:?}", s_num_y_workgroups));
+    debug(&format!("s_num_z_workgroups: {:?}", s_num_z_workgroups));
+  
+
     for offset in (0..num_subtasks).step_by(num_subtask_chunk_size) {
+        debug(&format!("Offset: {:?}", offset));
         smvp_gpu(
             &smvp_shader,
             s_num_x_workgroups / (num_subtasks / num_subtask_chunk_size),
@@ -242,6 +257,13 @@ pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
             let p_y_field = bytes_to_field(&p_y_biguint.to_bytes_le());
             let p_z_field = bytes_to_field(&p_z_biguint.to_bytes_le());
             let p = C::Curve::new_jacobian(p_x_field, p_y_field, p_z_field).unwrap();
+            if p.is_identity().into() && i < 15 {
+                println!("Index: {:?}", i);
+                println!("P x: {:?}", p_x_field);
+                println!("P y: {:?}", p_y_field);
+                println!("P z: {:?}", p_z_field);
+                println!("P identity: {:?}", p);
+            }
             p
         })
         .collect::<Vec<_>>();
@@ -266,11 +288,12 @@ pub async fn run_webgpu_smvp_shader_async<C: CurveAffine>(
 mod tests {
     use crate::cuzk::{
         lib::{sample_points, sample_scalars},
-        test::cuzk::{cpu_smvp_signed, cpu_transpose, decompose_scalars_signed},
+        test::{cuzk::{cpu_smvp_signed, cpu_transpose, decompose_scalars_signed}, transpose_shader::run_webgpu_transpose_shader},
     };
 
     use super::*;
-    use halo2curves::bn256::{Fr, G1Affine};
+    use group::Group;
+    use halo2curves::bn256::{Fr, G1Affine, G1};
 
     #[test]
     fn test_webgpu_smvp_shader() {
@@ -284,21 +307,23 @@ mod tests {
         let num_chunks_per_scalar = (256 + chunk_size - 1) / chunk_size;
         let num_subtasks = num_chunks_per_scalar;
 
-
-        let result_bucket_sums = run_webgpu_smvp_shader::<G1Affine>(&points, &scalars);
-        // println!("Result bucket sums: {:?}", result_bucket_sums);
-        println!("Result bucket sums length: {:?}", result_bucket_sums.len());
+        let (all_csc_col_ptr, all_csc_val_idxs) = run_webgpu_transpose_shader::<G1Affine>(&points, &scalars);
 
         let decomposed_scalars = decompose_scalars_signed(&scalars, num_subtasks, chunk_size);
 
         // Perform multiple transpositions "in parallel"}
-        let (all_csc_col_ptr, _, all_csc_vals) = cpu_transpose(
+        let (all_csc_col_ptr_cpu, _, all_csc_val_idxs_cpu) = cpu_transpose(
             decomposed_scalars.concat(),
             num_columns,
             num_rows,
             num_subtasks,
             input_size,
         );
+        assert_eq!(all_csc_col_ptr, all_csc_col_ptr_cpu);
+        assert_eq!(all_csc_val_idxs, all_csc_val_idxs_cpu);
+
+        let result_bucket_sums = run_webgpu_smvp_shader::<G1Affine>(&points, &scalars);
+        println!("Result bucket sums length: {:?}", result_bucket_sums.len());
 
         let mut bucket_sums = vec![];
 
@@ -310,19 +335,15 @@ mod tests {
                 num_columns,
                 chunk_size,
                 &all_csc_col_ptr,
-                &all_csc_vals,
+                &all_csc_val_idxs,
                 &points,
             );
             // println!("Bucket sums: {:?}", buckets);
             println!("Bucket sums length: {:?}", buckets.len());
             bucket_sums.extend(buckets);
         }
-        println!("Bucket sums length: {:?}", bucket_sums.len());
-        zip(result_bucket_sums, bucket_sums).enumerate().for_each(|(i, (a, b))| {
-            println!("Index: {:?}", i);
-            println!("Result bucket sum: {:?}", a);
-            println!("Bucket sum: {:?}", b);
-            assert_eq!(a, b);
-        });
+        let p_identity = G1::identity();
+
+        assert_eq!(result_bucket_sums, bucket_sums);
     }
 }
