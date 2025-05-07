@@ -6,14 +6,13 @@ use wgpu::CommandEncoderDescriptor;
 
 use crate::cuzk::{
     gpu::{create_storage_buffer, get_adapter, get_device, read_from_gpu_test},
-    lib::{points_to_bytes, scalars_to_bytes},
     msm::{convert_point_coords_and_decompose_shaders, smvp_gpu, transpose_gpu, P, PARAMS, WORD_SIZE},
     shader_manager::ShaderManager,
     utils::{
         bytes_to_field, debug, to_biguint_le
     },
 };
-
+use crate::{points_to_bytes, scalars_to_bytes};
 pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> Vec<C::Curve> {
     let input_size = scalars.len();
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
@@ -286,10 +285,8 @@ pub async fn run_webgpu_smvp_shader_async<C: CurveAffine>(
 
 #[cfg(test)]
 mod tests {
-    use crate::cuzk::{
-        lib::{sample_points, sample_scalars},
-        test::{cuzk::{cpu_smvp_signed, cpu_transpose, decompose_scalars_signed}, transpose_shader::run_webgpu_transpose_shader},
-    };
+    use crate::cuzk::test::{cuzk::{cpu_smvp_signed, cpu_transpose, decompose_scalars_signed}, transpose_shader::run_webgpu_transpose_shader};
+    use crate::{sample_points, sample_scalars};
 
     use super::*;
     use halo2curves::bn256::{Fr, G1Affine};

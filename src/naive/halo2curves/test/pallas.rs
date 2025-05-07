@@ -19,7 +19,7 @@ mod tests {
         let points = sample_points::<Affine>(sample_size);
 
         let now = Instant::now();
-        let fast = fast_msm(&points, &scalars);
+        let fast = cpu_msm(&points, &scalars);
         println!("Fast Elapsed: {:.2?}", now.elapsed());
         let now = Instant::now();
         let webgpu = run_webgpu_msm(&points, &scalars);
@@ -167,7 +167,7 @@ mod tests {
 //         let points = sample_points::<Affine>(sample_size);
 //         let scalars = sample_scalars::<Fr>(sample_size);
 
-//         let fast = fast_msm(&points, &scalars);
+//         let fast = cpu_msm(&points, &scalars);
 //         let result = run_webgpu_msm_async_browser(&points, &scalars).await;
 //         console::log_1(&format!("Result: {:?}", result).into());
 //         assert_eq!(fast, result);

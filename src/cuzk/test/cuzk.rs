@@ -309,7 +309,7 @@ pub fn parallel_bucket_reduction_2(
 }
 #[cfg(test)]
 mod tests {
-    use crate::cuzk::lib::{fast_msm, sample_points, sample_scalars};
+    use crate::{cpu_msm, sample_points, sample_scalars};
     use group::Curve;
     use super::*;
 
@@ -387,7 +387,7 @@ mod tests {
 
         let result_affine = result.to_affine();
 
-        let expected = fast_msm(&points, &scalars);
+        let expected = cpu_msm(&points, &scalars);
         let expected_affine = expected.to_affine();
 
         assert_eq!(result_affine.x, expected_affine.x);

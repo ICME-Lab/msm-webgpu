@@ -11,9 +11,9 @@ use crate::cuzk::gpu::{
     create_bind_group_layout, create_compute_pipeline, create_storage_buffer, execute_pipeline,
     get_adapter, get_device, read_from_gpu,
 };
-use crate::cuzk::lib::{points_to_bytes, scalars_to_bytes};
 use crate::cuzk::shader_manager::ShaderManager;
 use crate::cuzk::utils::to_biguint_le;
+use crate::{points_to_bytes, scalars_to_bytes};
 
 use super::utils::bytes_to_field;
 use super::utils::{compute_misc_params, MiscParams};
@@ -63,7 +63,6 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         label: Some("MSM Encoder"),
     });
 
-
     ////////////////////////////////////////////////////////////////////////////////////////////
     // 1. Decompose scalars into chunk_size windows using signed bucket indices.             /
     ////////////////////////////////////////////////////////////////////////////////////////////
@@ -110,7 +109,6 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         num_subtasks,
         num_columns,
     );
-
 
     let (point_x_sb, point_y_sb, scalar_chunks_sb) = convert_point_coords_and_decompose_shaders(
         &c_shader,
@@ -276,7 +274,6 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
 
     // Stage 1: Bucket points reduction (BPR)
     for subtask_idx in (0..num_subtasks).step_by(num_subtasks_per_bpr_1) {
-
         bpr_1(
             &bpr_shader,
             subtask_idx,
@@ -322,14 +319,14 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         .await;
     }
 
-
     // Map results back from GPU to CPU.
     let data = read_from_gpu(
         &device,
         &queue,
         encoder,
         vec![g_points_x_sb, g_points_y_sb, g_points_z_sb],
-    ).await;
+    )
+    .await;
 
     // Destroy the GPU device object.
     device.destroy();
@@ -364,6 +361,29 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         })
         .collect::<Vec<_>>();
 
+    // TODO: Use from_montgomery_repr passing a valid R^2 as a parameter
+    // let g_points_x = data[0]
+    //     .chunks(num_words * 4)
+    //     .map(|x| {
+    //         let x_field = u8s_to_field_without_assertion(&x, num_words, WORD_SIZE);
+    //         x_field
+    //     })
+    //     .collect::<Vec<_>>();
+    // let g_points_y = data[1]
+    //     .chunks(num_words * 4)
+    //     .map(|y| {
+    //         let y_field = u8s_to_field_without_assertion(&y, num_words, WORD_SIZE);
+    //         y_field
+    //     })
+    //     .collect::<Vec<_>>();
+    // let g_points_z = data[2]
+    //     .chunks(num_words * 4)
+    //     .map(|z| {
+    //         let z_field = u8s_to_field_without_assertion(&z, num_words, WORD_SIZE);
+    //         z_field
+    //     })
+    //     .collect::<Vec<_>>();
+
     for i in 0..num_subtasks {
         let mut point = C::Curve::identity();
         for j in 0..b_workgroup_size {
@@ -377,7 +397,6 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         }
         points.push(point);
     }
-
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     // 5. Horner's Method                                                                     /
@@ -463,14 +482,19 @@ pub async fn convert_point_coords_and_decompose_shaders(
         vec![&params_ub],
     );
 
-
     let bind_group = create_bind_group(
         Some("Bind group"),
         device,
         &bind_group_layout,
-        vec![&points_sb, &scalars_sb, &points_x_sb, &points_y_sb, &scalar_chunks_sb, &params_ub],
+        vec![
+            &points_sb,
+            &scalars_sb,
+            &points_x_sb,
+            &points_y_sb,
+            &scalar_chunks_sb,
+            &params_ub,
+        ],
     );
-
 
     let compute_pipeline = create_compute_pipeline(
         Some("Convert point coords and decompose shader"),
@@ -627,7 +651,6 @@ pub async fn smvp_gpu(
         vec![&params_ub],
     );
 
-
     let bind_group = create_bind_group(
         Some("Bind group"),
         device,
@@ -643,7 +666,6 @@ pub async fn smvp_gpu(
             &params_ub,
         ],
     );
-
 
     let compute_pipeline = create_compute_pipeline(
         Some("Compute pipeline"),
@@ -700,7 +722,6 @@ pub async fn bpr_1(
         ],
         vec![&params_ub],
     );
-
 
     let bind_group = create_bind_group(
         Some("Bind group"),

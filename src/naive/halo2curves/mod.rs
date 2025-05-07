@@ -28,7 +28,7 @@ pub fn sample_points<C: CurveAffine>(n: usize) -> Vec<C> {
         .collect::<Vec<_>>()
 }
 
-pub fn fast_msm<C: CurveAffine>(g: &Vec<C>, v: &Vec<C::Scalar>) -> C::Curve {
+pub fn cpu_msm<C: CurveAffine>(g: &Vec<C>, v: &Vec<C::Scalar>) -> C::Curve {
     best_multiexp(v, g)
 }
 

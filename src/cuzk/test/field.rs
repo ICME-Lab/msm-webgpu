@@ -95,7 +95,7 @@ pub async fn run_webgpu_field_op_async<F: PrimeField>(op: &str, a: F, b: F) -> F
 
 #[cfg(test)]
 mod tests {
-    use crate::cuzk::lib::sample_scalars;
+    use crate::sample_scalars;
 
     use super::*;
     use ff::Field;

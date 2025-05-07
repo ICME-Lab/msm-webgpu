@@ -45,9 +45,7 @@ pub static BPR_SHADER: Lazy<String> = Lazy::new(|| {
 pub static TEST_FIELD_SHADER: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/test/test_field.wgsl").to_string()
 });
-pub static TEST_DIFF_IMPL_SHADER: Lazy<String> = Lazy::new(|| {
-    include_str!("wgsl/test/test_diff_impl.wgsl").to_string()
-});
+
 pub static TEST_POINT_SHADER: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/test/test_point.wgsl").to_string()
 });

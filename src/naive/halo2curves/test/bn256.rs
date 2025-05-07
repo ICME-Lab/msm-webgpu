@@ -9,7 +9,7 @@ mod tests {
         emulate_bucket_accumulation, emulate_bucket_reduction, emulate_pippenger_gpu,
     };
 
-    use crate::naive::halo2curves::{fast_msm, fields_to_bytes_montgomery, points_to_bytes, run_webgpu_msm, sample_points, sample_scalars, scalars_to_bytes};
+    use crate::naive::halo2curves::{cpu_msm, fields_to_bytes_montgomery, points_to_bytes, run_webgpu_msm, sample_points, sample_scalars, scalars_to_bytes};
     use crate::naive::halo2curves::utils::{
         cast_u8_to_u16, cast_u8_to_u32, fields_to_u32_vec, u16_vec_to_fields, u32_vec_to_fields,
     };
@@ -37,7 +37,7 @@ mod tests {
         let points = sample_points::<G1Affine>(sample_size);
 
         let now = Instant::now();
-        let fast = fast_msm(&points, &scalars);
+        let fast = cpu_msm(&points, &scalars);
         println!("Fast Elapsed: {:.2?}", now.elapsed());
         let now = Instant::now();
         let webgpu = run_webgpu_msm(&points, &scalars);
@@ -51,7 +51,7 @@ mod tests {
         let scalars = sample_scalars::<Fr>(sample_size);
         let points = sample_points::<G1Affine>(sample_size);
         let now = Instant::now();
-        let fast = fast_msm(&points, &scalars);
+        let fast = cpu_msm(&points, &scalars);
         println!("Fast Elapsed: {:.2?}", now.elapsed());
         let now = Instant::now();
         let result = emulate_pippenger_gpu(&points, &scalars);
@@ -371,7 +371,7 @@ mod tests {
         let sample_size = 100;
         let points = sample_points::<G1Affine>(sample_size);
         let scalars = sample_scalars::<Fr>(sample_size);
-        let fast = fast_msm(&points, &scalars);
+        let fast = cpu_msm(&points, &scalars);
 
         let p_bytes = points_to_bytes(&points);
         let s_bytes = scalars_to_bytes(&scalars);
@@ -472,7 +472,7 @@ mod tests_wasm_pack {
     //     let scalars = sample_scalars::<Fr>(sample_size);
         
     //     let cpu_start = now();
-    //     let fast = fast_msm(&points, &scalars);
+    //     let fast = cpu_msm(&points, &scalars);
     //     console::log_1(&format!("CPU Elapsed: {} ms", now() - cpu_start).into());
 
     //     let gpu_start = now();

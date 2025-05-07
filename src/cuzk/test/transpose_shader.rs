@@ -5,11 +5,11 @@ use wgpu::CommandEncoderDescriptor;
 
 use crate::cuzk::{
     gpu::{get_adapter, get_device, read_from_gpu_test},
-    lib::{points_to_bytes, scalars_to_bytes},
     msm::{convert_point_coords_and_decompose_shaders, transpose_gpu, PARAMS, WORD_SIZE},
     shader_manager::ShaderManager,
     utils::debug,
 };
+use crate::{points_to_bytes, scalars_to_bytes};
 
 pub async fn transpose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> (Vec<i32>, Vec<i32>) {
     let input_size = scalars.len();
@@ -168,10 +168,8 @@ pub async fn run_webgpu_transpose_shader_async<C: CurveAffine>(
 
 #[cfg(test)]
 mod tests {
-    use crate::cuzk::{
-        lib::{sample_points, sample_scalars},
-        test::cuzk::{cpu_transpose, decompose_scalars_signed},
-    };
+    use crate::cuzk::test::cuzk::{cpu_transpose, decompose_scalars_signed};
+    use crate::{sample_points, sample_scalars};
 
     use super::*;
     use halo2curves::bn256::{Fr, G1Affine};

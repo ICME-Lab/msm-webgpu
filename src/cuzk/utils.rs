@@ -430,8 +430,8 @@ mod tests {
     use num_traits::Num;
     use rand::thread_rng;
 
-    use crate::cuzk::{lib::sample_scalars, msm::{PARAMS, WORD_SIZE}};
-
+    use crate::cuzk::msm::{PARAMS, WORD_SIZE};
+    use crate::sample_scalars;
     use super::*;
     
     #[test]
