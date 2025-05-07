@@ -102,8 +102,6 @@ pub async fn read_from_gpu(
 
     for (i, storage_buffer) in storage_buffers.iter().enumerate() {
         let size = storage_buffer.size();
-        console::log_1(&format!("Storage buffer: {:?}", storage_buffer).into());
-        console::log_1(&format!("Size: {}", size).into());
         let staging_buffer = device.create_buffer(&BufferDescriptor {
             label: Some(&format!("Staging Buffer {}", i)),
             size: size,
@@ -126,27 +124,17 @@ pub async fn read_from_gpu(
     queue.submit(vec![command_buffer]);
     device.poll(wgpu::Maintain::Wait);
 
-    console::log_1(&format!("After submit").into());
-    console::log_1(&format!("Staging buffers: {:?}", staging_buffers).into());
 
     let mut data = Vec::new();
     for staging_buffer in staging_buffers {
         let staging_slice = staging_buffer.slice(..);
-        console::log_1(&format!("Staging slice: {:?}", staging_slice).into());
         // let _buffer_future = staging_slice.map_async(MapMode::Read, |x| x.unwrap());
         let _buffer_future = map_buffer_async_browser(staging_slice, MapMode::Read).await;
-        if let Err(e) = _buffer_future {
-            console::log_1(&format!("Error mapping buffer: {:?}", e).into());
-        }
-        console::log_1(&format!("After mapping buffer").into());
         device.poll(wgpu::Maintain::Wait);
         let result_data = staging_slice.get_mapped_range();
-        console::log_1(&format!("Result data: {:?}", result_data).into());
         data.push(result_data.to_vec());
     }
 
-    console::log_1(&format!("Data: {:?}", data).into());
-    console::log_1(&format!("After mapping").into());
     data
 }
 
@@ -179,7 +167,6 @@ pub async fn read_from_gpu_test(
     }
 
     let command_buffer = encoder.finish();
-
 
     queue.submit(vec![command_buffer]);
 

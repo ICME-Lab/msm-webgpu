@@ -16,6 +16,8 @@ use crate::cuzk::gpu::{
 use crate::cuzk::lib::{points_to_bytes, scalars_to_bytes};
 use crate::cuzk::shader_manager::ShaderManager;
 use crate::cuzk::utils::debug;
+use crate::cuzk::utils::to_biguint_le;
+use crate::halo2curves::utils::bytes_to_field;
 
 use super::utils::{compute_misc_params, u8s_to_fields_without_assertion, MiscParams};
 
@@ -363,23 +365,37 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
 
     let mut points = vec![];
 
-    let g_points_x = u8s_to_fields_without_assertion::<
-        <<C as CurveAffine>::CurveExt as CurveExt>::Base,
-    >(&data[0], num_words, WORD_SIZE);
-    let g_points_y = u8s_to_fields_without_assertion::<
-        <<C as CurveAffine>::CurveExt as CurveExt>::Base,
-    >(&data[1], num_words, WORD_SIZE);
-    let g_points_z = u8s_to_fields_without_assertion::<
-        <<C as CurveAffine>::CurveExt as CurveExt>::Base,
-    >(&data[2], num_words, WORD_SIZE);
+    let g_points_x = bytemuck::cast_slice::<u8, u32>(&data[0])
+        .chunks(20)
+        .map(|x| {
+            let x_biguint_montgomery = to_biguint_le(&x.to_vec(), num_words, WORD_SIZE as u32);
+            let x_biguint = x_biguint_montgomery * &PARAMS.rinv % P.clone();
+            let x_field = bytes_to_field(&x_biguint.to_bytes_le());
+            x_field
+        })
+        .collect::<Vec<_>>();
+    let g_points_y = bytemuck::cast_slice::<u8, u32>(&data[1])
+        .chunks(20)
+        .map(|y| {
+            let y_biguint_montgomery = to_biguint_le(&y.to_vec(), num_words, WORD_SIZE as u32);
+            let y_biguint = y_biguint_montgomery * &PARAMS.rinv % P.clone();
+            let y_field = bytes_to_field(&y_biguint.to_bytes_le());
+            y_field
+        })
+        .collect::<Vec<_>>();
+    let g_points_z = bytemuck::cast_slice::<u8, u32>(&data[2])
+        .chunks(20)
+        .map(|z| {
+            let z_biguint_montgomery = to_biguint_le(&z.to_vec(), num_words, WORD_SIZE as u32);
+            let z_biguint = z_biguint_montgomery * &PARAMS.rinv % P.clone();
+            let z_field = bytes_to_field(&z_biguint.to_bytes_le());
+            z_field
+        })
+        .collect::<Vec<_>>();
+
     for i in 0..num_subtasks {
         let mut point = C::Curve::identity();
         for j in 0..b_workgroup_size {
-            debug(&format!("i: {:?}", i));
-            debug(&format!("j: {:?}", j));
-            debug(&format!("G points x: {:?}", g_points_x[i * b_workgroup_size + j]));
-            debug(&format!("G points y: {:?}", g_points_y[i * b_workgroup_size + j]));
-            debug(&format!("G points z: {:?}", g_points_z[i * b_workgroup_size + j]));
             let reduced_point = C::Curve::new_jacobian(
                 g_points_x[i * b_workgroup_size + j],
                 g_points_y[i * b_workgroup_size + j],
@@ -392,6 +408,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     }
 
     debug(&format!("Points: {:?}", points));
+    debug(&format!("Points length: {:?}", points.len()));
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     // 5. Horner's Method                                                                     /
@@ -402,7 +419,8 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     debug(&format!("Horner's method"));
     let m = C::ScalarExt::from(1 << chunk_size);
     let mut result = points[points.len() - 1];
-    for i in (0..points.len() - 2).rev() {
+    for i in (0..points.len() - 1).rev() {
+        debug(&format!("i: {:?}", i));
         result = result * m + points[i];
     }
     debug(&format!("Result: {:?}", result));
@@ -468,6 +486,7 @@ pub async fn convert_point_coords_and_decompose_shaders(
 
     // Uniform storage buffer.
     let params_bytes = to_u8s_for_gpu([input_size].to_vec());
+    debug(&format!("Params bytes: {:?}", params_bytes));
     let params_ub =
         create_and_write_uniform_buffer(Some("Params buffer"), device, queue, &params_bytes);
 
@@ -638,6 +657,7 @@ pub async fn smvp_gpu(
 ) {
     // Uniform Storage Buffer.
     let params_bytes = to_u8s_for_gpu(vec![input_size, num_y_workgroups, num_z_workgroups, offset]);
+    debug(&format!("Params bytes: {:?}", params_bytes));
     let params_ub = create_and_write_uniform_buffer(None, device, queue, &params_bytes);
 
     let bind_group_layout = create_bind_group_layout(
@@ -710,6 +730,7 @@ pub async fn bpr_1(
 ) {
     // Uniform storage buffer.
     let params_bytes = to_u8s_for_gpu(vec![subtask_idx, num_columns, num_x_workgroups]);
+    debug(&format!("Params bytes: {:?}", params_bytes));
     let params_ub = create_and_write_uniform_buffer(None, device, queue, &params_bytes);
 
     let bind_group_layout = create_bind_group_layout(
@@ -782,6 +803,7 @@ pub async fn bpr_2(
 ) {
     // Uniform storage buffer.
     let params_bytes = to_u8s_for_gpu(vec![subtask_idx, num_columns, num_x_workgroups]);
+    debug(&format!("Params bytes: {:?}", params_bytes));
     let params_ub = create_and_write_uniform_buffer(None, device, queue, &params_bytes);
 
     let bind_group_layout = create_bind_group_layout(

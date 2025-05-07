@@ -1,5 +1,6 @@
 
 
+// const POINT_IDENTITY: Point = get_paf();
 const POINT_IDENTITY: Point = Point(ZERO, ZERO, ZERO);
 
 fn is_inf(p: Point) -> bool {
@@ -112,13 +113,15 @@ fn negate_point(point: Point) -> Point {
 
 
 
-// fn get_paf() -> Point {
-//     var result: Point;
-//     let r = get_r();
-//     result.y = r;
-//     result.z = r;
-//     return result;
-// }
+fn get_paf() -> Point {
+    var result: Point;
+    // let r = get_r();
+    // result.y = r;
+    result.x = ZERO;
+    result.y = ZERO;
+    result.z = ZERO;
+    return result;
+}
 /// This double-and-add code is adapted from the ZPrize test harness:
 /// https://github.com/demox-labs/webgpu-msm/blob/main/src/reference/webgpu/wgsl/Curve.ts#L78.
 fn double_and_add(point: Point, scalar: u32) -> Point {

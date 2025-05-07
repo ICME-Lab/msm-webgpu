@@ -312,12 +312,14 @@ pub fn parallel_bucket_reduction_2(
 }
 #[cfg(test)]
 mod tests {
+    use crate::cuzk::lib::fast_msm;
+
     use super::*;
 
     #[test]
     fn test_cuzk() {
-        let input_size = 1 << 8;
-        let chunk_size: usize = 4;
+        let input_size = 1 << 16;
+        let chunk_size = if input_size >= 65536 { 16 } else { 4 };
         let num_columns = 1 << chunk_size;
         let num_rows = (input_size + num_columns - 1) / num_columns;
         let num_chunks_per_scalar = (256 + chunk_size - 1) / chunk_size;
@@ -388,13 +390,7 @@ mod tests {
 
         let result_affine = result.to_affine();
 
-        let mut expected = G1::identity();
-        for i in 0..input_size {
-            if scalars[i] != Fr::zero() {
-                let p = points[i] * scalars[i];
-                expected = expected + p;
-            }
-        }
+        let expected = fast_msm(&points, &scalars);
         let expected_affine = expected.to_affine();
 
         assert_eq!(result_affine.x, expected_affine.x);
