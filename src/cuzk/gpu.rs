@@ -30,8 +30,6 @@ pub async fn get_device(adapter: &Adapter) -> (Device, Queue) {
         max_bindings_per_bind_group: adapter.limits().max_bindings_per_bind_group,
         ..Default::default()
     };
-    // let required_limits = adapter.limits();
-    // let required_limits = wgpu::Limits { ..Default::default() };
 
     let (device, queue) = adapter
         .request_device(
