@@ -33,8 +33,6 @@ pub async fn setup_webgpu() -> (Device, Queue) {
         max_bindings_per_bind_group: adapter.limits().max_bindings_per_bind_group,
         ..Default::default()
     };
-    // let required_limits = adapter.limits();
-    // let required_limits = wgpu::Limits { ..Default::default() };
     println!("Required limits: {:?}", required_limits);
 
     let (device, queue) = adapter

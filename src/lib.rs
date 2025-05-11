@@ -40,30 +40,16 @@ pub fn points_to_bytes<C: CurveAffine>(g: &[C]) -> Vec<u8> {
         .collect::<Vec<_>>()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn run_webgpu_msm<C: CurveAffine>(g: &[C], v: &[C::Scalar]) -> C::Curve {
     pollster::block_on(compute_msm(g, v))
 }
 
-
-
-#[cfg(test)]
-mod tests {
-    use halo2curves::bn256::{Fr, G1Affine};
-    use super::*;
-
-    #[test]
-    fn test_webgpu_msm_cuzk() {
-        let sample_size = 1 << 16;
-        let points = sample_points::<G1Affine>(sample_size);
-        let scalars = sample_scalars::<Fr>(sample_size);
-
-        let fast = cpu_msm(&points, &scalars);
-
-        let result = run_webgpu_msm::<G1Affine>(&points, &scalars);
-
-        assert_eq!(fast, result);
-    }
+#[cfg(target_arch = "wasm32")]
+pub async fn run_webgpu_msm<C: CurveAffine>(g: &[C], v: &[C::Scalar]) -> C::Curve {
+    compute_msm(g, v).await
 }
+
 
 #[cfg(test)]
 mod tests_wasm_pack {
