@@ -4,10 +4,10 @@ An implementation of the [cuZK paper](https://eprint.iacr.org/2022/1321.pdf) in 
 
 For an introduction to ZK proving using WebGPU, see [this recent post](https://blog.zksecurity.xyz/posts/webgpu/) by zkSecurity.
 
-This work is built upon the existing [ZPrize 2023 submission](https://github.com/td-kwj-zp2023/webgpu-msm-bls12-377) by Tal Derei and Wei Jie. Their [documentation](https://hackmd.io/HNH0DcSqSka4hAaIfJNHEA) will largely serve as a documentation for this implementation, too. 
+This work is built upon the existing [ZPrize 2023 submission](https://github.com/td-kwj-zp2023/webgpu-msm-bls12-377) by Tal Derei and Koh Wei Jie. Their [documentation](https://hackmd.io/HNH0DcSqSka4hAaIfJNHEA) will largely serve as a documentation for this implementation, too. 
 
 Further reads on the optimisations applied:
-- [Optimizing Montgomery Multiplication in WebAssembly](https://baincapitalcrypto.com/optimizing-montgomery-multiplication-in-webassembly/) by Wei Jie.
+- [Optimizing Montgomery Multiplication in WebAssembly](https://baincapitalcrypto.com/optimizing-montgomery-multiplication-in-webassembly/) by Koh Wei Jie.
 - [Optimizing Barrett Reduction: Tighter Bounds Eliminate Redundant Subtractions](https://blog.zksecurity.xyz/posts/barrett-tighter-bound/) by Suneal Gong.
 - [Signed Bucket Indexes for Multi-Scalar Multiplication (MSM)](https://hackmd.io/@drouyang/signed-bucket-index) by drouyang.eth.
 
