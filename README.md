@@ -42,6 +42,7 @@ wasm-pack test --chrome --test test_webgpu_msm_cuzk_20
 
 ## Future work
 
+- Implement cuzk on other curves.
 - Implement cuzk on other libraries other than `halo2curves`, such as `arkworks`.
 - Explore the trade-off between the running
 time and the extra storage space needed by parallel Pippenger algorithm on webGPU as the paper [Elastic MSM](https://eprint.iacr.org/2024/057.pdf) suggests.
