@@ -51,18 +51,14 @@ pub async fn run_webgpu_msm<C: CurveAffine>(g: &[C], v: &[C::Scalar]) -> C::Curv
 }
 
 
-#[cfg(test)]
-mod tests_wasm_pack {
+pub mod tests_wasm_pack {
     use crate::cuzk::msm::compute_msm;
 
     use super::*;
 
     use halo2curves::bn256::{Fr, G1Affine};
     use wasm_bindgen::prelude::*;
-    use wasm_bindgen_test::*;
     use web_sys::console;
-
-    wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen]
     extern "C" {
@@ -70,9 +66,8 @@ mod tests_wasm_pack {
         fn now() -> f64;
     }
 
-    #[wasm_bindgen_test]
-    async fn test_webgpu_msm_cuzk() {
-        let sample_size = 1 << 16;
+    pub async fn test_webgpu_msm_cuzk(sample_size: usize) {
+        console::log_1(&format!("Testing with sample size: {}", sample_size).into());
         let points = sample_points::<G1Affine>(sample_size);
         let scalars = sample_scalars::<Fr>(sample_size);
 
@@ -87,4 +82,6 @@ mod tests_wasm_pack {
         console::log_1(&format!("Result: {:?}", result).into());
         assert_eq!(fast, result);
     }
+
+
 }
