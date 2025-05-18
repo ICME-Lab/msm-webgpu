@@ -14,17 +14,17 @@ use crate::cuzk::{
     utils::{bytes_to_field, field_to_u8_vec_for_gpu, to_biguint_le},
 };
 
-pub(crate) async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
+async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
     let a_bytes = field_to_u8_vec_for_gpu(&a, PARAMS.num_words, WORD_SIZE);
     let b_bytes = field_to_u8_vec_for_gpu(&b, PARAMS.num_words, WORD_SIZE);
     let input_size = 1;
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_words = PARAMS.num_words;
-    println!("Input size: {}", input_size);
-    println!("Chunk size: {}", chunk_size);
-    println!("Num words: {}", num_words);
-    println!("Word size: {}", WORD_SIZE);
-    println!("Params: {:?}", PARAMS);
+    println!("Input size: {input_size}");
+    println!("Chunk size: {chunk_size}");
+    println!("Num words: {num_words}");
+    println!("Word size: {WORD_SIZE}");
+    println!("Params: {PARAMS:?}");
 
     let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size);
 
@@ -77,16 +77,18 @@ pub(crate) async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
 
     let result_biguint = to_biguint_le(&data_u32.to_vec(), num_words, WORD_SIZE as u32);
 
-    let result = bytes_to_field(&result_biguint.to_bytes_le());
+    
 
-    result
+    bytes_to_field(&result_biguint.to_bytes_le())
 }
 
-pub(crate) fn run_webgpu_field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
+/// Run WebGPU field op sync
+pub fn run_webgpu_field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
     pollster::block_on(run_webgpu_field_op_async(op, a, b))
 }
 
-pub(crate) async fn run_webgpu_field_op_async<F: PrimeField>(op: &str, a: F, b: F) -> F {
+/// Run WebGPU field op async
+pub async fn run_webgpu_field_op_async<F: PrimeField>(op: &str, a: F, b: F) -> F {
     let now = Instant::now();
     let result = field_op::<F>(op, a, b).await;
     println!("Field add time: {:?}", now.elapsed());

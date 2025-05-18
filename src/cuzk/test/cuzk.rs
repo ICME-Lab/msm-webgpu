@@ -24,6 +24,7 @@ pub(crate) fn get_element<T: Clone + Copy>(arr: &[T], id: i32) -> T {
     }
 }
 
+/// Update element
 pub(crate) fn update_element<T: Clone + Copy>(arr: &mut Vec<T>, id: i32, val: T) {
     let len = arr.len();
     if id < 0 {
@@ -33,17 +34,18 @@ pub(crate) fn update_element<T: Clone + Copy>(arr: &mut Vec<T>, id: i32, val: T)
     }
 }
 
-pub(crate) fn cpu_transpose(
+/// CPU transpose
+pub fn cpu_transpose(
     all_csr_col_idx: Vec<i32>,
     n: usize,
     m: usize,
     num_subtasks: usize,
     input_size: usize,
 ) -> (Vec<i32>, Vec<i32>, Vec<i32>) {
-    let mut all_csc_col_ptr: Vec<i32> = vec![0; (num_subtasks * (n + 1)) as usize];
-    let mut all_csc_row_idx: Vec<i32> = vec![0; (num_subtasks * input_size) as usize];
-    let mut all_csc_vals: Vec<i32> = vec![0; (num_subtasks * input_size) as usize];
-    let mut all_curr: Vec<i32> = vec![0; (num_subtasks * n) as usize];
+    let mut all_csc_col_ptr: Vec<i32> = vec![0; num_subtasks * (n + 1)];
+    let mut all_csc_row_idx: Vec<i32> = vec![0; num_subtasks * input_size];
+    let mut all_csc_vals: Vec<i32> = vec![0; num_subtasks * input_size];
+    let mut all_curr: Vec<i32> = vec![0; num_subtasks * n];
 
     for subtask_idx in 0..num_subtasks {
         let ccp_offset = (subtask_idx * (n + 1)) as i32;
@@ -92,7 +94,8 @@ pub(crate) fn cpu_transpose(
     (all_csc_col_ptr, all_csc_row_idx, all_csc_vals)
 }
 
-pub(crate) fn decompose_scalars_signed<F: PrimeField>(
+/// Decompose scalars signed
+pub fn decompose_scalars_signed<F: PrimeField>(
     scalars: &[F],
     num_words: usize,
     word_size: usize,
@@ -110,7 +113,7 @@ pub(crate) fn decompose_scalars_signed<F: PrimeField>(
         for i in 0..limbs.len() {
             signed_slices[i] = limbs[i] as i32 + carry;
             if signed_slices[i] >= l / 2 {
-                signed_slices[i] = (l - signed_slices[i]) * -1;
+                signed_slices[i] = -(l - signed_slices[i]);
                 if signed_slices[i] == -0 {
                     signed_slices[i] = 0;
                 }
@@ -137,8 +140,7 @@ pub(crate) fn decompose_scalars_signed<F: PrimeField>(
 /**
  * Perform SMVP with signed bucket indices
  */
-
-pub(crate) fn cpu_smvp_signed(
+pub fn cpu_smvp_signed(
     subtask_idx: usize,
     input_size: usize,
     num_columns: usize,
@@ -170,9 +172,9 @@ pub(crate) fn cpu_smvp_signed(
             let mut sum = zero;
             for k in row_begin..row_end {
                 let idx = subtask_idx as i32 * input_size as i32 + k;
-                let val = get_element(&all_csc_val_idxs, idx);
-                let point = get_element(&points, val);
-                sum = sum + G1::from(point);
+                let val = get_element(all_csc_val_idxs, idx);
+                let point = get_element(points, val);
+                sum += G1::from(point);
             }
 
             let bucket_idx;
@@ -184,16 +186,17 @@ pub(crate) fn cpu_smvp_signed(
             }
 
             if bucket_idx > 0 {
-                buckets[thread_id] = buckets[thread_id] + sum;
+                buckets[thread_id] += sum;
             } else {
-                buckets[thread_id] = buckets[thread_id] + zero;
+                buckets[thread_id] += zero;
             }
         }
     }
     buckets
 }
 
-pub(crate) fn serial_bucket_reduction(buckets: &[G1]) -> G1 {
+/// Serial bucket reduction
+pub fn serial_bucket_reduction(buckets: &[G1]) -> G1 {
     let mut indices = vec![];
     for i in 1..buckets.len() {
         indices.push(i);
@@ -203,13 +206,13 @@ pub(crate) fn serial_bucket_reduction(buckets: &[G1]) -> G1 {
     let mut bucket_sum = G1::identity();
     for i in 1..buckets.len() + 1 {
         let b = buckets[indices[i - 1]] * Fr::from(i as u64);
-        bucket_sum = bucket_sum + b;
+        bucket_sum += b;
     }
     bucket_sum
 }
 
-// Perform running sum in the classic fashion - one siumulated thread only
-pub(crate) fn running_sum_bucket_reduction(buckets: &[G1]) -> G1 {
+/// Perform running sum in the classic fashion - one siumulated thread only
+pub fn running_sum_bucket_reduction(buckets: &[G1]) -> G1 {
     let n = buckets.len();
     let mut m = buckets[0];
     let mut g = m;
@@ -217,16 +220,16 @@ pub(crate) fn running_sum_bucket_reduction(buckets: &[G1]) -> G1 {
     for i in 0..n - 1 {
         let idx = n - 1 - i;
         let b = buckets[idx];
-        m = m + b;
-        g = g + m;
+        m += b;
+        g += m;
     }
 
     g
 }
 
-// Perform running sum with simulated parallelism. It is up to the caller
-// to add the resulting points.
-pub(crate) fn parallel_bucket_reduction(buckets: &[G1], num_threads: usize) -> Vec<G1> {
+/// Perform running sum with simulated parallelism. It is up to the caller
+/// to add the resulting points.
+pub fn parallel_bucket_reduction(buckets: &[G1], num_threads: usize) -> Vec<G1> {
     let buckets_per_thread = buckets.len() / num_threads;
     let mut bucket_sums: Vec<G1> = vec![];
 
@@ -243,13 +246,13 @@ pub(crate) fn parallel_bucket_reduction(buckets: &[G1], num_threads: usize) -> V
         for i in 0..(buckets_per_thread - 1) {
             let idx = (num_threads - thread_id) * buckets_per_thread - 1 - i;
             let b = buckets[idx];
-            m = m + b;
-            g = g + m;
+            m += b;
+            g += m;
         }
 
         let s = buckets_per_thread * (num_threads - thread_id - 1);
         if s > 0 {
-            g = g + m * Fr::from(s as u64);
+            g += m * Fr::from(s as u64);
         }
 
         bucket_sums.push(g);
@@ -257,8 +260,8 @@ pub(crate) fn parallel_bucket_reduction(buckets: &[G1], num_threads: usize) -> V
     bucket_sums
 }
 
-// The first part of the parallel bucket reduction algo
-pub(crate) fn parallel_bucket_reduction_1(
+/// The first part of the parallel bucket reduction algo
+pub fn parallel_bucket_reduction_1(
     buckets: &[G1],
     num_threads: usize,
 ) -> (Vec<G1>, Vec<G1>) {
@@ -279,8 +282,8 @@ pub(crate) fn parallel_bucket_reduction_1(
         for i in 0..(buckets_per_thread - 1) {
             let idx = (num_threads - thread_id) * buckets_per_thread - 1 - i;
             let b = buckets[idx];
-            m = m + b;
-            g = g + m;
+            m += b;
+            g += m;
         }
 
         g_points.push(g);
@@ -289,8 +292,8 @@ pub(crate) fn parallel_bucket_reduction_1(
     (g_points, m_points)
 }
 
-// The second part of the parallel bucket reduction algo
-pub(crate) fn parallel_bucket_reduction_2(
+/// The second part of the parallel bucket reduction algo
+pub fn parallel_bucket_reduction_2(
     g_points: Vec<G1>,
     m_points: Vec<G1>,
     num_buckets: usize,
@@ -304,7 +307,7 @@ pub(crate) fn parallel_bucket_reduction_2(
         let m = m_points[thread_id];
         let s = buckets_per_thread * (num_threads - thread_id - 1);
         if s > 0 {
-            g = g + m * Fr::from(s as u64);
+            g += m * Fr::from(s as u64);
         }
         result.push(g);
     }

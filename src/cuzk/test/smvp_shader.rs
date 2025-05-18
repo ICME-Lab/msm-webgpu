@@ -13,24 +13,25 @@ use crate::cuzk::{
     utils::{bytes_to_field, debug, to_biguint_le},
 };
 use crate::{points_to_bytes, scalars_to_bytes};
-pub(crate) async fn smvp_shader<C: CurveAffine>(
+
+async fn smvp_shader<C: CurveAffine>(
     points: &[C],
     scalars: &[C::Scalar],
 ) -> Vec<C::Curve> {
     let input_size = scalars.len();
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_columns = 1 << chunk_size;
-    let num_rows = (input_size + num_columns - 1) / num_columns;
-    let num_subtasks = (256 + chunk_size - 1) / chunk_size;
+    let num_rows = input_size.div_ceil(num_columns);
+    let num_subtasks = 256_usize.div_ceil(chunk_size);
     let num_words = PARAMS.num_words;
-    debug(&format!("Input size: {}", input_size));
-    debug(&format!("Chunk size: {}", chunk_size));
-    debug(&format!("Num columns: {}", num_columns));
-    debug(&format!("Num rows: {}", num_rows));
-    debug(&format!("Num subtasks: {}", num_subtasks));
-    debug(&format!("Num words: {}", num_words));
-    debug(&format!("Word size: {}", WORD_SIZE));
-    println!("Params: {:?}", PARAMS);
+    debug(&format!("Input size: {input_size}"));
+    debug(&format!("Chunk size: {chunk_size}"));
+    debug(&format!("Num columns: {num_columns}"));
+    debug(&format!("Num rows: {num_rows}"));
+    debug(&format!("Num subtasks: {num_subtasks}"));
+    debug(&format!("Num words: {num_words}"));
+    debug(&format!("Word size: {WORD_SIZE}"));
+    println!("Params: {PARAMS:?}");
 
     let point_bytes = points_to_bytes(points);
     let scalar_bytes = scalars_to_bytes(scalars);
@@ -157,8 +158,7 @@ pub(crate) async fn smvp_shader<C: CurveAffine>(
     if half_num_columns < 32768 {
         s_workgroup_size = 32;
         s_num_x_workgroups = 1;
-        s_num_y_workgroups = (half_num_columns + s_workgroup_size * s_num_x_workgroups - 1)
-            / (s_workgroup_size * s_num_x_workgroups);
+        s_num_y_workgroups = half_num_columns.div_ceil(s_workgroup_size * s_num_x_workgroups);
     }
 
     if num_columns < 256 {
@@ -168,11 +168,11 @@ pub(crate) async fn smvp_shader<C: CurveAffine>(
         s_num_z_workgroups = 1;
     }
 
-    debug(&format!("Half num columns: {:?}", half_num_columns));
-    debug(&format!("S workgroup size: {:?}", s_workgroup_size));
-    debug(&format!("S num x workgroups: {:?}", s_num_x_workgroups));
-    debug(&format!("S num y workgroups: {:?}", s_num_y_workgroups));
-    debug(&format!("S num z workgroups: {:?}", s_num_z_workgroups));
+    debug(&format!("Half num columns: {half_num_columns:?}"));
+    debug(&format!("S workgroup size: {s_workgroup_size:?}"));
+    debug(&format!("S num x workgroups: {s_num_x_workgroups:?}"));
+    debug(&format!("S num y workgroups: {s_num_y_workgroups:?}"));
+    debug(&format!("S num z workgroups: {s_num_z_workgroups:?}"));
 
     // This is a dynamic variable that determines the number of CSR
     // matrices processed per invocation of the shader. A safe default is 1.
@@ -182,8 +182,7 @@ pub(crate) async fn smvp_shader<C: CurveAffine>(
     // overwritten per iteration.
     let bucket_sum_coord_bytelength = (num_columns / 2) * num_words * 4 * num_subtasks;
     debug(&format!(
-        "Bucket sum coord bytelength: {:?}",
-        bucket_sum_coord_bytelength
+        "Bucket sum coord bytelength: {bucket_sum_coord_bytelength:?}"
     ));
     let bucket_sum_x_sb = create_storage_buffer(
         Some("Bucket sum X buffer"),
@@ -202,16 +201,16 @@ pub(crate) async fn smvp_shader<C: CurveAffine>(
     );
     let smvp_shader = shader_manager.gen_smvp_shader(s_workgroup_size, num_columns);
 
-    debug(&format!("SMVP shader: {}", smvp_shader));
+    debug(&format!("SMVP shader: {smvp_shader}"));
     debug(&format!(
         "s_num_x_workgroups / (num_subtasks / num_subtask_chunk_size): {:?}",
         s_num_x_workgroups / (num_subtasks / num_subtask_chunk_size)
     ));
-    debug(&format!("s_num_y_workgroups: {:?}", s_num_y_workgroups));
-    debug(&format!("s_num_z_workgroups: {:?}", s_num_z_workgroups));
+    debug(&format!("s_num_y_workgroups: {s_num_y_workgroups:?}"));
+    debug(&format!("s_num_z_workgroups: {s_num_z_workgroups:?}"));
 
     for offset in (0..num_subtasks).step_by(num_subtask_chunk_size) {
-        debug(&format!("Offset: {:?}", offset));
+        debug(&format!("Offset: {offset:?}"));
         smvp_gpu(
             &smvp_shader,
             s_num_x_workgroups / (num_subtasks / num_subtask_chunk_size),
@@ -248,7 +247,8 @@ pub(crate) async fn smvp_shader<C: CurveAffine>(
     let p_y = bytemuck::cast_slice::<u8, u32>(&data[1]).chunks(20);
     let p_z = bytemuck::cast_slice::<u8, u32>(&data[2]).chunks(20);
 
-    let p = zip(zip(p_x, p_y), p_z)
+    
+    zip(zip(p_x, p_y), p_z)
         .enumerate()
         .map(|(i, ((x, y), z))| {
             let p_x_biguint_montgomery = to_biguint_le(&x.to_vec(), num_words, WORD_SIZE as u32);
@@ -263,26 +263,27 @@ pub(crate) async fn smvp_shader<C: CurveAffine>(
             let p_z_field = bytes_to_field(&p_z_biguint.to_bytes_le());
             let p = C::Curve::new_jacobian(p_x_field, p_y_field, p_z_field).unwrap();
             if p.is_identity().into() && i < 15 {
-                println!("Index: {:?}", i);
-                println!("P x: {:?}", p_x_field);
-                println!("P y: {:?}", p_y_field);
-                println!("P z: {:?}", p_z_field);
-                println!("P identity: {:?}", p);
+                println!("Index: {i:?}");
+                println!("P x: {p_x_field:?}");
+                println!("P y: {p_y_field:?}");
+                println!("P z: {p_z_field:?}");
+                println!("P identity: {p:?}");
             }
             p
         })
-        .collect::<Vec<_>>();
-    p
+        .collect::<Vec<_>>()
 }
 
-pub(crate) fn run_webgpu_smvp_shader<C: CurveAffine>(
+/// Run WebGPU SMVP shader sync
+pub fn run_webgpu_smvp_shader<C: CurveAffine>(
     points: &[C],
     scalars: &[C::Scalar],
 ) -> Vec<C::Curve> {
     pollster::block_on(run_webgpu_smvp_shader_async(points, scalars))
 }
 
-pub(crate) async fn run_webgpu_smvp_shader_async<C: CurveAffine>(
+/// Run WebGPU SMVP shader async
+pub async fn run_webgpu_smvp_shader_async<C: CurveAffine>(
     points: &[C],
     scalars: &[C::Scalar],
 ) -> Vec<C::Curve> {

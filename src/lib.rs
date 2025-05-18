@@ -35,7 +35,7 @@ pub fn scalars_to_bytes<F: PrimeField>(v: &[F]) -> Vec<u8> {
 
 /// Convert points to bytes as [x0, y0, x1, y1, ...]
 pub fn points_to_bytes<C: CurveAffine>(g: &[C]) -> Vec<u8> {
-    g.into_iter()
+    g.iter()
         .flat_map(|affine| {
             let coords = affine.coordinates().unwrap();
             let x = field_to_bytes(coords.x());
@@ -73,7 +73,7 @@ pub mod tests_wasm_pack {
     }
 
     pub async fn test_webgpu_msm_cuzk(sample_size: usize) {
-        console::log_1(&format!("Testing with sample size: {}", sample_size).into());
+        console::log_1(&format!("Testing with sample size: {sample_size}").into());
         let points = sample_points::<G1Affine>(sample_size);
         let scalars = sample_scalars::<Fr>(sample_size);
 
@@ -85,7 +85,7 @@ pub mod tests_wasm_pack {
         let result = compute_msm::<G1Affine>(&points, &scalars).await;
         console::log_1(&format!("GPU Elapsed: {} ms", now() - result_start).into());
 
-        console::log_1(&format!("Result: {:?}", result).into());
+        console::log_1(&format!("Result: {result:?}").into());
         assert_eq!(fast, result);
     }
 }

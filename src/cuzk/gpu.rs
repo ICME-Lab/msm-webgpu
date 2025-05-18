@@ -41,7 +41,7 @@ pub async fn get_device(adapter: &Adapter) -> (Device, Queue) {
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                required_limits: required_limits,
+                required_limits,
                 required_features: Features::empty(),
                 memory_hints: MemoryHints::default(), // Favor performance over memory usage
             },
@@ -56,8 +56,8 @@ pub async fn get_device(adapter: &Adapter) -> (Device, Queue) {
 /// Create a storage buffer
 pub fn create_storage_buffer(label: Option<&str>, device: &Device, size: u64) -> Buffer {
     device.create_buffer(&BufferDescriptor {
-        label: label,
-        size: size,
+        label,
+        size,
         usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     })
@@ -71,7 +71,7 @@ pub fn create_and_write_storage_buffer(
     data: &[u8],
 ) -> Buffer {
     device.create_buffer_init(&BufferInitDescriptor {
-        label: label,
+        label,
         contents: data,
         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
     })
@@ -85,7 +85,7 @@ pub fn create_and_write_uniform_buffer(
     data: &[u8],
 ) -> Buffer {
     let buffer = device.create_buffer(&BufferDescriptor {
-        label: label,
+        label,
         size: data.len() as u64,
         usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         mapped_at_creation: false,
@@ -108,12 +108,12 @@ pub async fn read_from_gpu(
     for (i, storage_buffer) in storage_buffers.iter().enumerate() {
         let size = storage_buffer.size();
         let staging_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some(&format!("Staging Buffer {}", i)),
-            size: size,
+            label: Some(&format!("Staging Buffer {i}")),
+            size,
             usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
+        encoder.copy_buffer_to_buffer(storage_buffer, 0, &staging_buffer, 0, size);
         staging_buffers.push(staging_buffer);
     }
 
@@ -146,12 +146,12 @@ pub async fn read_from_gpu_test(
     for (i, storage_buffer) in storage_buffers.iter().enumerate() {
         let size = storage_buffer.size();
         let staging_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some(&format!("Staging Buffer {}", i)),
-            size: size,
+            label: Some(&format!("Staging Buffer {i}")),
+            size,
             usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
+        encoder.copy_buffer_to_buffer(storage_buffer, 0, &staging_buffer, 0, size);
         staging_buffers.push(staging_buffer);
     }
 
@@ -162,7 +162,7 @@ pub async fn read_from_gpu_test(
     let mut data = Vec::new();
     for staging_buffer in staging_buffers {
         let staging_slice = staging_buffer.slice(..);
-        let _buffer_future = staging_slice.map_async(MapMode::Read, |x| x.unwrap());
+        staging_slice.map_async(MapMode::Read, |x| x.unwrap());
         device.poll(wgpu::Maintain::Wait);
         let result_data = staging_slice.get_mapped_range();
         data.push(result_data.to_vec());
@@ -194,12 +194,10 @@ pub fn create_bind_group_layout(
         })
         .collect::<Vec<_>>();
     device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-        label: label,
-        entries: &vec![
-            storage_buffer_read_only_entries,
+        label,
+        entries: &[storage_buffer_read_only_entries,
             storage_buffer_entries,
-            uniform_buffer_entries,
-        ]
+            uniform_buffer_entries]
         .concat(),
     })
 }
@@ -254,7 +252,7 @@ pub fn create_bind_group(
     buffers: Vec<&Buffer>,
 ) -> BindGroup {
     device.create_bind_group(&BindGroupDescriptor {
-        label: label,
+        label,
         layout: bind_group_layout,
         entries: &buffers
             .iter()
@@ -276,21 +274,21 @@ pub async fn create_compute_pipeline(
     entry_point: &str,
 ) -> ComputePipeline {
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-        label: label,
+        label,
         bind_group_layouts: &[bind_group_layout],
         push_constant_ranges: &[],
     });
 
     let module = device.create_shader_module(ShaderModuleDescriptor {
-        label: label,
+        label,
         source: ShaderSource::Wgsl(code.into()),
     });
 
     device.create_compute_pipeline(&ComputePipelineDescriptor {
-        label: label,
+        label,
         layout: Some(&pipeline_layout),
         module: &module,
-        entry_point: Some(&entry_point),
+        entry_point: Some(entry_point),
         compilation_options: PipelineCompilationOptions::default(),
         cache: None,
     })

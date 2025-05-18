@@ -60,7 +60,7 @@ pub fn to_biguint_le(limbs: &Vec<u32>, num_limbs: usize, log_limb_size: u32) -> 
         let a = idx * log_limb_size;
         let b = BigUint::from(2u32).pow(a) * BigUint::from(limbs[idx as usize]);
 
-        res += BigUint::from(b);
+        res += b;
     }
 
     res
@@ -76,8 +76,8 @@ pub fn to_words_le(val: &BigUint, num_words: usize, word_size: usize) -> Vec<u32
         let shift = idx * word_size;
         let w = (val >> shift) & mask.clone();
         let digits = w.to_u32_digits();
-        if digits.len() > 0 {
-            limbs[idx] = digits[0] as u32;
+        if !digits.is_empty() {
+            limbs[idx] = digits[0];
         }
     }
 
@@ -174,8 +174,8 @@ pub fn from_words_le_without_assertion<F: PrimeField>(
         }
     }
     let bytes = val.to_bytes_le();
-    let field = bytes_to_field(&bytes);
-    field
+    
+    bytes_to_field(&bytes)
 }
 
 /// Convert a vector of points to a vector of bytes
@@ -184,7 +184,7 @@ pub fn points_to_bytes_for_gpu<C: CurveAffine>(
     num_words: usize,
     word_size: usize,
 ) -> Vec<u8> {
-    g.into_iter()
+    g.iter()
         .flat_map(|affine| {
             let coords = affine.coordinates().unwrap();
             let x = field_to_u8_vec_for_gpu(coords.x(), num_words, word_size);
@@ -200,7 +200,7 @@ pub fn gen_p_limbs(p: &BigUint, num_words: usize, word_size: usize) -> String {
     let limbs = to_words_le(p, num_words, word_size);
     let mut r = String::new();
     for (i, limb) in limbs.iter().enumerate() {
-        r += &format!("    p.limbs[{}u] = {}u;\n", i, limb);
+        r += &format!("    p.limbs[{i}u] = {limb}u;\n");
     }
     r
 }
@@ -210,7 +210,7 @@ pub fn gen_p_limbs_plus_one(p: &BigUint, num_words: usize, word_size: usize) -> 
     let limbs = to_words_le(p, num_words, word_size);
     let mut r = String::new();
     for (i, limb) in limbs.iter().enumerate() {
-        r += &format!("    p.limbs[{}u] = {}u;\n", i, limb);
+        r += &format!("    p.limbs[{i}u] = {limb}u;\n");
     }
     r += &format!("    p.limbs[{}u] = {}u;\n", limbs.len(), 0);
     r
@@ -220,20 +220,20 @@ pub fn gen_p_limbs_plus_one(p: &BigUint, num_words: usize, word_size: usize) -> 
 pub fn gen_zero_limbs(num_words: usize) -> String {
     let mut r = String::new();
     for _i in 0..(num_words - 1) {
-        r += &format!("0u, ");
+        r += "0u, ";
     }
-    r += &format!("0u");
+    r += "0u";
     r
 }
 
 /// Generate the GPU representation of one
 pub fn gen_one_limbs(num_words: usize) -> String {
     let mut r = String::new();
-    r += &format!("1u, ");
+    r += "1u, ";
     for _i in 0..(num_words - 2) {
-        r += &format!("0u, ");
+        r += "0u, ";
     }
-    r += &format!("0u");
+    r += "0u";
     r
 }
 
@@ -242,7 +242,7 @@ pub fn gen_r_limbs(r: &BigUint, num_words: usize, word_size: usize) -> String {
     let limbs = to_words_le(r, num_words, word_size);
     let mut r = String::new();
     for (i, limb) in limbs.iter().enumerate() {
-        r += &format!("    r.limbs[{}u] = {}u;\n", i, limb);
+        r += &format!("    r.limbs[{i}u] = {limb}u;\n");
     }
     r
 }
@@ -252,7 +252,7 @@ pub fn gen_rinv_limbs(rinv: &BigUint, num_words: usize, word_size: usize) -> Str
     let limbs = to_words_le(rinv, num_words, word_size);
     let mut r = String::new();
     for (i, limb) in limbs.iter().enumerate() {
-        r += &format!("    rinv.limbs[{}u] = {}u;\n", i, limb);
+        r += &format!("    rinv.limbs[{i}u] = {limb}u;\n");
     }
     r
 }
@@ -275,7 +275,7 @@ pub fn gen_mu_limbs(p: &BigUint, num_words: usize, word_size: usize) -> String {
     let limbs = to_words_le(&mu, num_words, word_size);
     let mut r = String::new();
     for (i, limb) in limbs.iter().enumerate() {
-        r += &format!("    mu.limbs[{}u] = {}u;\n", i, limb);
+        r += &format!("    mu.limbs[{i}u] = {limb}u;\n");
     }
     r
 }
@@ -341,7 +341,7 @@ pub fn calc_rinv_and_n0(p: &BigUint, r: &BigUint, log_limb_size: u32) -> (BigUin
     let pprime = BigInt::from_biguint(Sign::Plus, pprime);
 
     let neg_n_inv = BigInt::from_biguint(Sign::Plus, r.clone()) - pprime;
-    let n0 = neg_n_inv % BigInt::from(2u32.pow(log_limb_size as u32));
+    let n0 = neg_n_inv % BigInt::from(2u32.pow(log_limb_size));
     let n0 = n0.to_biguint().unwrap().to_u32_digits()[0];
 
     (rinv, n0)
@@ -361,7 +361,7 @@ pub fn compute_misc_params(p: &BigUint, word_size: usize) -> MiscParams {
     assert!(word_size > 0);
     let num_words = calc_num_words(word_size);
     let r = BigUint::one() << (num_words * word_size);
-    let res = calc_rinv_and_n0(&p, &r, word_size as u32);
+    let res = calc_rinv_and_n0(p, &r, word_size as u32);
     let rinv = res.0;
     let n0 = res.1;
     MiscParams {
@@ -379,7 +379,7 @@ pub fn debug(s: &str) {
     console::log_1(&s.into());
     // if not wasm
     #[cfg(not(target_arch = "wasm32"))]
-    println!("{}", s);
+    println!("{s}");
 }
 
 #[cfg(test)]

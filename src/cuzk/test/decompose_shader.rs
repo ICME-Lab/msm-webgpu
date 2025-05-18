@@ -11,24 +11,24 @@ use crate::cuzk::{
 };
 use crate::{points_to_bytes, scalars_to_bytes};
 
-pub(crate) async fn decompose_shader<C: CurveAffine>(
+async fn decompose_shader<C: CurveAffine>(
     points: &[C],
     scalars: &[C::Scalar],
 ) -> (Vec<C>, Vec<u8>) {
     let input_size = scalars.len();
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_columns = 1 << chunk_size;
-    let num_rows = (input_size + num_columns - 1) / num_columns;
-    let num_subtasks = (256 + chunk_size - 1) / chunk_size;
+    let num_rows = input_size.div_ceil(num_columns);
+    let num_subtasks = 256_usize.div_ceil(chunk_size);
     let num_words = PARAMS.num_words;
-    debug(&format!("Input size: {}", input_size));
-    debug(&format!("Chunk size: {}", chunk_size));
-    debug(&format!("Num columns: {}", num_columns));
-    debug(&format!("Num rows: {}", num_rows));
-    debug(&format!("Num subtasks: {}", num_subtasks));
-    debug(&format!("Num words: {}", num_words));
-    debug(&format!("Word size: {}", WORD_SIZE));
-    debug(&format!("Params: {:?}", PARAMS));
+    debug(&format!("Input size: {input_size}"));
+    debug(&format!("Chunk size: {chunk_size}"));
+    debug(&format!("Num columns: {num_columns}"));
+    debug(&format!("Num rows: {num_rows}"));
+    debug(&format!("Num subtasks: {num_subtasks}"));
+    debug(&format!("Num words: {num_words}"));
+    debug(&format!("Word size: {WORD_SIZE}"));
+    debug(&format!("Params: {PARAMS:?}"));
 
     let point_bytes = points_to_bytes(points);
     let scalar_bytes = scalars_to_bytes(scalars);
@@ -133,14 +133,16 @@ pub(crate) async fn decompose_shader<C: CurveAffine>(
     (p, data[2].clone())
 }
 
-pub(crate) fn run_webgpu_decompose<C: CurveAffine>(
+/// Run WebGPU decompose sync
+pub fn run_webgpu_decompose<C: CurveAffine>(
     points: &[C],
     scalars: &[C::Scalar],
 ) -> (Vec<C>, Vec<u8>) {
     pollster::block_on(run_webgpu_decompose_async(points, scalars))
 }
 
-pub(crate) async fn run_webgpu_decompose_async<C: CurveAffine>(
+/// Run WebGPU decompose async
+pub async fn run_webgpu_decompose_async<C: CurveAffine>(
     points: &[C],
     scalars: &[C::Scalar],
 ) -> (Vec<C>, Vec<u8>) {

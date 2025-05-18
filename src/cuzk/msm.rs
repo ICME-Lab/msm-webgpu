@@ -52,8 +52,8 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     let input_size = scalars.len();
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_columns = 1 << chunk_size;
-    let num_rows = (input_size + num_columns - 1) / num_columns;
-    let num_subtasks = (256 + chunk_size - 1) / chunk_size;
+    let num_rows = input_size.div_ceil(num_columns);
+    let num_subtasks = 256_usize.div_ceil(chunk_size);
     let num_words = PARAMS.num_words;
     let point_bytes = points_to_bytes(points);
     let scalar_bytes = scalars_to_bytes(scalars);
@@ -183,7 +183,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         s_workgroup_size = 32;
         s_num_x_workgroups = 1;
         s_num_y_workgroups =
-            ((half_num_columns / s_workgroup_size) + s_num_x_workgroups - 1) / s_num_x_workgroups;
+            (half_num_columns / s_workgroup_size).div_ceil(s_num_x_workgroups);
     }
 
     if num_columns < 256 {
@@ -341,8 +341,8 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         .map(|x| {
             let x_biguint_montgomery = to_biguint_le(&x.to_vec(), num_words, WORD_SIZE as u32);
             let x_biguint = x_biguint_montgomery * &PARAMS.rinv % P.clone();
-            let x_field = bytes_to_field(&x_biguint.to_bytes_le());
-            x_field
+            
+            bytes_to_field(&x_biguint.to_bytes_le())
         })
         .collect::<Vec<_>>();
     let g_points_y = bytemuck::cast_slice::<u8, u32>(&data[1])
@@ -350,8 +350,8 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         .map(|y| {
             let y_biguint_montgomery = to_biguint_le(&y.to_vec(), num_words, WORD_SIZE as u32);
             let y_biguint = y_biguint_montgomery * &PARAMS.rinv % P.clone();
-            let y_field = bytes_to_field(&y_biguint.to_bytes_le());
-            y_field
+            
+            bytes_to_field(&y_biguint.to_bytes_le())
         })
         .collect::<Vec<_>>();
     let g_points_z = bytemuck::cast_slice::<u8, u32>(&data[2])
@@ -359,8 +359,8 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         .map(|z| {
             let z_biguint_montgomery = to_biguint_le(&z.to_vec(), num_words, WORD_SIZE as u32);
             let z_biguint = z_biguint_montgomery * &PARAMS.rinv % P.clone();
-            let z_field = bytes_to_field(&z_biguint.to_bytes_le());
-            z_field
+            
+            bytes_to_field(&z_biguint.to_bytes_le())
         })
         .collect::<Vec<_>>();
 
@@ -382,7 +382,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
                 g_points_z[i * b_workgroup_size + j],
             )
             .unwrap();
-            point = point + reduced_point;
+            point += reduced_point;
         }
         points.push(point);
     }

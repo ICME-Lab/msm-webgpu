@@ -76,7 +76,7 @@ impl ShaderManager {
         let num_words = PARAMS.num_words;
         let r = PARAMS.r.clone();
         let rinv = PARAMS.rinv.clone();
-        println!("P: {:?}", P);
+        println!("P: {P:?}");
         println!("P limbs: {}", gen_p_limbs(&P, num_words, word_size));
         println!("W_MASK: {:?}", (1 << word_size) - 1);
         println!("R limbs: {}", gen_r_limbs(&r, num_words, word_size));
@@ -92,7 +92,7 @@ impl ShaderManager {
             one_limbs: gen_one_limbs(num_words),
             slack: num_words * word_size - p_bit_length,
             w_mask: (1 << word_size) - 1,
-            n0: PARAMS.n0.clone(),
+            n0: PARAMS.n0,
             r_limbs: gen_r_limbs(&r, num_words, word_size),
             mu_limbs: gen_mu_limbs(&P, num_words, word_size),
             rinv_limbs: gen_rinv_limbs(&rinv, num_words, word_size),
@@ -113,8 +113,8 @@ impl ShaderManager {
 
     /// Generate the sparse matrix-vector product shader
     pub fn gen_smvp_shader(&self, workgroup_size: usize, num_csr_cols: usize) -> String {
-        println!("num_csr_cols: {:?}", num_csr_cols);
-        println!("workgroup_size: {:?}", workgroup_size);
+        println!("num_csr_cols: {num_csr_cols:?}");
+        println!("workgroup_size: {workgroup_size:?}");
         let mut handlebars = Handlebars::new();
         handlebars
             .register_template_string("smvp", SMVP_SHADER.as_str())
@@ -224,10 +224,10 @@ impl ShaderManager {
         num_subtasks: usize,
         num_columns: usize,
     ) -> String {
-        println!("num_columns: {:?}", num_columns);
-        println!("num_y_workgroups: {:?}", num_y_workgroups);
-        println!("num_subtasks: {:?}", num_subtasks);
-        println!("workgroup_size: {:?}", workgroup_size);
+        println!("num_columns: {num_columns:?}");
+        println!("num_y_workgroups: {num_y_workgroups:?}");
+        println!("num_subtasks: {num_subtasks:?}");
+        println!("workgroup_size: {workgroup_size:?}");
         let mut handlebars = Handlebars::new();
         handlebars
             .register_template_string("decomp_scalars", DECOMPOSE_SCALARS_SHADER.as_str())
