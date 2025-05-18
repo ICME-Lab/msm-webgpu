@@ -3,6 +3,7 @@ use wgpu::{
     util::{BufferInitDescriptor, DeviceExt}, Adapter, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, Buffer, BufferAsyncError, BufferDescriptor, BufferSlice, BufferUsages, CommandEncoder, ComputePipeline, ComputePipelineDescriptor, Device, Features, Instance, Limits, MapMode, MemoryHints, PipelineCompilationOptions, PipelineLayoutDescriptor, PowerPreference, Queue, ShaderModuleDescriptor, ShaderSource
 };
 
+/// Get an adapter
 pub async fn get_adapter() -> Adapter {
     let instance = Instance::default();
 
@@ -17,6 +18,7 @@ pub async fn get_adapter() -> Adapter {
         .expect("No suitable GPU adapters found on the system!")
 }
 
+/// Get a device
 pub async fn get_device(adapter: &Adapter) -> (Device, Queue) {
     let required_limits = Limits {
         max_buffer_size: adapter.limits().max_buffer_size,
@@ -47,6 +49,7 @@ pub async fn get_device(adapter: &Adapter) -> (Device, Queue) {
     (device, queue)
 }
 
+/// Create a storage buffer
 pub fn create_storage_buffer(label: Option<&str>, device: &Device, size: u64) -> Buffer {
     device.create_buffer(&BufferDescriptor {
         label: label,
@@ -56,7 +59,7 @@ pub fn create_storage_buffer(label: Option<&str>, device: &Device, size: u64) ->
     })
 }
 
-
+/// Create a storage buffer and write data to it
 
 pub fn create_and_write_storage_buffer(
     label: Option<&str>,
@@ -70,6 +73,7 @@ pub fn create_and_write_storage_buffer(
     })
 }
 
+/// Create a uniform buffer and write data to it
 pub fn create_and_write_uniform_buffer(
     label: Option<&str>,
     device: &Device,
@@ -88,6 +92,7 @@ pub fn create_and_write_uniform_buffer(
     buffer
 }
 
+/// Read data from the GPU
 pub async fn read_from_gpu(
     device: &Device,
     queue: &Queue,
@@ -124,7 +129,6 @@ pub async fn read_from_gpu(
     let mut data = Vec::new();
     for staging_buffer in staging_buffers {
         let staging_slice = staging_buffer.slice(..);
-        // let _buffer_future = staging_slice.map_async(MapMode::Read, |x| x.unwrap());
         let _buffer_future = map_buffer_async_browser(staging_slice, MapMode::Read).await;
         device.poll(wgpu::Maintain::Wait);
         let result_data = staging_slice.get_mapped_range();
@@ -134,8 +138,7 @@ pub async fn read_from_gpu(
     data
 }
 
-
-
+/// Read data from the GPU for testing
 pub async fn read_from_gpu_test(
     device: &Device,
     queue: &Queue,
@@ -178,6 +181,7 @@ pub async fn read_from_gpu_test(
     data
 }
 
+/// Create a bind group layout
 pub fn create_bind_group_layout(
     label: Option<&str>,
     device: &Device,
@@ -210,6 +214,7 @@ pub fn create_bind_group_layout(
     })
 }
 
+/// Default storage buffer entry
 pub fn default_storage_buffer_entry(idx: u32) -> BindGroupLayoutEntry {
     BindGroupLayoutEntry {
         binding: idx,
@@ -223,6 +228,7 @@ pub fn default_storage_buffer_entry(idx: u32) -> BindGroupLayoutEntry {
     }
 }
 
+/// Default storage read only buffer entry
 pub fn default_storage_read_only_buffer_entry(idx: u32) -> BindGroupLayoutEntry {
     BindGroupLayoutEntry {
         binding: idx,
@@ -235,6 +241,8 @@ pub fn default_storage_read_only_buffer_entry(idx: u32) -> BindGroupLayoutEntry 
         count: None,
     }
 }
+
+/// Default uniform buffer entry
 pub fn default_uniform_buffer_entry(idx: u32) -> BindGroupLayoutEntry {
     BindGroupLayoutEntry {
         binding: idx,
@@ -248,6 +256,7 @@ pub fn default_uniform_buffer_entry(idx: u32) -> BindGroupLayoutEntry {
     }
 }
 
+/// Create a bind group
 pub fn create_bind_group(
     label: Option<&str>,
     device: &Device,
@@ -268,6 +277,7 @@ pub fn create_bind_group(
     })
 }
 
+/// Create a compute pipeline
 pub async fn create_compute_pipeline(
     label: Option<&str>,
     device: &Device,
@@ -296,6 +306,7 @@ pub async fn create_compute_pipeline(
     })
 }
 
+/// Execute a compute pipeline
 pub async fn execute_pipeline(
     encoder: &mut CommandEncoder,
     pipeline: ComputePipeline,
@@ -313,6 +324,7 @@ pub async fn execute_pipeline(
     cpass.dispatch_workgroups(num_x_workgroups, num_y_workgroups, num_z_workgroups);
 }
 
+/// Map a buffer asynchronously
 pub fn map_buffer_async_browser(
     slice: BufferSlice<'_>,
     mode: MapMode,

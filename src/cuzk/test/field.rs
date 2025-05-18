@@ -13,7 +13,7 @@ use crate::cuzk::{
     utils::{bytes_to_field, field_to_u8_vec_for_gpu, to_biguint_le},
 };
 
-pub async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
+pub(crate) async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
     let a_bytes = field_to_u8_vec_for_gpu(&a, PARAMS.num_words, WORD_SIZE);
     let b_bytes = field_to_u8_vec_for_gpu(&b, PARAMS.num_words, WORD_SIZE);
     let input_size = 1;
@@ -82,11 +82,11 @@ pub async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
     result
 }
 
-pub fn run_webgpu_field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
+pub(crate) fn run_webgpu_field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
     pollster::block_on(run_webgpu_field_op_async(op, a, b))
 }
 
-pub async fn run_webgpu_field_op_async<F: PrimeField>(op: &str, a: F, b: F) -> F {
+pub(crate) async fn run_webgpu_field_op_async<F: PrimeField>(op: &str, a: F, b: F) -> F {
     let now = Instant::now();
     let result = field_op::<F>(op, a, b).await;
     println!("Field add time: {:?}", now.elapsed());
@@ -95,7 +95,7 @@ pub async fn run_webgpu_field_op_async<F: PrimeField>(op: &str, a: F, b: F) -> F
 
 #[cfg(test)]
 mod tests {
-    use crate::sample_scalars;
+    use crate::{cuzk::{msm::calc_num_words, utils::u8s_to_field_without_assertion}, sample_scalars};
 
     use super::*;
     use ff::Field;
@@ -158,5 +158,18 @@ mod tests {
 
         println!("Result: {:?}", result);
         assert_eq!(fast, result);
+    }
+
+    #[test]
+    fn test_field_to_u8_vec_for_gpu() {
+        // random
+        let mut rng = thread_rng();
+        let a = Fq::random(&mut rng);
+        for word_size in 13..17 {
+            let num_words = calc_num_words(word_size);
+            let bytes = field_to_u8_vec_for_gpu(&a, num_words, word_size);
+            let a_from_bytes = u8s_to_field_without_assertion(&bytes, num_words, word_size);
+            assert_eq!(a, a_from_bytes);
+        }
     }
 }

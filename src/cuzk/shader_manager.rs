@@ -2,50 +2,56 @@ use handlebars::Handlebars;
 use once_cell::sync::Lazy;
 use serde_json::json;
 
-// Templates
+/// Decompose scalars shader
 pub static DECOMPOSE_SCALARS_SHADER: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/cuzk/decompose_scalars.template.wgsl").to_string()
 });
+/// Extract word from bytes least significant end shader
 pub static EXTRACT_WORD_FROM_BYTES_LE_FUNCS: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/cuzk/extract_word_from_bytes_le.template.wgsl").to_string()
 });
-
+/// Montgomery product shader
 pub static MONTGOMERY_PRODUCT_FUNCS: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/montgomery/mont_pro_product.template.wgsl").to_string()
 });
+/// Barrett reduction shader
 pub static BARRETT_FUNCS: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/field/barrett.template.wgsl").to_string()
 });
-pub static MONTGOMERY_PRODUCT_FUNCS_CIOS: Lazy<String> = Lazy::new(|| {
-    include_str!("wgsl/montgomery/mont_pro_cios.template.wgsl").to_string()
-});
+/// Curve operations shader
 pub static EC_FUNCS: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/curve/ec.template.wgsl").to_string()
 });
+/// Field operations shader
 pub static FIELD_FUNCS: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/field/field.template.wgsl").to_string()
 });
+/// Big integer operations shader
 pub static BIGINT_FUNCS: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/bigint/bigint.template.wgsl").to_string()
 });
+/// Structs shader
 pub static STRUCTS: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/struct/structs.template.wgsl").to_string()
 });
 
-// Shaders
+/// Transpose shader
 pub static TRANSPOSE_SHADER: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/cuzk/transpose.template.wgsl").to_string()
 });
+/// Sparse matrix-vector product shader
 pub static SMVP_SHADER: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/cuzk/smvp.template.wgsl").to_string()
 });
+/// Batch product reduction shader
 pub static BPR_SHADER: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/cuzk/bpr.template.wgsl").to_string()
 });
+/// Test field shader
 pub static TEST_FIELD_SHADER: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/test/test_field.wgsl").to_string()
 });
-
+/// Test point shader
 pub static TEST_POINT_SHADER: Lazy<String> = Lazy::new(|| {
     include_str!("wgsl/test/test_point.wgsl").to_string()
 });
@@ -53,6 +59,8 @@ pub static TEST_POINT_SHADER: Lazy<String> = Lazy::new(|| {
 use crate::cuzk::utils::{calc_bitwidth, gen_mu_limbs, gen_one_limbs, gen_p_limbs, gen_rinv_limbs};
 
 use super::{msm::{P, PARAMS}, utils::{gen_p_limbs_plus_one, gen_r_limbs, gen_zero_limbs}};
+
+/// Shader manager
 pub struct ShaderManager {
     word_size: usize,
     chunk_size: usize,
@@ -72,6 +80,7 @@ pub struct ShaderManager {
 }
 
 impl ShaderManager {
+    /// Create a new shader manager
     pub fn new(word_size: usize, chunk_size: usize, input_size: usize) -> Self {
         let p_bit_length = calc_bitwidth(&P); 
         let num_words = PARAMS.num_words;
@@ -100,6 +109,7 @@ impl ShaderManager {
         }
     }
 
+    /// Generate the transpose shader
     pub fn gen_transpose_shader(&self, workgroup_size: usize) -> String {
         let mut handlebars = Handlebars::new();
         handlebars
@@ -111,6 +121,7 @@ impl ShaderManager {
         handlebars.render("transpose", &data).unwrap()
     }
 
+    /// Generate the sparse matrix-vector product shader
     pub fn gen_smvp_shader(&self, workgroup_size: usize, num_csr_cols: usize) -> String {
         println!("num_csr_cols: {:?}", num_csr_cols);
         println!("workgroup_size: {:?}", workgroup_size);
@@ -150,6 +161,7 @@ impl ShaderManager {
         handlebars.render("smvp", &data).unwrap()
     }
 
+    /// Generate the batch product reduction shader
     pub fn gen_bpr_shader(&self, workgroup_size: usize) -> String {
         let mut handlebars = Handlebars::new();
         handlebars
@@ -184,6 +196,7 @@ impl ShaderManager {
         handlebars.render("bpr", &data).unwrap()
     }
 
+    /// Generate the decompose scalars shader
     pub fn gen_decomp_scalars_shader(
         &self,
         workgroup_size: usize,
@@ -235,7 +248,7 @@ impl ShaderManager {
         handlebars.render("decomp_scalars", &data).unwrap()
     }
 
-    // Test methods
+    /// Generate the test field shader
     pub fn gen_test_field_shader(&self) -> String {
         let mut handlebars = Handlebars::new();
         handlebars.register_template_string("test_field", TEST_FIELD_SHADER.as_str()).unwrap();
@@ -266,6 +279,7 @@ impl ShaderManager {
         handlebars.render("test_field", &data).unwrap()
     }
 
+    /// Generate the test point shader
     pub fn gen_test_point_shader(&self) -> String {
         let mut handlebars = Handlebars::new();
         handlebars.register_template_string("test_point", TEST_POINT_SHADER.as_str()).unwrap();

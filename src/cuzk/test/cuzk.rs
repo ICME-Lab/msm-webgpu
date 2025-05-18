@@ -8,7 +8,7 @@ use crate::cuzk::utils::to_words_le_from_field;
 /// https://synergy.cs.vt.edu/pubs/papers/wang-transposition-ics16.pdf.
 /// It simulates running multiple transpositions in parallel, with one thread
 /// per CSR matrix. It does not accept an arbitrary csr_row_ptr array.
-pub fn calc_start_end(m: usize, n: usize, i: usize) -> (usize, usize) {
+pub(crate) fn calc_start_end(m: usize, n: usize, i: usize) -> (usize, usize) {
     if i < m {
         (i * n, i * n + n)
     } else {
@@ -16,7 +16,7 @@ pub fn calc_start_end(m: usize, n: usize, i: usize) -> (usize, usize) {
     }
 }
 
-pub fn get_element<T: Clone + Copy>(arr: &[T], id: i32) -> T {
+pub(crate) fn get_element<T: Clone + Copy>(arr: &[T], id: i32) -> T {
     if id < 0 {
         arr[arr.len() + id as usize]
     } else {
@@ -24,7 +24,7 @@ pub fn get_element<T: Clone + Copy>(arr: &[T], id: i32) -> T {
     }
 }
 
-pub fn update_element<T: Clone + Copy>(arr: &mut Vec<T>, id: i32, val: T) {
+pub(crate) fn update_element<T: Clone + Copy>(arr: &mut Vec<T>, id: i32, val: T) {
     let len = arr.len();
     if id < 0 {
         arr[len + id as usize] = val;
@@ -33,7 +33,7 @@ pub fn update_element<T: Clone + Copy>(arr: &mut Vec<T>, id: i32, val: T) {
     }
 }
 
-pub fn cpu_transpose(
+pub(crate) fn cpu_transpose(
     all_csr_col_idx: Vec<i32>,
     n: usize,
     m: usize,
@@ -92,7 +92,7 @@ pub fn cpu_transpose(
     (all_csc_col_ptr, all_csc_row_idx, all_csc_vals)
 }
 
-pub fn decompose_scalars_signed<F: PrimeField>(
+pub(crate) fn decompose_scalars_signed<F: PrimeField>(
     scalars: &[F],
     num_words: usize,
     word_size: usize,
@@ -138,7 +138,7 @@ pub fn decompose_scalars_signed<F: PrimeField>(
  * Perform SMVP with signed bucket indices
  */
 
-pub fn cpu_smvp_signed(
+pub(crate) fn cpu_smvp_signed(
     subtask_idx: usize,
     input_size: usize,
     num_columns: usize,
@@ -193,7 +193,7 @@ pub fn cpu_smvp_signed(
     buckets
 }
 
-pub fn serial_bucket_reduction(buckets: &[G1]) -> G1 {
+pub(crate) fn serial_bucket_reduction(buckets: &[G1]) -> G1 {
     let mut indices = vec![];
     for i in 1..buckets.len() {
         indices.push(i);
@@ -209,7 +209,7 @@ pub fn serial_bucket_reduction(buckets: &[G1]) -> G1 {
 }
 
 // Perform running sum in the classic fashion - one siumulated thread only
-pub fn running_sum_bucket_reduction(buckets: &[G1]) -> G1 {
+pub(crate) fn running_sum_bucket_reduction(buckets: &[G1]) -> G1 {
     let n = buckets.len();
     let mut m = buckets[0];
     let mut g = m;
@@ -226,7 +226,7 @@ pub fn running_sum_bucket_reduction(buckets: &[G1]) -> G1 {
 
 // Perform running sum with simulated parallelism. It is up to the caller
 // to add the resulting points.
-pub fn parallel_bucket_reduction(buckets: &[G1], num_threads: usize) -> Vec<G1> {
+pub(crate) fn parallel_bucket_reduction(buckets: &[G1], num_threads: usize) -> Vec<G1> {
     let buckets_per_thread = buckets.len() / num_threads;
     let mut bucket_sums: Vec<G1> = vec![];
 
@@ -258,7 +258,10 @@ pub fn parallel_bucket_reduction(buckets: &[G1], num_threads: usize) -> Vec<G1> 
 }
 
 // The first part of the parallel bucket reduction algo
-pub fn parallel_bucket_reduction_1(buckets: &[G1], num_threads: usize) -> (Vec<G1>, Vec<G1>) {
+pub(crate) fn parallel_bucket_reduction_1(
+    buckets: &[G1],
+    num_threads: usize,
+) -> (Vec<G1>, Vec<G1>) {
     let buckets_per_thread = buckets.len() / num_threads;
     let mut g_points: Vec<G1> = vec![];
     let mut m_points: Vec<G1> = vec![];
@@ -287,7 +290,7 @@ pub fn parallel_bucket_reduction_1(buckets: &[G1], num_threads: usize) -> (Vec<G
 }
 
 // The second part of the parallel bucket reduction algo
-pub fn parallel_bucket_reduction_2(
+pub(crate) fn parallel_bucket_reduction_2(
     g_points: Vec<G1>,
     m_points: Vec<G1>,
     num_buckets: usize,

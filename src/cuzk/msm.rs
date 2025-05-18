@@ -16,13 +16,14 @@ use crate::cuzk::utils::to_biguint_le;
 use crate::{points_to_bytes, scalars_to_bytes};
 
 use super::utils::bytes_to_field;
+use super::utils::calc_bitwidth;
 use super::utils::{compute_misc_params, MiscParams};
 
-// TODO: HARDCODE THE VALUE FOR BN256 FOR EFFICIENCY
+/// Calculate the number of words in the field characteristic
 pub fn calc_num_words(word_size: usize) -> usize {
-    let p_width = 254;
-    let mut num_words = p_width / word_size;
-    while num_words * word_size < p_width {
+    let p_bit_length = calc_bitwidth(&P);
+    let mut num_words = p_bit_length / word_size;
+    while num_words * word_size < p_bit_length {
         num_words += 1;
     }
     num_words
@@ -31,6 +32,7 @@ pub fn calc_num_words(word_size: usize) -> usize {
 /// 13-bit limbs.
 pub const WORD_SIZE: usize = 13;
 
+/// Field characteristic
 pub static P: Lazy<BigUint> = Lazy::new(|| {
     BigUint::from_str_radix(
         "21888242871839275222246405745257275088696311157297823662689037894645226208583",
@@ -39,6 +41,7 @@ pub static P: Lazy<BigUint> = Lazy::new(|| {
     .expect("Invalid modulus")
 });
 
+/// Miscellaneous parameters
 pub static PARAMS: Lazy<MiscParams> = Lazy::new(|| compute_misc_params(&P, WORD_SIZE));
 
 /*
@@ -361,26 +364,12 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         })
         .collect::<Vec<_>>();
 
-    // TODO: Use from_montgomery_repr passing a valid R^2 as a parameter
+    // TODO: Use from_montgomery_repr passing a valid R^2 as a parameter for performance
     // let g_points_x = data[0]
     //     .chunks(num_words * 4)
     //     .map(|x| {
     //         let x_field = u8s_to_field_without_assertion(&x, num_words, WORD_SIZE);
     //         x_field
-    //     })
-    //     .collect::<Vec<_>>();
-    // let g_points_y = data[1]
-    //     .chunks(num_words * 4)
-    //     .map(|y| {
-    //         let y_field = u8s_to_field_without_assertion(&y, num_words, WORD_SIZE);
-    //         y_field
-    //     })
-    //     .collect::<Vec<_>>();
-    // let g_points_z = data[2]
-    //     .chunks(num_words * 4)
-    //     .map(|z| {
-    //         let z_field = u8s_to_field_without_assertion(&z, num_words, WORD_SIZE);
-    //         z_field
     //     })
     //     .collect::<Vec<_>>();
 
@@ -433,6 +422,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
  *
  */
 
+/// Convert point coordinates and decompose shaders
 pub async fn convert_point_coords_and_decompose_shaders(
     shader_code: &str,
     num_x_workgroups: usize,
@@ -603,6 +593,8 @@ pub async fn transpose_gpu(
     (all_csc_col_ptr_sb, all_csc_val_idxs_sb)
 }
 
+
+// TODO: Use bytemuck
 pub fn to_u8s_for_gpu(vals: Vec<usize>) -> Vec<u8> {
     let max: u64 = 1 << 32;
     let mut buf = vec![];
@@ -687,6 +679,7 @@ pub async fn smvp_gpu(
     .await;
 }
 
+/// Batch product reduction shader 1
 pub async fn bpr_1(
     shader_code: &str,
     subtask_idx: usize,
@@ -758,6 +751,7 @@ pub async fn bpr_1(
     .await;
 }
 
+/// Batch product reduction shader 2
 pub async fn bpr_2(
     shader_code: &str,
     subtask_idx: usize,

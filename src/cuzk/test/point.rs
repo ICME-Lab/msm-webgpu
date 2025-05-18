@@ -12,7 +12,8 @@ use crate::cuzk::{
     utils::{bytes_to_field, points_to_bytes_for_gpu, to_biguint_le},
 };
 
-pub async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve {
+
+pub(crate) async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve {
     let a_bytes = points_to_bytes_for_gpu(&vec![a], PARAMS.num_words, WORD_SIZE);
     let b_bytes = points_to_bytes_for_gpu(&vec![b], PARAMS.num_words, WORD_SIZE);
     let scalar_bytes = scalar.to_le_bytes();
@@ -90,11 +91,16 @@ pub async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::C
     C::Curve::new_jacobian(results[0].clone(), results[1].clone(), results[2].clone()).unwrap()
 }
 
-pub fn run_webgpu_point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve {
+pub(crate) fn run_webgpu_point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve {
     pollster::block_on(run_webgpu_point_op_async(op, a, b, scalar))
 }
 
-pub async fn run_webgpu_point_op_async<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve {
+pub(crate) async fn run_webgpu_point_op_async<C: CurveAffine>(
+    op: &str,
+    a: C,
+    b: C,
+    scalar: u32,
+) -> C::Curve {
     let now = Instant::now();
     let result = point_op::<C>(op, a, b, scalar).await;
     println!("Point op time: {:?}", now.elapsed());

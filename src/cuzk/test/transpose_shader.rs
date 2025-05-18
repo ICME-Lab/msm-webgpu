@@ -11,7 +11,10 @@ use crate::cuzk::{
 };
 use crate::{points_to_bytes, scalars_to_bytes};
 
-pub async fn transpose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> (Vec<i32>, Vec<i32>) {
+pub(crate) async fn transpose_shader<C: CurveAffine>(
+    points: &[C],
+    scalars: &[C::Scalar],
+) -> (Vec<i32>, Vec<i32>) {
     let input_size = scalars.len();
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_columns = 1 << chunk_size;
@@ -152,11 +155,14 @@ pub async fn transpose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar
     (all_csc_col_ptr.to_vec(), all_csc_val_idxs.to_vec())
 }
 
-pub fn run_webgpu_transpose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> (Vec<i32>, Vec<i32>) {
+pub(crate) fn run_webgpu_transpose_shader<C: CurveAffine>(
+    points: &[C],
+    scalars: &[C::Scalar],
+) -> (Vec<i32>, Vec<i32>) {
     pollster::block_on(run_webgpu_transpose_shader_async(points, scalars))
 }
 
-pub async fn run_webgpu_transpose_shader_async<C: CurveAffine>(
+pub(crate) async fn run_webgpu_transpose_shader_async<C: CurveAffine>(
     points: &[C],
     scalars: &[C::Scalar],
 ) -> (Vec<i32>, Vec<i32>) {

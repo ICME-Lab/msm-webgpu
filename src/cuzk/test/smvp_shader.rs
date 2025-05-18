@@ -13,7 +13,7 @@ use crate::cuzk::{
     },
 };
 use crate::{points_to_bytes, scalars_to_bytes};
-pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> Vec<C::Curve> {
+pub(crate) async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> Vec<C::Curve> {
     let input_size = scalars.len();
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_columns = 1 << chunk_size;
@@ -269,11 +269,11 @@ pub async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     p
 }
 
-pub fn run_webgpu_smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> Vec<C::Curve> {
+pub(crate) fn run_webgpu_smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> Vec<C::Curve> {
     pollster::block_on(run_webgpu_smvp_shader_async(points, scalars))
 }
 
-pub async fn run_webgpu_smvp_shader_async<C: CurveAffine>(
+pub(crate) async fn run_webgpu_smvp_shader_async<C: CurveAffine>(
     points: &[C],
     scalars: &[C::Scalar],
 ) -> Vec<C::Curve> {

@@ -10,7 +10,10 @@ use crate::cuzk::{
 };
 use crate::{points_to_bytes, scalars_to_bytes};
 
-pub async fn decompose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> (Vec<C>, Vec<u8>) {
+pub(crate) async fn decompose_shader<C: CurveAffine>(
+    points: &[C],
+    scalars: &[C::Scalar],
+) -> (Vec<C>, Vec<u8>) {
     let input_size = scalars.len();
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_columns = 1 << chunk_size;
@@ -126,11 +129,17 @@ pub async fn decompose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar
 
 }
 
-pub fn run_webgpu_decompose<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> (Vec<C>, Vec<u8>) {
+pub(crate) fn run_webgpu_decompose<C: CurveAffine>(
+    points: &[C],
+    scalars: &[C::Scalar],
+) -> (Vec<C>, Vec<u8>) {
     pollster::block_on(run_webgpu_decompose_async(points, scalars))
 }
 
-pub async fn run_webgpu_decompose_async<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> (Vec<C>, Vec<u8>) {
+pub(crate) async fn run_webgpu_decompose_async<C: CurveAffine>(
+    points: &[C],
+    scalars: &[C::Scalar],
+) -> (Vec<C>, Vec<u8>) {
     let now = Instant::now();
     let result = decompose_shader::<C>(points, scalars).await;
     println!("Decompose time: {:?}", now.elapsed());
