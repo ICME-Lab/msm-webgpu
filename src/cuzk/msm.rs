@@ -84,27 +84,15 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         c_workgroup_size = 64;
         c_num_x_workgroups = 4;
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 32768 && input_size <= 65536 {
+    } else if input_size > 32768 && input_size <= 131072 {
         c_workgroup_size = 256;
         c_num_x_workgroups = 8;
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 65536 && input_size <= 131072 {
-        c_workgroup_size = 256;
-        c_num_x_workgroups = 8;
-        c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 131072 && input_size <= 262144 {
+    } else if input_size > 131072 && input_size <= 1048576 {
         c_workgroup_size = 256;
         c_num_x_workgroups = 32;
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 262144 && input_size <= 524288 {
-        c_workgroup_size = 256;
-        c_num_x_workgroups = 32;
-        c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 524288 && input_size <= 1048576 {
-        c_workgroup_size = 256;
-        c_num_x_workgroups = 32;
-        c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    }
+    } 
 
     let c_shader = shader_manager.gen_decomp_scalars_shader(
         c_workgroup_size,
@@ -339,7 +327,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     let g_points_x = bytemuck::cast_slice::<u8, u32>(&data[0])
         .chunks(num_words)
         .map(|x| {
-            let x_biguint_montgomery = to_biguint_le(&x.to_vec(), num_words, WORD_SIZE as u32);
+            let x_biguint_montgomery = to_biguint_le(x, num_words, WORD_SIZE as u32);
             let x_biguint = x_biguint_montgomery * &PARAMS.rinv % P.clone();
             
             bytes_to_field(&x_biguint.to_bytes_le())
@@ -348,7 +336,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     let g_points_y = bytemuck::cast_slice::<u8, u32>(&data[1])
         .chunks(num_words)
         .map(|y| {
-            let y_biguint_montgomery = to_biguint_le(&y.to_vec(), num_words, WORD_SIZE as u32);
+            let y_biguint_montgomery = to_biguint_le(y, num_words, WORD_SIZE as u32);
             let y_biguint = y_biguint_montgomery * &PARAMS.rinv % P.clone();
             
             bytes_to_field(&y_biguint.to_bytes_le())
@@ -357,7 +345,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     let g_points_z = bytemuck::cast_slice::<u8, u32>(&data[2])
         .chunks(num_words)
         .map(|z| {
-            let z_biguint_montgomery = to_biguint_le(&z.to_vec(), num_words, WORD_SIZE as u32);
+            let z_biguint_montgomery = to_biguint_le(z, num_words, WORD_SIZE as u32);
             let z_biguint = z_biguint_montgomery * &PARAMS.rinv % P.clone();
             
             bytes_to_field(&z_biguint.to_bytes_le())

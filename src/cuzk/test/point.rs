@@ -15,8 +15,8 @@ use crate::cuzk::{
 };
 
 async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve {
-    let a_bytes = points_to_bytes_for_gpu(&vec![a], PARAMS.num_words, WORD_SIZE);
-    let b_bytes = points_to_bytes_for_gpu(&vec![b], PARAMS.num_words, WORD_SIZE);
+    let a_bytes = points_to_bytes_for_gpu(&[a], PARAMS.num_words, WORD_SIZE);
+    let b_bytes = points_to_bytes_for_gpu(&[b], PARAMS.num_words, WORD_SIZE);
     let scalar_bytes = scalar.to_le_bytes();
     let input_size = 1;
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
@@ -83,7 +83,7 @@ async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve
     let results = data_u32
         .chunks(20)
         .map(|chunk| {
-            let biguint_montgomery = to_biguint_le(&chunk.to_vec(), num_words, WORD_SIZE as u32);
+            let biguint_montgomery = to_biguint_le(chunk, num_words, WORD_SIZE as u32);
             let biguint = biguint_montgomery * &PARAMS.rinv % P.clone();
             let field: <<C as CurveAffine>::CurveExt as CurveExt>::Base =
                 bytes_to_field(&biguint.to_bytes_le());

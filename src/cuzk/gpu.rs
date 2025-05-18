@@ -64,7 +64,6 @@ pub fn create_storage_buffer(label: Option<&str>, device: &Device, size: u64) ->
 }
 
 /// Create a storage buffer and write data to it
-
 pub fn create_and_write_storage_buffer(
     label: Option<&str>,
     device: &Device,

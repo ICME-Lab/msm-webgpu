@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 pub mod cuzk;
 
 use crate::cuzk::msm::compute_msm;

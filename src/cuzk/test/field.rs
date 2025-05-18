@@ -75,7 +75,7 @@ async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
 
     let data_u32 = bytemuck::cast_slice::<u8, u32>(&data[0]);
 
-    let result_biguint = to_biguint_le(&data_u32.to_vec(), num_words, WORD_SIZE as u32);
+    let result_biguint = to_biguint_le(data_u32, num_words, WORD_SIZE as u32);
 
     
 

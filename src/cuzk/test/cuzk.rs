@@ -25,7 +25,7 @@ pub(crate) fn get_element<T: Clone + Copy>(arr: &[T], id: i32) -> T {
 }
 
 /// Update element
-pub(crate) fn update_element<T: Clone + Copy>(arr: &mut Vec<T>, id: i32, val: T) {
+pub(crate) fn update_element<T: Clone + Copy>(arr: &mut [T], id: i32, val: T) {
     let len = arr.len();
     if id < 0 {
         arr[len + id as usize] = val;
@@ -156,7 +156,7 @@ pub fn cpu_smvp_signed(
 
     let rp_offset = subtask_idx * (num_columns + 1);
 
-    for thread_id in 0..num_columns / 2 {
+    for (thread_id, bucket) in buckets.iter_mut().enumerate() {
         for j in 0..2 {
             let mut row_idx = thread_id + num_columns / 2;
             if j == 1 {
@@ -186,9 +186,9 @@ pub fn cpu_smvp_signed(
             }
 
             if bucket_idx > 0 {
-                buckets[thread_id] += sum;
+                *bucket += sum;
             } else {
-                buckets[thread_id] += zero;
+                *bucket += zero;
             }
         }
     }

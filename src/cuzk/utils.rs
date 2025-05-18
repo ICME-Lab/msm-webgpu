@@ -26,7 +26,7 @@ pub fn to_words_le_from_le_bytes(val: &[u8], num_words: usize, word_size: usize)
 
     let mut limbs = vec![0u32; num_words];
 
-    for idx in 0..num_words {
+    for (idx, limb) in limbs.iter_mut().enumerate() {
         let mut word = 0u32;
 
         // Pick out `word_size` bits that start at bit `idx * word_size`
@@ -42,14 +42,14 @@ pub fn to_words_le_from_le_bytes(val: &[u8], num_words: usize, word_size: usize)
             word |= (bit as u32) << bit_in_word;
         }
 
-        limbs[idx] = word;
+        *limb = word;
     }
 
     limbs
 }
 
 /// Convert a vector of u32 limbs into a BigUint
-pub fn to_biguint_le(limbs: &Vec<u32>, num_limbs: usize, log_limb_size: u32) -> BigUint {
+pub fn to_biguint_le(limbs: &[u32], num_limbs: usize, log_limb_size: u32) -> BigUint {
     assert!(limbs.len() == num_limbs);
     let mut res = BigUint::from(0u32);
     let max = 2u32.pow(log_limb_size);
@@ -180,7 +180,7 @@ pub fn from_words_le_without_assertion<F: PrimeField>(
 
 /// Convert a vector of points to a vector of bytes
 pub fn points_to_bytes_for_gpu<C: CurveAffine>(
-    g: &Vec<C>,
+    g: &[C],
     num_words: usize,
     word_size: usize,
 ) -> Vec<u8> {

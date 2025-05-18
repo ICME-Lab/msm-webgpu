@@ -58,27 +58,15 @@ async fn smvp_shader<C: CurveAffine>(
         c_workgroup_size = 64;
         c_num_x_workgroups = 4;
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 32768 && input_size <= 65536 {
+    } else if input_size > 32768 && input_size <= 131072 {
         c_workgroup_size = 256;
         c_num_x_workgroups = 8;
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 65536 && input_size <= 131072 {
-        c_workgroup_size = 256;
-        c_num_x_workgroups = 8;
-        c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 131072 && input_size <= 262144 {
+    } else if input_size > 131072 && input_size <= 1048576 {
         c_workgroup_size = 256;
         c_num_x_workgroups = 32;
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 262144 && input_size <= 524288 {
-        c_workgroup_size = 256;
-        c_num_x_workgroups = 32;
-        c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 524288 && input_size <= 1048576 {
-        c_workgroup_size = 256;
-        c_num_x_workgroups = 32;
-        c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    }
+    } 
 
     let c_shader = shader_manager.gen_decomp_scalars_shader(
         c_workgroup_size,
@@ -251,9 +239,9 @@ async fn smvp_shader<C: CurveAffine>(
     zip(zip(p_x, p_y), p_z)
         .enumerate()
         .map(|(i, ((x, y), z))| {
-            let p_x_biguint_montgomery = to_biguint_le(&x.to_vec(), num_words, WORD_SIZE as u32);
-            let p_y_biguint_montgomery = to_biguint_le(&y.to_vec(), num_words, WORD_SIZE as u32);
-            let p_z_biguint_montgomery = to_biguint_le(&z.to_vec(), num_words, WORD_SIZE as u32);
+            let p_x_biguint_montgomery = to_biguint_le(x, num_words, WORD_SIZE as u32);
+            let p_y_biguint_montgomery = to_biguint_le(y, num_words, WORD_SIZE as u32);
+            let p_z_biguint_montgomery = to_biguint_le(z, num_words, WORD_SIZE as u32);
 
             let p_x_biguint = p_x_biguint_montgomery * &PARAMS.rinv % P.clone();
             let p_y_biguint = p_y_biguint_montgomery * &PARAMS.rinv % P.clone();
