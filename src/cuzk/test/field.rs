@@ -6,7 +6,8 @@ use wgpu::CommandEncoderDescriptor;
 use crate::cuzk::{
     gpu::{
         create_and_write_storage_buffer, create_bind_group, create_bind_group_layout,
-        create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device, read_from_gpu_test,
+        create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device,
+        read_from_gpu_test,
     },
     msm::{PARAMS, WORD_SIZE},
     shader_manager::ShaderManager,
@@ -78,7 +79,6 @@ pub(crate) async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
 
     let result = bytes_to_field(&result_biguint.to_bytes_le());
 
-
     result
 }
 
@@ -95,7 +95,10 @@ pub(crate) async fn run_webgpu_field_op_async<F: PrimeField>(op: &str, a: F, b: 
 
 #[cfg(test)]
 mod tests {
-    use crate::{cuzk::{msm::calc_num_words, utils::u8s_to_field_without_assertion}, sample_scalars};
+    use crate::{
+        cuzk::{msm::calc_num_words, utils::u8s_to_field_without_assertion},
+        sample_scalars,
+    };
 
     use super::*;
     use ff::Field;

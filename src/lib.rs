@@ -5,7 +5,7 @@ use ff::PrimeField;
 use group::{Curve, Group};
 use rand::thread_rng;
 
-use halo2curves::{msm::best_multiexp, CurveAffine};
+use halo2curves::{CurveAffine, msm::best_multiexp};
 
 use crate::cuzk::utils::field_to_bytes;
 
@@ -28,7 +28,7 @@ pub fn cpu_msm<C: CurveAffine>(g: &[C], v: &[C::Scalar]) -> C::Curve {
     best_multiexp(v, g)
 }
 
-/// Convert scalars to bytes 
+/// Convert scalars to bytes
 pub fn scalars_to_bytes<F: PrimeField>(v: &[F]) -> Vec<u8> {
     v.iter().flat_map(|x| field_to_bytes(x)).collect::<Vec<_>>()
 }
@@ -56,7 +56,6 @@ pub fn run_webgpu_msm<C: CurveAffine>(g: &[C], v: &[C::Scalar]) -> C::Curve {
 pub async fn run_webgpu_msm<C: CurveAffine>(g: &[C], v: &[C::Scalar]) -> C::Curve {
     compute_msm(g, v).await
 }
-
 
 pub mod tests_wasm_pack {
     use crate::cuzk::msm::compute_msm;
@@ -89,6 +88,4 @@ pub mod tests_wasm_pack {
         console::log_1(&format!("Result: {:?}", result).into());
         assert_eq!(fast, result);
     }
-
-
 }

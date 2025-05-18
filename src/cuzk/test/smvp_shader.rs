@@ -1,19 +1,22 @@
 use std::{iter::zip, time::Instant};
 
-use halo2curves::{CurveAffine, CurveExt};
 use group::Group;
+use halo2curves::{CurveAffine, CurveExt};
 use wgpu::CommandEncoderDescriptor;
 
 use crate::cuzk::{
     gpu::{create_storage_buffer, get_adapter, get_device, read_from_gpu_test},
-    msm::{convert_point_coords_and_decompose_shaders, smvp_gpu, transpose_gpu, P, PARAMS, WORD_SIZE},
-    shader_manager::ShaderManager,
-    utils::{
-        bytes_to_field, debug, to_biguint_le
+    msm::{
+        P, PARAMS, WORD_SIZE, convert_point_coords_and_decompose_shaders, smvp_gpu, transpose_gpu,
     },
+    shader_manager::ShaderManager,
+    utils::{bytes_to_field, debug, to_biguint_le},
 };
 use crate::{points_to_bytes, scalars_to_bytes};
-pub(crate) async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> Vec<C::Curve> {
+pub(crate) async fn smvp_shader<C: CurveAffine>(
+    points: &[C],
+    scalars: &[C::Scalar],
+) -> Vec<C::Curve> {
     let input_size = scalars.len();
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_columns = 1 << chunk_size;
@@ -85,22 +88,21 @@ pub(crate) async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scal
 
     // println!("C shader: {}", c_shader);
 
-    let (point_x_sb, point_y_sb, scalar_chunks_sb) =
-        convert_point_coords_and_decompose_shaders(
-            &c_shader,
-            c_num_x_workgroups,
-            c_num_y_workgroups,
-            c_num_z_workgroups,
-            &device,
-            &queue,
-            &mut encoder,
-            &point_bytes,
-            &scalar_bytes,
-            num_subtasks,
-            chunk_size,
-            num_words,
-        )
-        .await;
+    let (point_x_sb, point_y_sb, scalar_chunks_sb) = convert_point_coords_and_decompose_shaders(
+        &c_shader,
+        c_num_x_workgroups,
+        c_num_y_workgroups,
+        c_num_z_workgroups,
+        &device,
+        &queue,
+        &mut encoder,
+        &point_bytes,
+        &scalar_bytes,
+        num_subtasks,
+        chunk_size,
+        num_words,
+    )
+    .await;
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     // 2. Sparse Matrix Transposition                                                         /
@@ -155,9 +157,8 @@ pub(crate) async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scal
     if half_num_columns < 32768 {
         s_workgroup_size = 32;
         s_num_x_workgroups = 1;
-        s_num_y_workgroups =
-    (half_num_columns + s_workgroup_size * s_num_x_workgroups - 1)
-    / (s_workgroup_size * s_num_x_workgroups);
+        s_num_y_workgroups = (half_num_columns + s_workgroup_size * s_num_x_workgroups - 1)
+            / (s_workgroup_size * s_num_x_workgroups);
     }
 
     if num_columns < 256 {
@@ -180,7 +181,10 @@ pub(crate) async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scal
     // Buffers that store the SMVP result, ie. bucket sums. They are
     // overwritten per iteration.
     let bucket_sum_coord_bytelength = (num_columns / 2) * num_words * 4 * num_subtasks;
-    debug(&format!("Bucket sum coord bytelength: {:?}", bucket_sum_coord_bytelength));
+    debug(&format!(
+        "Bucket sum coord bytelength: {:?}",
+        bucket_sum_coord_bytelength
+    ));
     let bucket_sum_x_sb = create_storage_buffer(
         Some("Bucket sum X buffer"),
         &device,
@@ -199,10 +203,12 @@ pub(crate) async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scal
     let smvp_shader = shader_manager.gen_smvp_shader(s_workgroup_size, num_columns);
 
     debug(&format!("SMVP shader: {}", smvp_shader));
-    debug(&format!("s_num_x_workgroups / (num_subtasks / num_subtask_chunk_size): {:?}", s_num_x_workgroups / (num_subtasks / num_subtask_chunk_size)));
+    debug(&format!(
+        "s_num_x_workgroups / (num_subtasks / num_subtask_chunk_size): {:?}",
+        s_num_x_workgroups / (num_subtasks / num_subtask_chunk_size)
+    ));
     debug(&format!("s_num_y_workgroups: {:?}", s_num_y_workgroups));
     debug(&format!("s_num_z_workgroups: {:?}", s_num_z_workgroups));
-  
 
     for offset in (0..num_subtasks).step_by(num_subtask_chunk_size) {
         debug(&format!("Offset: {:?}", offset));
@@ -248,7 +254,7 @@ pub(crate) async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scal
             let p_x_biguint_montgomery = to_biguint_le(&x.to_vec(), num_words, WORD_SIZE as u32);
             let p_y_biguint_montgomery = to_biguint_le(&y.to_vec(), num_words, WORD_SIZE as u32);
             let p_z_biguint_montgomery = to_biguint_le(&z.to_vec(), num_words, WORD_SIZE as u32);
-        
+
             let p_x_biguint = p_x_biguint_montgomery * &PARAMS.rinv % P.clone();
             let p_y_biguint = p_y_biguint_montgomery * &PARAMS.rinv % P.clone();
             let p_z_biguint = p_z_biguint_montgomery * &PARAMS.rinv % P.clone();
@@ -269,7 +275,10 @@ pub(crate) async fn smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scal
     p
 }
 
-pub(crate) fn run_webgpu_smvp_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> Vec<C::Curve> {
+pub(crate) fn run_webgpu_smvp_shader<C: CurveAffine>(
+    points: &[C],
+    scalars: &[C::Scalar],
+) -> Vec<C::Curve> {
     pollster::block_on(run_webgpu_smvp_shader_async(points, scalars))
 }
 
@@ -285,7 +294,10 @@ pub(crate) async fn run_webgpu_smvp_shader_async<C: CurveAffine>(
 
 #[cfg(test)]
 mod tests {
-    use crate::cuzk::test::{cuzk::{cpu_smvp_signed, cpu_transpose, decompose_scalars_signed}, transpose_shader::run_webgpu_transpose_shader};
+    use crate::cuzk::test::{
+        cuzk::{cpu_smvp_signed, cpu_transpose, decompose_scalars_signed},
+        transpose_shader::run_webgpu_transpose_shader,
+    };
     use crate::{sample_points, sample_scalars};
 
     use super::*;
@@ -303,7 +315,8 @@ mod tests {
         let num_chunks_per_scalar = (256 + chunk_size - 1) / chunk_size;
         let num_subtasks = num_chunks_per_scalar;
 
-        let (all_csc_col_ptr, all_csc_val_idxs) = run_webgpu_transpose_shader::<G1Affine>(&points, &scalars);
+        let (all_csc_col_ptr, all_csc_val_idxs) =
+            run_webgpu_transpose_shader::<G1Affine>(&points, &scalars);
 
         let decomposed_scalars = decompose_scalars_signed(&scalars, num_subtasks, chunk_size);
 

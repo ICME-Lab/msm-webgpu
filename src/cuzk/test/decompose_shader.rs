@@ -4,9 +4,10 @@ use halo2curves::CurveAffine;
 use wgpu::CommandEncoderDescriptor;
 
 use crate::cuzk::{
-    gpu::{
-        get_adapter, get_device, read_from_gpu_test,
-    }, msm::{convert_point_coords_and_decompose_shaders, P, PARAMS, WORD_SIZE}, shader_manager::ShaderManager, utils::{bytes_to_field, debug, to_biguint_le}
+    gpu::{get_adapter, get_device, read_from_gpu_test},
+    msm::{P, PARAMS, WORD_SIZE, convert_point_coords_and_decompose_shaders},
+    shader_manager::ShaderManager,
+    utils::{bytes_to_field, debug, to_biguint_le},
 };
 use crate::{points_to_bytes, scalars_to_bytes};
 
@@ -39,7 +40,6 @@ pub(crate) async fn decompose_shader<C: CurveAffine>(
     let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
         label: Some("Decompose Encoder"),
     });
-
 
     // Total thread count = workgroup_size * #x workgroups * #y workgroups * #z workgroups.
     let mut c_workgroup_size = 64;
@@ -102,31 +102,35 @@ pub(crate) async fn decompose_shader<C: CurveAffine>(
     )
     .await;
     // Map results back from GPU to CPU.
-    let data = read_from_gpu_test(&device, &queue, encoder, 
-        vec![point_x_sb, point_y_sb, scalar_chunks_sb]).await;
+    let data = read_from_gpu_test(
+        &device,
+        &queue,
+        encoder,
+        vec![point_x_sb, point_y_sb, scalar_chunks_sb],
+    )
+    .await;
 
     // Destroy the GPU device object.
     device.destroy();
 
-
     let p_x = bytemuck::cast_slice::<u8, u32>(&data[0]).chunks(20);
     let p_y = bytemuck::cast_slice::<u8, u32>(&data[1]).chunks(20);
 
-    let p = zip(p_x, p_y).map(|(x, y)| {
-    
-        let p_x_biguint_montgomery = to_biguint_le(&x.to_vec(), num_words, WORD_SIZE as u32);
-        let p_y_biguint_montgomery = to_biguint_le(&y.to_vec(), num_words, WORD_SIZE as u32);
-    
-        let p_x_biguint = p_x_biguint_montgomery * &PARAMS.rinv % P.clone();
-        let p_y_biguint = p_y_biguint_montgomery * &PARAMS.rinv % P.clone();
-        let p_x_field = bytes_to_field(&p_x_biguint.to_bytes_le());
-        let p_y_field = bytes_to_field(&p_y_biguint.to_bytes_le());
-    
-        let p = C::from_xy(p_x_field, p_y_field);
-        p.unwrap()
-    }).collect::<Vec<_>>();
-    (p, data[2].clone())
+    let p = zip(p_x, p_y)
+        .map(|(x, y)| {
+            let p_x_biguint_montgomery = to_biguint_le(&x.to_vec(), num_words, WORD_SIZE as u32);
+            let p_y_biguint_montgomery = to_biguint_le(&y.to_vec(), num_words, WORD_SIZE as u32);
 
+            let p_x_biguint = p_x_biguint_montgomery * &PARAMS.rinv % P.clone();
+            let p_y_biguint = p_y_biguint_montgomery * &PARAMS.rinv % P.clone();
+            let p_x_field = bytes_to_field(&p_x_biguint.to_bytes_le());
+            let p_y_field = bytes_to_field(&p_y_biguint.to_bytes_le());
+
+            let p = C::from_xy(p_x_field, p_y_field);
+            p.unwrap()
+        })
+        .collect::<Vec<_>>();
+    (p, data[2].clone())
 }
 
 pub(crate) fn run_webgpu_decompose<C: CurveAffine>(

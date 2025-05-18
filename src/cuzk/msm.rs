@@ -17,7 +17,7 @@ use crate::{points_to_bytes, scalars_to_bytes};
 
 use super::utils::bytes_to_field;
 use super::utils::calc_bitwidth;
-use super::utils::{compute_misc_params, MiscParams};
+use super::utils::{MiscParams, compute_misc_params};
 
 /// Calculate the number of words in the field characteristic
 pub fn calc_num_words(word_size: usize) -> usize {
@@ -592,7 +592,6 @@ pub async fn transpose_gpu(
 
     (all_csc_col_ptr_sb, all_csc_val_idxs_sb)
 }
-
 
 // TODO: Use bytemuck
 pub fn to_u8s_for_gpu(vals: Vec<usize>) -> Vec<u8> {

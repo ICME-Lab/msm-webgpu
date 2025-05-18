@@ -5,13 +5,14 @@ use wgpu::CommandEncoderDescriptor;
 
 use crate::cuzk::{
     gpu::{
-        create_and_write_storage_buffer, create_and_write_uniform_buffer, create_bind_group, create_bind_group_layout, create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device, read_from_gpu_test
+        create_and_write_storage_buffer, create_and_write_uniform_buffer, create_bind_group,
+        create_bind_group_layout, create_compute_pipeline, create_storage_buffer, execute_pipeline,
+        get_adapter, get_device, read_from_gpu_test,
     },
     msm::{P, PARAMS, WORD_SIZE},
     shader_manager::ShaderManager,
     utils::{bytes_to_field, points_to_bytes_for_gpu, to_biguint_le},
 };
-
 
 pub(crate) async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve {
     let a_bytes = points_to_bytes_for_gpu(&vec![a], PARAMS.num_words, WORD_SIZE);
@@ -41,7 +42,8 @@ pub(crate) async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) 
 
     let result_sb = create_storage_buffer(Some("Result buffer"), &device, 240);
 
-    let scalar_sb = create_and_write_uniform_buffer(Some("Scalar buffer"), &device, &queue, &scalar_bytes);
+    let scalar_sb =
+        create_and_write_uniform_buffer(Some("Scalar buffer"), &device, &queue, &scalar_bytes);
     let bind_group_layout = create_bind_group_layout(
         Some("Bind group layout"),
         &device,
@@ -78,13 +80,16 @@ pub(crate) async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) 
     println!("Data u32: {:?}", data_u32);
     println!("Data length: {:?}", data_u32.len());
 
-    let results = data_u32.chunks(20)
+    let results = data_u32
+        .chunks(20)
         .map(|chunk| {
-        let biguint_montgomery = to_biguint_le(&chunk.to_vec(), num_words, WORD_SIZE as u32);
-        let biguint = biguint_montgomery * &PARAMS.rinv % P.clone();
-        let field: <<C as CurveAffine>::CurveExt as CurveExt>::Base = bytes_to_field(&biguint.to_bytes_le());
-        field
-    }).collect::<Vec<_>>();
+            let biguint_montgomery = to_biguint_le(&chunk.to_vec(), num_words, WORD_SIZE as u32);
+            let biguint = biguint_montgomery * &PARAMS.rinv % P.clone();
+            let field: <<C as CurveAffine>::CurveExt as CurveExt>::Base =
+                bytes_to_field(&biguint.to_bytes_le());
+            field
+        })
+        .collect::<Vec<_>>();
 
     println!("Results: {:?}", results);
 
@@ -110,10 +115,10 @@ pub(crate) async fn run_webgpu_point_op_async<C: CurveAffine>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use group::Curve;
     use group::cofactor::CofactorCurveAffine;
     use halo2curves::bn256::{Fr, G1Affine};
-    use rand::{thread_rng, Rng};
-    use group::Curve;
+    use rand::{Rng, thread_rng};
 
     #[test]
     fn test_webgpu_point_add() {
@@ -146,7 +151,6 @@ mod tests {
         println!("Result: {:?}", result);
         assert_eq!(fast, result);
     }
-
 
     #[test]
     fn test_webgpu_point_negate() {

@@ -5,7 +5,7 @@ use wgpu::CommandEncoderDescriptor;
 
 use crate::cuzk::{
     gpu::{get_adapter, get_device, read_from_gpu_test},
-    msm::{convert_point_coords_and_decompose_shaders, transpose_gpu, PARAMS, WORD_SIZE},
+    msm::{PARAMS, WORD_SIZE, convert_point_coords_and_decompose_shaders, transpose_gpu},
     shader_manager::ShaderManager,
     utils::debug,
 };
@@ -84,22 +84,21 @@ pub(crate) async fn transpose_shader<C: CurveAffine>(
         num_columns,
     );
 
-    let (_point_x_sb, _point_y_sb, scalar_chunks_sb) =
-        convert_point_coords_and_decompose_shaders(
-            &c_shader,
-            c_num_x_workgroups,
-            c_num_y_workgroups,
-            c_num_z_workgroups,
-            &device,
-            &queue,
-            &mut encoder,
-            &point_bytes,
-            &scalar_bytes,
-            num_subtasks,
-            chunk_size,
-            num_words,
-        )
-        .await;
+    let (_point_x_sb, _point_y_sb, scalar_chunks_sb) = convert_point_coords_and_decompose_shaders(
+        &c_shader,
+        c_num_x_workgroups,
+        c_num_y_workgroups,
+        c_num_z_workgroups,
+        &device,
+        &queue,
+        &mut encoder,
+        &point_bytes,
+        &scalar_bytes,
+        num_subtasks,
+        chunk_size,
+        num_words,
+    )
+    .await;
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     // 2. Sparse Matrix Transposition                                                         /
@@ -137,12 +136,12 @@ pub(crate) async fn transpose_shader<C: CurveAffine>(
     )
     .await;
 
-        // Map results back from GPU to CPU.
+    // Map results back from GPU to CPU.
     let data = read_from_gpu_test(
         &device,
         &queue,
         encoder,
-    vec![all_csc_col_ptr_sb, all_csc_val_idxs_sb],
+        vec![all_csc_col_ptr_sb, all_csc_val_idxs_sb],
     )
     .await;
 
@@ -192,8 +191,8 @@ mod tests {
         let num_chunks_per_scalar = (256 + chunk_size - 1) / chunk_size;
         let num_subtasks = num_chunks_per_scalar;
 
-
-        let (all_csc_col_ptr, all_csc_val_idxs) = run_webgpu_transpose_shader::<G1Affine>(&points, &scalars);
+        let (all_csc_col_ptr, all_csc_val_idxs) =
+            run_webgpu_transpose_shader::<G1Affine>(&points, &scalars);
 
         let decomposed_scalars = decompose_scalars_signed(&scalars, num_subtasks, chunk_size);
 

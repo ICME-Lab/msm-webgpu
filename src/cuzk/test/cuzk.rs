@@ -1,6 +1,6 @@
 use ff::PrimeField;
 use group::Group;
-use halo2curves::bn256::{Fr, G1Affine, G1};
+use halo2curves::bn256::{Fr, G1, G1Affine};
 
 use crate::cuzk::utils::to_words_le_from_field;
 
@@ -312,9 +312,9 @@ pub(crate) fn parallel_bucket_reduction_2(
 }
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::{cpu_msm, sample_points, sample_scalars};
     use group::Curve;
-    use super::*;
 
     #[test]
     fn test_cuzk() {

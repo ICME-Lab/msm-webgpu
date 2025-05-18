@@ -1,6 +1,10 @@
-
 use wgpu::{
-    util::{BufferInitDescriptor, DeviceExt}, Adapter, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, Buffer, BufferAsyncError, BufferDescriptor, BufferSlice, BufferUsages, CommandEncoder, ComputePipeline, ComputePipelineDescriptor, Device, Features, Instance, Limits, MapMode, MemoryHints, PipelineCompilationOptions, PipelineLayoutDescriptor, PowerPreference, Queue, ShaderModuleDescriptor, ShaderSource
+    Adapter, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, Buffer, BufferAsyncError, BufferDescriptor,
+    BufferSlice, BufferUsages, CommandEncoder, ComputePipeline, ComputePipelineDescriptor, Device,
+    Features, Instance, Limits, MapMode, MemoryHints, PipelineCompilationOptions,
+    PipelineLayoutDescriptor, PowerPreference, Queue, ShaderModuleDescriptor, ShaderSource,
+    util::{BufferInitDescriptor, DeviceExt},
 };
 
 /// Get an adapter
@@ -109,22 +113,14 @@ pub async fn read_from_gpu(
             usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        encoder.copy_buffer_to_buffer(
-            &storage_buffer,
-            0,
-            &staging_buffer,
-            0,
-            size,
-        );
+        encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
         staging_buffers.push(staging_buffer);
     }
 
     let command_buffer = encoder.finish();
 
-
     queue.submit(vec![command_buffer]);
     device.poll(wgpu::Maintain::Wait);
-
 
     let mut data = Vec::new();
     for staging_buffer in staging_buffers {
@@ -155,13 +151,7 @@ pub async fn read_from_gpu_test(
             usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        encoder.copy_buffer_to_buffer(
-            &storage_buffer,
-            0,
-            &staging_buffer,
-            0,
-            size,
-        );
+        encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
         staging_buffers.push(staging_buffer);
     }
 

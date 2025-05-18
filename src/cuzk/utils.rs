@@ -1,8 +1,8 @@
-use ff::{PrimeField, Field};
+use crate::cuzk::msm::{P, calc_num_words};
+use ff::{Field, PrimeField};
 use halo2curves::CurveAffine;
 use num_bigint::{BigInt, BigUint, Sign};
 use num_traits::One;
-use crate::cuzk::msm::{calc_num_words, P};
 #[cfg(target_arch = "wasm32")]
 use web_sys::console;
 
@@ -20,15 +20,8 @@ pub fn bytes_to_field<F: PrimeField>(bytes: &[u8]) -> F {
     F::from_repr(repr).unwrap()
 }
 
-
-
-
 /// Convert a binary representation into u32 limbs.
-pub fn to_words_le_from_le_bytes(
-    val: &[u8],
-    num_words: usize,
-    word_size: usize,
-) -> Vec<u32> {
+pub fn to_words_le_from_le_bytes(val: &[u8], num_words: usize, word_size: usize) -> Vec<u32> {
     assert!(word_size <= 32, "u32 supports up to 32 bits");
 
     let mut limbs = vec![0u32; num_words];
@@ -39,8 +32,10 @@ pub fn to_words_le_from_le_bytes(
         // Pick out `word_size` bits that start at bit `idx * word_size`
         for bit_in_word in 0..word_size {
             let global_bit = idx * word_size + bit_in_word;
-            let byte_idx   = global_bit / 8;          // 0 = least-significant byte
-            if byte_idx >= val.len() { break; }       // past the supplied data → 0
+            let byte_idx = global_bit / 8; // 0 = least-significant byte
+            if byte_idx >= val.len() {
+                break;
+            } // past the supplied data → 0
 
             let bit_in_byte = global_bit % 8;
             let bit = (val[byte_idx] >> bit_in_byte) & 1;
@@ -52,7 +47,6 @@ pub fn to_words_le_from_le_bytes(
 
     limbs
 }
-
 
 /// Convert a vector of u32 limbs into a BigUint
 pub fn to_biguint_le(limbs: &Vec<u32>, num_limbs: usize, log_limb_size: u32) -> BigUint {
@@ -72,13 +66,8 @@ pub fn to_biguint_le(limbs: &Vec<u32>, num_limbs: usize, log_limb_size: u32) -> 
     res
 }
 
-
 /// Convert a BigUint into u32 limbs
-pub fn to_words_le(
-    val: &BigUint,
-    num_words: usize,
-    word_size: usize,
-) -> Vec<u32> {
+pub fn to_words_le(val: &BigUint, num_words: usize, word_size: usize) -> Vec<u32> {
     let mut limbs = vec![0u32; num_words];
 
     let mask = BigUint::from((1u32 << word_size) - 1);
@@ -90,11 +79,10 @@ pub fn to_words_le(
         if digits.len() > 0 {
             limbs[idx] = digits[0] as u32;
         }
-    }   
+    }
 
     limbs
 }
-
 
 /// Convert a field element into u32 limbs
 pub fn to_words_le_from_field<F: PrimeField>(
@@ -112,7 +100,10 @@ pub fn fields_to_u8_vec_for_gpu<F: PrimeField>(
     num_words: usize,
     word_size: usize,
 ) -> Vec<u8> {
-    fields.iter().flat_map(|field| field_to_u8_vec_for_gpu(field, num_words, word_size)).collect::<Vec<_>>()
+    fields
+        .iter()
+        .flat_map(|field| field_to_u8_vec_for_gpu(field, num_words, word_size))
+        .collect::<Vec<_>>()
 }
 
 /// Split a field element into limbs and convert each limb to a vector of bytes.
@@ -205,11 +196,7 @@ pub fn points_to_bytes_for_gpu<C: CurveAffine>(
 }
 
 /// Generate the GPU representation of the field characteristic
-pub fn gen_p_limbs(
-    p: &BigUint,
-    num_words: usize,
-    word_size: usize,
-) -> String {
+pub fn gen_p_limbs(p: &BigUint, num_words: usize, word_size: usize) -> String {
     let limbs = to_words_le(p, num_words, word_size);
     let mut r = String::new();
     for (i, limb) in limbs.iter().enumerate() {
@@ -219,11 +206,7 @@ pub fn gen_p_limbs(
 }
 
 /// Generate the GPU representation of the field characteristic padded with a zero limb
-pub fn gen_p_limbs_plus_one(
-    p: &BigUint,
-    num_words: usize,
-    word_size: usize,
-) -> String {
+pub fn gen_p_limbs_plus_one(p: &BigUint, num_words: usize, word_size: usize) -> String {
     let limbs = to_words_le(p, num_words, word_size);
     let mut r = String::new();
     for (i, limb) in limbs.iter().enumerate() {
@@ -234,9 +217,7 @@ pub fn gen_p_limbs_plus_one(
 }
 
 /// Generate the GPU representation of zero
-pub fn gen_zero_limbs(
-    num_words: usize,
-) -> String {
+pub fn gen_zero_limbs(num_words: usize) -> String {
     let mut r = String::new();
     for _i in 0..(num_words - 1) {
         r += &format!("0u, ");
@@ -246,9 +227,7 @@ pub fn gen_zero_limbs(
 }
 
 /// Generate the GPU representation of one
-pub fn gen_one_limbs(
-    num_words: usize,
-) -> String {
+pub fn gen_one_limbs(num_words: usize) -> String {
     let mut r = String::new();
     r += &format!("1u, ");
     for _i in 0..(num_words - 2) {
@@ -259,11 +238,7 @@ pub fn gen_one_limbs(
 }
 
 /// Generate the GPU representation of the Montgomery radix
-pub fn gen_r_limbs(
-    r: &BigUint,
-    num_words: usize,
-    word_size: usize,
-) -> String {
+pub fn gen_r_limbs(r: &BigUint, num_words: usize, word_size: usize) -> String {
     let limbs = to_words_le(r, num_words, word_size);
     let mut r = String::new();
     for (i, limb) in limbs.iter().enumerate() {
@@ -273,11 +248,7 @@ pub fn gen_r_limbs(
 }
 
 /// Generate the GPU representation of the Montgomery radix inverse
-pub fn gen_rinv_limbs(
-    rinv: &BigUint,
-    num_words: usize,
-    word_size: usize,
-) -> String {
+pub fn gen_rinv_limbs(rinv: &BigUint, num_words: usize, word_size: usize) -> String {
     let limbs = to_words_le(rinv, num_words, word_size);
     let mut r = String::new();
     for (i, limb) in limbs.iter().enumerate() {
@@ -287,25 +258,19 @@ pub fn gen_rinv_limbs(
 }
 
 /// Generate the Montgomery magic number
-pub fn gen_mu(
-    p: &BigUint
-) -> BigUint {
-  let mut x = 1u32;
-  let two = BigUint::from(2u32);
+pub fn gen_mu(p: &BigUint) -> BigUint {
+    let mut x = 1u32;
+    let two = BigUint::from(2u32);
 
-  while two.pow(x) < *p {
-    x += 1;
-  }
+    while two.pow(x) < *p {
+        x += 1;
+    }
 
-  BigUint::from(4u32).pow(x) / p
+    BigUint::from(4u32).pow(x) / p
 }
 
 /// Generate the GPU representation of the Montgomery magic number
-pub fn gen_mu_limbs(
-    p: &BigUint,
-    num_words: usize,
-    word_size: usize,
-) -> String {
+pub fn gen_mu_limbs(p: &BigUint, num_words: usize, word_size: usize) -> String {
     let mu = gen_mu(p);
     let limbs = to_words_le(&mu, num_words, word_size);
     let mut r = String::new();
@@ -335,10 +300,7 @@ fn egcd(a: &BigInt, b: &BigInt) -> (BigInt, BigInt, BigInt) {
 }
 
 /// Calculate the Montgomery inverse and the Montgomery reduction parameter
-pub fn calc_inv_and_pprime(
-    p: &BigUint,
-    r: &BigUint,
-) -> (BigUint, BigUint) {
+pub fn calc_inv_and_pprime(p: &BigUint, r: &BigUint) -> (BigUint, BigUint) {
     assert!(*r != BigUint::from(0u32));
 
     let p_bigint = BigInt::from_biguint(Sign::Plus, p.clone());
@@ -346,7 +308,7 @@ pub fn calc_inv_and_pprime(
     let one = BigInt::from(1u32);
     let (_, mut rinv, mut pprime) = egcd(
         &BigInt::from_biguint(Sign::Plus, r.clone()),
-        &BigInt::from_biguint(Sign::Plus, p.clone())
+        &BigInt::from_biguint(Sign::Plus, p.clone()),
     );
 
     if rinv.sign() == Sign::Minus {
@@ -359,32 +321,22 @@ pub fn calc_inv_and_pprime(
 
     // r * rinv - p * pprime == 1
     assert!(
-        (BigInt::from_biguint(Sign::Plus, r.clone()) * &rinv % &p_bigint) -
-            (&p_bigint * &pprime % &p_bigint)
-        == one
+        (BigInt::from_biguint(Sign::Plus, r.clone()) * &rinv % &p_bigint)
+            - (&p_bigint * &pprime % &p_bigint)
+            == one
     );
 
     // r * rinv % p == 1
     assert!((BigInt::from_biguint(Sign::Plus, r.clone()) * &rinv % &p_bigint) == one);
 
     // p * pprime % r == 1
-    assert!(
-        (&p_bigint * &pprime % &r_bigint) == one
-    );
+    assert!((&p_bigint * &pprime % &r_bigint) == one);
 
-    (
-        rinv.to_biguint().unwrap(),
-        pprime.to_biguint().unwrap(),
-    )
+    (rinv.to_biguint().unwrap(), pprime.to_biguint().unwrap())
 }
 
-
 /// Calculate the Montgomery radix inverse and the Montgomery reduction parameter
-pub fn calc_rinv_and_n0(
-    p: &BigUint,
-    r: &BigUint,
-    log_limb_size: u32
-) -> (BigUint, u32) {
+pub fn calc_rinv_and_n0(p: &BigUint, r: &BigUint, log_limb_size: u32) -> (BigUint, u32) {
     let (rinv, pprime) = calc_inv_and_pprime(p, r);
     let pprime = BigInt::from_biguint(Sign::Plus, pprime);
 
@@ -405,17 +357,19 @@ pub struct MiscParams {
 }
 
 /// Compute miscellaneous parameters for the WebGPU shader
-pub fn compute_misc_params(
-    p: &BigUint,
-    word_size: usize,
-) -> MiscParams {
+pub fn compute_misc_params(p: &BigUint, word_size: usize) -> MiscParams {
     assert!(word_size > 0);
     let num_words = calc_num_words(word_size);
     let r = BigUint::one() << (num_words * word_size);
     let res = calc_rinv_and_n0(&p, &r, word_size as u32);
     let rinv = res.0;
     let n0 = res.1;
-    MiscParams { num_words, n0, r: r % p, rinv }
+    MiscParams {
+        num_words,
+        n0,
+        r: r % p,
+        rinv,
+    }
 }
 
 /// Debug print
@@ -434,10 +388,10 @@ mod tests {
     use num_traits::Num;
     use rand::thread_rng;
 
+    use super::*;
     use crate::cuzk::msm::{PARAMS, WORD_SIZE};
     use crate::sample_scalars;
-    use super::*;
-    
+
     #[test]
     fn test_to_words_le_from_le_bytes() {
         let val = sample_scalars::<Fr>(1)[0];
@@ -483,12 +437,16 @@ mod tests {
 
     #[test]
     fn test_to_words_le() {
-        let a = BigUint::from_str_radix("12ab655e9a2ca55660b44d1e5c37b00159aa76fed00000010a11800000000001", 16).unwrap();
+        let a = BigUint::from_str_radix(
+            "12ab655e9a2ca55660b44d1e5c37b00159aa76fed00000010a11800000000001",
+            16,
+        )
+        .unwrap();
         let limbs = to_words_le(&a, 20, 13);
         let expected = vec![
-            1, 0, 0, 768, 4257, 0, 0, 8154, 2678, 2765, 3072, 6255, 4581, 6694,
-            6530, 5290, 6700, 2804, 2777, 37,
-          ];
+            1, 0, 0, 768, 4257, 0, 0, 8154, 2678, 2765, 3072, 6255, 4581, 6694, 6530, 5290, 6700,
+            2804, 2777, 37,
+        ];
         assert_eq!(limbs, expected);
     }
 }
