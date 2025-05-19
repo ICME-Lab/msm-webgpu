@@ -16,13 +16,14 @@ use crate::cuzk::utils::to_biguint_le;
 use crate::{points_to_bytes, scalars_to_bytes};
 
 use super::utils::bytes_to_field;
-use super::utils::{compute_misc_params, MiscParams};
+use super::utils::calc_bitwidth;
+use super::utils::{MiscParams, compute_misc_params};
 
-// TODO: HARDCODE THE VALUE FOR BN256 FOR EFFICIENCY
+/// Calculate the number of words in the field characteristic
 pub fn calc_num_words(word_size: usize) -> usize {
-    let p_width = 254;
-    let mut num_words = p_width / word_size;
-    while num_words * word_size < p_width {
+    let p_bit_length = calc_bitwidth(&P);
+    let mut num_words = p_bit_length / word_size;
+    while num_words * word_size < p_bit_length {
         num_words += 1;
     }
     num_words
@@ -31,6 +32,7 @@ pub fn calc_num_words(word_size: usize) -> usize {
 /// 13-bit limbs.
 pub const WORD_SIZE: usize = 13;
 
+/// Field characteristic
 pub static P: Lazy<BigUint> = Lazy::new(|| {
     BigUint::from_str_radix(
         "21888242871839275222246405745257275088696311157297823662689037894645226208583",
@@ -39,6 +41,7 @@ pub static P: Lazy<BigUint> = Lazy::new(|| {
     .expect("Invalid modulus")
 });
 
+/// Miscellaneous parameters
 pub static PARAMS: Lazy<MiscParams> = Lazy::new(|| compute_misc_params(&P, WORD_SIZE));
 
 /*
@@ -49,8 +52,8 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     let input_size = scalars.len();
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_columns = 1 << chunk_size;
-    let num_rows = (input_size + num_columns - 1) / num_columns;
-    let num_subtasks = (256 + chunk_size - 1) / chunk_size;
+    let num_rows = input_size.div_ceil(num_columns);
+    let num_subtasks = 256_usize.div_ceil(chunk_size);
     let num_words = PARAMS.num_words;
     let point_bytes = points_to_bytes(points);
     let scalar_bytes = scalars_to_bytes(scalars);
@@ -81,27 +84,15 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         c_workgroup_size = 64;
         c_num_x_workgroups = 4;
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 32768 && input_size <= 65536 {
+    } else if input_size > 32768 && input_size <= 131072 {
         c_workgroup_size = 256;
         c_num_x_workgroups = 8;
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 65536 && input_size <= 131072 {
-        c_workgroup_size = 256;
-        c_num_x_workgroups = 8;
-        c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 131072 && input_size <= 262144 {
+    } else if input_size > 131072 && input_size <= 1048576 {
         c_workgroup_size = 256;
         c_num_x_workgroups = 32;
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 262144 && input_size <= 524288 {
-        c_workgroup_size = 256;
-        c_num_x_workgroups = 32;
-        c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 524288 && input_size <= 1048576 {
-        c_workgroup_size = 256;
-        c_num_x_workgroups = 32;
-        c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    }
+    } 
 
     let c_shader = shader_manager.gen_decomp_scalars_shader(
         c_workgroup_size,
@@ -180,7 +171,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         s_workgroup_size = 32;
         s_num_x_workgroups = 1;
         s_num_y_workgroups =
-            ((half_num_columns / s_workgroup_size) + s_num_x_workgroups - 1) / s_num_x_workgroups;
+            (half_num_columns / s_workgroup_size).div_ceil(s_num_x_workgroups);
     }
 
     if num_columns < 256 {
@@ -336,51 +327,37 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     let g_points_x = bytemuck::cast_slice::<u8, u32>(&data[0])
         .chunks(num_words)
         .map(|x| {
-            let x_biguint_montgomery = to_biguint_le(&x.to_vec(), num_words, WORD_SIZE as u32);
+            let x_biguint_montgomery = to_biguint_le(x, num_words, WORD_SIZE as u32);
             let x_biguint = x_biguint_montgomery * &PARAMS.rinv % P.clone();
-            let x_field = bytes_to_field(&x_biguint.to_bytes_le());
-            x_field
+            
+            bytes_to_field(&x_biguint.to_bytes_le())
         })
         .collect::<Vec<_>>();
     let g_points_y = bytemuck::cast_slice::<u8, u32>(&data[1])
         .chunks(num_words)
         .map(|y| {
-            let y_biguint_montgomery = to_biguint_le(&y.to_vec(), num_words, WORD_SIZE as u32);
+            let y_biguint_montgomery = to_biguint_le(y, num_words, WORD_SIZE as u32);
             let y_biguint = y_biguint_montgomery * &PARAMS.rinv % P.clone();
-            let y_field = bytes_to_field(&y_biguint.to_bytes_le());
-            y_field
+            
+            bytes_to_field(&y_biguint.to_bytes_le())
         })
         .collect::<Vec<_>>();
     let g_points_z = bytemuck::cast_slice::<u8, u32>(&data[2])
         .chunks(num_words)
         .map(|z| {
-            let z_biguint_montgomery = to_biguint_le(&z.to_vec(), num_words, WORD_SIZE as u32);
+            let z_biguint_montgomery = to_biguint_le(z, num_words, WORD_SIZE as u32);
             let z_biguint = z_biguint_montgomery * &PARAMS.rinv % P.clone();
-            let z_field = bytes_to_field(&z_biguint.to_bytes_le());
-            z_field
+            
+            bytes_to_field(&z_biguint.to_bytes_le())
         })
         .collect::<Vec<_>>();
 
-    // TODO: Use from_montgomery_repr passing a valid R^2 as a parameter
+    // TODO: Use from_montgomery_repr passing a valid R^2 as a parameter for performance
     // let g_points_x = data[0]
     //     .chunks(num_words * 4)
     //     .map(|x| {
     //         let x_field = u8s_to_field_without_assertion(&x, num_words, WORD_SIZE);
     //         x_field
-    //     })
-    //     .collect::<Vec<_>>();
-    // let g_points_y = data[1]
-    //     .chunks(num_words * 4)
-    //     .map(|y| {
-    //         let y_field = u8s_to_field_without_assertion(&y, num_words, WORD_SIZE);
-    //         y_field
-    //     })
-    //     .collect::<Vec<_>>();
-    // let g_points_z = data[2]
-    //     .chunks(num_words * 4)
-    //     .map(|z| {
-    //         let z_field = u8s_to_field_without_assertion(&z, num_words, WORD_SIZE);
-    //         z_field
     //     })
     //     .collect::<Vec<_>>();
 
@@ -393,7 +370,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
                 g_points_z[i * b_workgroup_size + j],
             )
             .unwrap();
-            point = point + reduced_point;
+            point += reduced_point;
         }
         points.push(point);
     }
@@ -433,6 +410,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
  *
  */
 
+/// Convert point coordinates and decompose shaders
 pub async fn convert_point_coords_and_decompose_shaders(
     shader_code: &str,
     num_x_workgroups: usize,
@@ -603,6 +581,7 @@ pub async fn transpose_gpu(
     (all_csc_col_ptr_sb, all_csc_val_idxs_sb)
 }
 
+// TODO: Use bytemuck
 pub fn to_u8s_for_gpu(vals: Vec<usize>) -> Vec<u8> {
     let max: u64 = 1 << 32;
     let mut buf = vec![];
@@ -687,6 +666,7 @@ pub async fn smvp_gpu(
     .await;
 }
 
+/// Batch product reduction shader 1
 pub async fn bpr_1(
     shader_code: &str,
     subtask_idx: usize,
@@ -758,6 +738,7 @@ pub async fn bpr_1(
     .await;
 }
 
+/// Batch product reduction shader 2
 pub async fn bpr_2(
     shader_code: &str,
     subtask_idx: usize,

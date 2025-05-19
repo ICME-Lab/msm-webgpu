@@ -524,13 +524,13 @@ dependencies = [
 
 [[package]]
 name = "halo2curves"
-version = "0.6.0"
-source = "git+https://github.com/ICME-Lab/halo2curves?branch=main#129994dfcaa872070692e0200a9e35b3cd2bd3e8"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db81d01d0bbfec9f624d7590fc6929ee2537a64ec1e080d8f8c9e2d2da291405"
 dependencies = [
  "blake2b_simd",
  "ff",
  "group",
- "hex",
  "lazy_static",
  "num-bigint",
  "num-traits",
@@ -540,8 +540,6 @@ dependencies = [
  "rand",
  "rand_core",
  "rayon",
- "serde",
- "serde_arrays",
  "static_assertions",
  "subtle",
 ]
@@ -576,15 +574,6 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
-
-[[package]]
-name = "hex"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "hexf-parse"
@@ -1147,15 +1136,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f0e2c6ed6606019b4e29e69dbaba95b11854410e5347d525002456dbbb786b6"
 dependencies = [
  "serde_derive",
-]
-
-[[package]]
-name = "serde_arrays"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38636132857f68ec3d5f3eb121166d2af33cb55174c4d5ff645db6165cbef0fd"
-dependencies = [
- "serde",
 ]
 
 [[package]]

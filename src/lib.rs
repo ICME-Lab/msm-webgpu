@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 pub mod cuzk;
 
 use crate::cuzk::msm::compute_msm;
@@ -5,15 +7,17 @@ use ff::PrimeField;
 use group::{Curve, Group};
 use rand::thread_rng;
 
-use halo2curves::{msm::best_multiexp, CurveAffine};
+use halo2curves::{CurveAffine, msm::best_multiexp};
 
 use crate::cuzk::utils::field_to_bytes;
 
+/// Sample random scalars
 pub fn sample_scalars<F: PrimeField>(n: usize) -> Vec<F> {
     let mut rng = thread_rng();
     (0..n).map(|_| F::random(&mut rng)).collect::<Vec<_>>()
 }
 
+/// Sample random affine points
 pub fn sample_points<C: CurveAffine>(n: usize) -> Vec<C> {
     let mut rng = thread_rng();
     (0..n)
@@ -21,16 +25,19 @@ pub fn sample_points<C: CurveAffine>(n: usize) -> Vec<C> {
         .collect::<Vec<_>>()
 }
 
+/// Run CPU MSM computation
 pub fn cpu_msm<C: CurveAffine>(g: &[C], v: &[C::Scalar]) -> C::Curve {
     best_multiexp(v, g)
 }
 
+/// Convert scalars to bytes
 pub fn scalars_to_bytes<F: PrimeField>(v: &[F]) -> Vec<u8> {
     v.iter().flat_map(|x| field_to_bytes(x)).collect::<Vec<_>>()
 }
 
+/// Convert points to bytes as [x0, y0, x1, y1, ...]
 pub fn points_to_bytes<C: CurveAffine>(g: &[C]) -> Vec<u8> {
-    g.into_iter()
+    g.iter()
         .flat_map(|affine| {
             let coords = affine.coordinates().unwrap();
             let x = field_to_bytes(coords.x());
@@ -41,15 +48,16 @@ pub fn points_to_bytes<C: CurveAffine>(g: &[C]) -> Vec<u8> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+/// Run WebGPU MSM computation synchronously
 pub fn run_webgpu_msm<C: CurveAffine>(g: &[C], v: &[C::Scalar]) -> C::Curve {
     pollster::block_on(compute_msm(g, v))
 }
 
 #[cfg(target_arch = "wasm32")]
+/// Run WebGPU MSM computation asynchronously
 pub async fn run_webgpu_msm<C: CurveAffine>(g: &[C], v: &[C::Scalar]) -> C::Curve {
     compute_msm(g, v).await
 }
-
 
 pub mod tests_wasm_pack {
     use crate::cuzk::msm::compute_msm;
@@ -67,7 +75,7 @@ pub mod tests_wasm_pack {
     }
 
     pub async fn test_webgpu_msm_cuzk(sample_size: usize) {
-        console::log_1(&format!("Testing with sample size: {}", sample_size).into());
+        console::log_1(&format!("Testing with sample size: {sample_size}").into());
         let points = sample_points::<G1Affine>(sample_size);
         let scalars = sample_scalars::<Fr>(sample_size);
 
@@ -79,9 +87,7 @@ pub mod tests_wasm_pack {
         let result = compute_msm::<G1Affine>(&points, &scalars).await;
         console::log_1(&format!("GPU Elapsed: {} ms", now() - result_start).into());
 
-        console::log_1(&format!("Result: {:?}", result).into());
+        console::log_1(&format!("Result: {result:?}").into());
         assert_eq!(fast, result);
     }
-
-
 }

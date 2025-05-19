@@ -5,27 +5,30 @@ use wgpu::CommandEncoderDescriptor;
 
 use crate::cuzk::{
     gpu::{get_adapter, get_device, read_from_gpu_test},
-    msm::{convert_point_coords_and_decompose_shaders, transpose_gpu, PARAMS, WORD_SIZE},
+    msm::{PARAMS, WORD_SIZE, convert_point_coords_and_decompose_shaders, transpose_gpu},
     shader_manager::ShaderManager,
     utils::debug,
 };
 use crate::{points_to_bytes, scalars_to_bytes};
 
-pub async fn transpose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> (Vec<i32>, Vec<i32>) {
+async fn transpose_shader<C: CurveAffine>(
+    points: &[C],
+    scalars: &[C::Scalar],
+) -> (Vec<i32>, Vec<i32>) {
     let input_size = scalars.len();
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_columns = 1 << chunk_size;
-    let num_rows = (input_size + num_columns - 1) / num_columns;
-    let num_subtasks = (256 + chunk_size - 1) / chunk_size;
+    let num_rows = input_size.div_ceil(num_columns);
+    let num_subtasks = 256_usize.div_ceil(chunk_size);
     let num_words = PARAMS.num_words;
-    debug(&format!("Input size: {}", input_size));
-    debug(&format!("Chunk size: {}", chunk_size));
-    debug(&format!("Num columns: {}", num_columns));
-    debug(&format!("Num rows: {}", num_rows));
-    debug(&format!("Num subtasks: {}", num_subtasks));
-    debug(&format!("Num words: {}", num_words));
-    debug(&format!("Word size: {}", WORD_SIZE));
-    println!("Params: {:?}", PARAMS);
+    debug(&format!("Input size: {input_size}"));
+    debug(&format!("Chunk size: {chunk_size}"));
+    debug(&format!("Num columns: {num_columns}"));
+    debug(&format!("Num rows: {num_rows}"));
+    debug(&format!("Num subtasks: {num_subtasks}"));
+    debug(&format!("Num words: {num_words}"));
+    debug(&format!("Word size: {WORD_SIZE}"));
+    println!("Params: {PARAMS:?}");
 
     let point_bytes = points_to_bytes(points);
     let scalar_bytes = scalars_to_bytes(scalars);
@@ -52,27 +55,15 @@ pub async fn transpose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar
         c_workgroup_size = 64;
         c_num_x_workgroups = 4;
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 32768 && input_size <= 65536 {
+    } else if input_size > 32768 && input_size <= 131072 {
         c_workgroup_size = 256;
         c_num_x_workgroups = 8;
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 65536 && input_size <= 131072 {
-        c_workgroup_size = 256;
-        c_num_x_workgroups = 8;
-        c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 131072 && input_size <= 262144 {
+    } else if input_size > 131072 && input_size <= 1048576 {
         c_workgroup_size = 256;
         c_num_x_workgroups = 32;
         c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 262144 && input_size <= 524288 {
-        c_workgroup_size = 256;
-        c_num_x_workgroups = 32;
-        c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    } else if input_size > 524288 && input_size <= 1048576 {
-        c_workgroup_size = 256;
-        c_num_x_workgroups = 32;
-        c_num_y_workgroups = input_size / c_workgroup_size / c_num_x_workgroups;
-    }
+    } 
 
     let c_shader = shader_manager.gen_decomp_scalars_shader(
         c_workgroup_size,
@@ -81,22 +72,21 @@ pub async fn transpose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar
         num_columns,
     );
 
-    let (_point_x_sb, _point_y_sb, scalar_chunks_sb) =
-        convert_point_coords_and_decompose_shaders(
-            &c_shader,
-            c_num_x_workgroups,
-            c_num_y_workgroups,
-            c_num_z_workgroups,
-            &device,
-            &queue,
-            &mut encoder,
-            &point_bytes,
-            &scalar_bytes,
-            num_subtasks,
-            chunk_size,
-            num_words,
-        )
-        .await;
+    let (_point_x_sb, _point_y_sb, scalar_chunks_sb) = convert_point_coords_and_decompose_shaders(
+        &c_shader,
+        c_num_x_workgroups,
+        c_num_y_workgroups,
+        c_num_z_workgroups,
+        &device,
+        &queue,
+        &mut encoder,
+        &point_bytes,
+        &scalar_bytes,
+        num_subtasks,
+        chunk_size,
+        num_words,
+    )
+    .await;
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     // 2. Sparse Matrix Transposition                                                         /
@@ -134,12 +124,12 @@ pub async fn transpose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar
     )
     .await;
 
-        // Map results back from GPU to CPU.
+    // Map results back from GPU to CPU.
     let data = read_from_gpu_test(
         &device,
         &queue,
         encoder,
-    vec![all_csc_col_ptr_sb, all_csc_val_idxs_sb],
+        vec![all_csc_col_ptr_sb, all_csc_val_idxs_sb],
     )
     .await;
 
@@ -152,10 +142,15 @@ pub async fn transpose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar
     (all_csc_col_ptr.to_vec(), all_csc_val_idxs.to_vec())
 }
 
-pub fn run_webgpu_transpose_shader<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> (Vec<i32>, Vec<i32>) {
+/// Run WebGPU transpose shader sync
+pub fn run_webgpu_transpose_shader<C: CurveAffine>(
+    points: &[C],
+    scalars: &[C::Scalar],
+) -> (Vec<i32>, Vec<i32>) {
     pollster::block_on(run_webgpu_transpose_shader_async(points, scalars))
 }
 
+/// Run WebGPU transpose shader async
 pub async fn run_webgpu_transpose_shader_async<C: CurveAffine>(
     points: &[C],
     scalars: &[C::Scalar],
@@ -186,8 +181,8 @@ mod tests {
         let num_chunks_per_scalar = (256 + chunk_size - 1) / chunk_size;
         let num_subtasks = num_chunks_per_scalar;
 
-
-        let (all_csc_col_ptr, all_csc_val_idxs) = run_webgpu_transpose_shader::<G1Affine>(&points, &scalars);
+        let (all_csc_col_ptr, all_csc_val_idxs) =
+            run_webgpu_transpose_shader::<G1Affine>(&points, &scalars);
 
         let decomposed_scalars = decompose_scalars_signed(&scalars, num_subtasks, chunk_size);
 

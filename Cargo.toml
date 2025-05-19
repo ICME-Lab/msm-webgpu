@@ -1,7 +1,7 @@
 [package]
 name = "msm-webgpu"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -14,7 +14,7 @@ num-integer = "0.1.46"
 itertools = "0.12.0"
 num-traits = "0.2.17"
 ahash = { version = "0.8.11", default-features = false }
-halo2curves = { git = "https://github.com/ICME-Lab/halo2curves", branch = "main", features = ["bits", "derive_serde"] }
+halo2curves = "0.6.1"
 group = "0.13.0"
 ff = { version = "0.13.0", default-features = false, features = ["std"] }
 rand = "0.8.5"
