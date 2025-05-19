@@ -1,7 +1,19 @@
 [package]
 name = "msm-webgpu"
 version = "0.1.0"
-edition = "2024"
+description = "Multi-Scalar Multiplication (MSM) implementation for WebGPU."
+authors = [
+    "Alberto Centelles <acentelles>",
+    "Khalil Gibran Hassam <forpee>",
+    "Wyatt Benno <wyattbenno777>",
+    "ICME-Lab"
+]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/ICME-Lab/msm-webgpu"
+readme = "README.md"
+keywords = ["cryptography", "zero-knowledge", "msm", "webgpu", "bn254"]
+categories = ["cryptography", "wasm", "web-programming"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
