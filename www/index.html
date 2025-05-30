@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MSM Runner</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .file-input {
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>MSM Runner</h1>
+
+    <div class="section">
+        <h2>Run CPU MSM</h2>
+        <div>
+            <label for="numberOfMSM">Input</label>
+            <!-- Enforce number must be bigger than 65536 -->
+            <input type="number" id="CPUNumberOfMSM" value="65536">
+        </div>
+        <button id="CPUButton">Run</button>
+        <h2>Output:</h2>
+        <pre id="CPUOutput">Results will appear here...</pre>
+    
+    </div>
+
+    <div class="section">
+        <h2>Run WebGPU MSM</h2>
+        <div>
+            <label for="numberOfMSM">Input</label>
+            <!-- Enforce number must be bigger than 65536 -->
+            <input type="number" id="GPUNumberOfMSM" value="65536">
+        </div>
+        <button id="GPUButton">Run</button>
+        <h2>Output:</h2>
+        <pre id="GPUOutput">Results will appear here...</pre>
+    </div>
+
+
+
+    <script>
+        if (WebAssembly.validate(new Uint8Array([0xfd, 0x00, 0x01, 0x0b]))) {
+            console.log("SIMD is supported!");
+        } else {
+            console.log("SIMD is NOT supported!");
+        }
+
+        const worker = new Worker("worker.js");
+
+        worker.onmessage = (event) => {
+            if (event.data.type === "log") {
+                console.log("WASM Output:", event.data.message);
+            } else if (event.data.type === "CPUResult") {
+                document.getElementById("CPUOutput").textContent = JSON.stringify(event.data.result, null, 2);
+            } else if (event.data.type === "GPUResult") {
+                document.getElementById("GPUOutput").textContent = JSON.stringify(event.data.result, null, 2);
+            } else if (event.data.type === "error") {
+                alert("Error: " + event.data.error);
+            }
+        };
+
+        document.getElementById("CPUButton").addEventListener("click", async () => {
+            const numberOfMSM = parseInt(document.getElementById("CPUNumberOfMSM").value);
+            if (numberOfMSM < 65536) {
+                alert("Number of MSM must be bigger than 65536");
+                return;
+            }
+
+            document.getElementById("CPUOutput").textContent = "Processing...";
+
+            worker.postMessage({
+                type: "runCPU",
+                numberOfMSM,
+            });
+        });
+
+        document.getElementById("GPUButton").addEventListener("click", async () => {
+            const numberOfMSM = parseInt(document.getElementById("GPUNumberOfMSM").value);
+            if (numberOfMSM < 65536) {
+                alert("Number of MSM must be bigger than 65536");
+                return;
+            }
+
+            document.getElementById("GPUOutput").textContent = "Processing...";
+
+            worker.postMessage({
+                type: "runGPU",
+                numberOfMSM,
+            });
+        });
+    </script>
+</body>
+
+</html>

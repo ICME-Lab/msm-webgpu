@@ -4,7 +4,7 @@ use group::Group;
 use halo2curves::{CurveAffine, CurveExt};
 use wgpu::CommandEncoderDescriptor;
 
-use crate::cuzk::{
+use msm_webgpu::cuzk::{
     gpu::{create_storage_buffer, get_adapter, get_device, read_from_gpu_test},
     msm::{
         P, PARAMS, WORD_SIZE, convert_point_coords_and_decompose_shaders, smvp_gpu, transpose_gpu,
@@ -12,7 +12,7 @@ use crate::cuzk::{
     shader_manager::ShaderManager,
     utils::{bytes_to_field, debug, to_biguint_le},
 };
-use crate::{points_to_bytes, scalars_to_bytes};
+use msm_webgpu::{points_to_bytes, scalars_to_bytes};
 
 async fn smvp_shader<C: CurveAffine>(
     points: &[C],
@@ -283,11 +283,8 @@ pub async fn run_webgpu_smvp_shader_async<C: CurveAffine>(
 
 #[cfg(test)]
 mod tests {
-    use crate::cuzk::test::{
-        cuzk::{cpu_smvp_signed, cpu_transpose, decompose_scalars_signed},
-        transpose_shader::run_webgpu_transpose_shader,
-    };
-    use crate::{sample_points, sample_scalars};
+    use msm_webgpu::cuzk::test::utils::{cpu_smvp_signed, cpu_transpose, decompose_scalars_signed};
+    use msm_webgpu::{sample_points, sample_scalars};
 
     use super::*;
     use halo2curves::bn256::{Fr, G1Affine};
@@ -303,10 +300,6 @@ mod tests {
         let num_rows = (input_size + num_columns - 1) / num_columns;
         let num_chunks_per_scalar = (256 + chunk_size - 1) / chunk_size;
         let num_subtasks = num_chunks_per_scalar;
-
-        let (all_csc_col_ptr, all_csc_val_idxs) =
-            run_webgpu_transpose_shader::<G1Affine>(&points, &scalars);
-
         let decomposed_scalars = decompose_scalars_signed(&scalars, num_subtasks, chunk_size);
 
         // Perform multiple transpositions "in parallel"}
@@ -317,8 +310,6 @@ mod tests {
             num_subtasks,
             input_size,
         );
-        assert_eq!(all_csc_col_ptr, all_csc_col_ptr_cpu);
-        assert_eq!(all_csc_val_idxs, all_csc_val_idxs_cpu);
 
         let result_bucket_sums = run_webgpu_smvp_shader::<G1Affine>(&points, &scalars);
         println!("Result bucket sums length: {:?}", result_bucket_sums.len());
@@ -332,8 +323,8 @@ mod tests {
                 input_size,
                 num_columns,
                 chunk_size,
-                &all_csc_col_ptr,
-                &all_csc_val_idxs,
+                &all_csc_col_ptr_cpu,
+                &all_csc_val_idxs_cpu,
                 &points,
             );
             println!("Bucket sums length: {:?}", buckets.len());

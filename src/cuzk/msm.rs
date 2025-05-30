@@ -18,6 +18,7 @@ use crate::{points_to_bytes, scalars_to_bytes};
 use super::utils::bytes_to_field;
 use super::utils::calc_bitwidth;
 use super::utils::{MiscParams, compute_misc_params};
+use ff::Field;
 
 /// Calculate the number of words in the field characteristic
 pub fn calc_num_words(word_size: usize) -> usize {
@@ -44,19 +45,45 @@ pub static P: Lazy<BigUint> = Lazy::new(|| {
 /// Miscellaneous parameters
 pub static PARAMS: Lazy<MiscParams> = Lazy::new(|| compute_misc_params(&P, WORD_SIZE));
 
+fn pad_scalars<C: CurveAffine>(scalars: &[C::Scalar]) -> Vec<C::Scalar> {
+    let n = scalars.len();
+    let l = n.next_power_of_two();
+    let diff = l - n;
+    let mut padded_scalars = vec![C::Scalar::ZERO; l];
+    padded_scalars[..scalars.len()].copy_from_slice(scalars);
+    let mut rng = rand::thread_rng();
+    for i in 0..(diff / 2) {
+        let a = C::Scalar::random(&mut rng);
+        padded_scalars[n + i] = a;
+        padded_scalars[n + diff / 2 + i] = -a;
+    }
+    padded_scalars
+}
+
+fn pad_points<C: CurveAffine>(points: &[C]) -> Vec<C> {
+    let n = points.len();
+    let l = n.next_power_of_two();
+    let mut padded_points = vec![C::generator(); l];
+    padded_points[..points.len()].copy_from_slice(points);
+    padded_points
+}
+
 /*
  * End-to-end implementation of the modified cuZK MSM algorithm by Lu et al,
  * 2022: https://eprint.iacr.org/2022/1321.pdf
  */
 pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> C::Curve {
-    let input_size = scalars.len();
+    let padded_scalars = pad_scalars::<C>(scalars);
+    let padded_points = pad_points::<C>(points);
+    let input_size = padded_scalars.len();
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_columns = 1 << chunk_size;
     let num_rows = input_size.div_ceil(num_columns);
     let num_subtasks = 256_usize.div_ceil(chunk_size);
     let num_words = PARAMS.num_words;
-    let point_bytes = points_to_bytes(points);
-    let scalar_bytes = scalars_to_bytes(scalars);
+
+    let point_bytes = points_to_bytes(&padded_points);
+    let scalar_bytes = scalars_to_bytes(&padded_scalars);
 
     let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size);
 

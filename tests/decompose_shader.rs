@@ -3,13 +3,13 @@ use std::{iter::zip, time::Instant};
 use halo2curves::CurveAffine;
 use wgpu::CommandEncoderDescriptor;
 
-use crate::cuzk::{
+use msm_webgpu::cuzk::{
     gpu::{get_adapter, get_device, read_from_gpu_test},
     msm::{P, PARAMS, WORD_SIZE, convert_point_coords_and_decompose_shaders},
     shader_manager::ShaderManager,
     utils::{bytes_to_field, debug, to_biguint_le},
 };
-use crate::{points_to_bytes, scalars_to_bytes};
+use msm_webgpu::{points_to_bytes, scalars_to_bytes};
 
 async fn decompose_shader<C: CurveAffine>(
     points: &[C],
@@ -142,13 +142,13 @@ pub async fn run_webgpu_decompose_async<C: CurveAffine>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{sample_points, sample_scalars};
-
     use super::*;
+    use msm_webgpu::{sample_points, sample_scalars};
+
     use halo2curves::bn256::{Fr, G1Affine};
 
     #[test]
-    fn test_webgpu_decompose() {
+    fn test_decompose() {
         let input_size = 1 << 16;
         let scalars = sample_scalars::<Fr>(input_size);
         let points = sample_points::<G1Affine>(input_size);
