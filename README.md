@@ -39,6 +39,27 @@ For $2^{20}$ MSMs:
 wasm-pack test --chrome --test test_webgpu_msm_cuzk_20
 ```
 
+## Web Browser UI test
+
+```
+RUSTFLAGS="-C target-feature=+simd128" wasm-pack build --target no-modules --release --out-dir www/pkg
+```
+
+```
+cd www
+```
+
+```
+npm install
+```
+
+```
+npx serve
+```
+
+Open the browser and navigate to `http://localhost:3000`.
+
+
 
 ## Future work
 

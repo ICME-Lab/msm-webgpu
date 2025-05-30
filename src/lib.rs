@@ -3,14 +3,21 @@
 pub mod cuzk;
 
 use crate::cuzk::msm::compute_msm;
+use cuzk::utils::debug;
+use ff::Field;
 use ff::PrimeField;
 use group::{Curve, Group};
+use halo2curves::bn256::Fr;
+use halo2curves::bn256::G1Affine;
+use halo2curves::bn256::G1;
+use halo2curves::{msm::best_multiexp, CurveAffine};
 use rand::thread_rng;
-
-use halo2curves::{CurveAffine, msm::best_multiexp};
+use rand::Rng;
+use js_sys::Array;          
 
 use crate::cuzk::utils::field_to_bytes;
-
+use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures;
 /// Sample random scalars
 pub fn sample_scalars<F: PrimeField>(n: usize) -> Vec<F> {
     let mut rng = thread_rng();
@@ -21,6 +28,7 @@ pub fn sample_scalars<F: PrimeField>(n: usize) -> Vec<F> {
 pub fn sample_points<C: CurveAffine>(n: usize) -> Vec<C> {
     let mut rng = thread_rng();
     (0..n)
+        // .map(|_| C::identity())
         .map(|_| C::Curve::random(&mut rng).to_affine())
         .collect::<Vec<_>>()
 }
@@ -37,36 +45,99 @@ pub fn scalars_to_bytes<F: PrimeField>(v: &[F]) -> Vec<u8> {
 
 /// Convert points to bytes as [x0, y0, x1, y1, ...]
 pub fn points_to_bytes<C: CurveAffine>(g: &[C]) -> Vec<u8> {
-    g.iter()
+    let start = now();
+    let ps = g.iter()
         .flat_map(|affine| {
             let coords = affine.coordinates().unwrap();
             let x = field_to_bytes(coords.x());
             let y = field_to_bytes(coords.y());
             [x, y].concat()
         })
-        .collect::<Vec<_>>()
+        .collect::<Vec<_>>();
+    debug(&format!("Points to bytes took {} ms", now() - start));
+    ps
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-/// Run WebGPU MSM computation synchronously
-pub fn run_webgpu_msm<C: CurveAffine>(g: &[C], v: &[C::Scalar]) -> C::Curve {
-    pollster::block_on(compute_msm(g, v))
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = performance)]
+    fn now() -> f64;
 }
 
-#[cfg(target_arch = "wasm32")]
+
+
 /// Run WebGPU MSM computation asynchronously
-pub async fn run_webgpu_msm<C: CurveAffine>(g: &[C], v: &[C::Scalar]) -> C::Curve {
-    compute_msm(g, v).await
+pub async fn run_webgpu_msm<C: CurveAffine>(
+    g: &[C],
+    v: &[C::Scalar],
+) -> C::Curve {
+        let start = now();
+        let result = compute_msm(g, v).await;
+        debug(&format!("MSM Elapsed: {} ms", now() - start));
+        result
 }
+
+#[wasm_bindgen]
+pub async fn run_webgpu_msm_web(
+    sample_size: usize,
+    _callback: js_sys::Function,
+) -> Array {
+    let start = now();
+    debug(&format!("Testing with sample size: {sample_size}"));
+    let points = sample_points::<G1Affine>(sample_size);
+    let scalars = sample_scalars::<Fr>(sample_size);
+    debug(&format!("Sampling points and scalars took {} ms", now() - start));
+
+    let start = now();
+    let result = compute_msm(&points, &scalars).await;
+    let msm_elapsed = now() - start;
+    debug(&format!("GPU MSM Elapsed: {} ms", msm_elapsed));
+    let coords = result.to_affine().coordinates().unwrap();
+
+    let x_str = format!("{:?}", coords.x());
+    let y_str = format!("{:?}", coords.y());
+
+    let arr = Array::new();
+    arr.push(&JsValue::from(x_str));
+    arr.push(&JsValue::from(y_str));
+    arr.push(&JsValue::from(msm_elapsed));
+    arr
+}
+
+#[wasm_bindgen]
+pub async fn run_cpu_msm_web(
+    sample_size: usize,
+    _callback: js_sys::Function,
+) -> Array {
+    let start = now();
+    debug(&format!("Testing with sample size: {sample_size}"));
+    let points = sample_points::<G1Affine>(sample_size);
+    let scalars = sample_scalars::<Fr>(sample_size);
+    debug(&format!("Sampling points and scalars took {} ms", now() - start));
+
+
+    let start = now();
+    let result = cpu_msm(&points, &scalars);
+    let cpu_elapsed = now() - start;
+    debug(&format!("CPU MSM Elapsed: {} ms", cpu_elapsed));
+    let coords = result.to_affine().coordinates().unwrap();
+
+    let x_str = format!("{:?}", coords.x());
+    let y_str = format!("{:?}", coords.y());
+
+    let arr = Array::new();
+    arr.push(&JsValue::from(x_str));
+    arr.push(&JsValue::from(y_str));
+    arr.push(&JsValue::from(cpu_elapsed));
+    arr
+}
+
 
 pub mod tests_wasm_pack {
-    use crate::cuzk::msm::compute_msm;
-
     use super::*;
 
     use halo2curves::bn256::{Fr, G1Affine};
-    use wasm_bindgen::prelude::*;
-    use web_sys::console;
+
 
     #[wasm_bindgen]
     extern "C" {
@@ -75,19 +146,28 @@ pub mod tests_wasm_pack {
     }
 
     pub async fn test_webgpu_msm_cuzk(sample_size: usize) {
-        console::log_1(&format!("Testing with sample size: {sample_size}").into());
+        debug(&format!("Testing with sample size: {sample_size}"));
         let points = sample_points::<G1Affine>(sample_size);
         let scalars = sample_scalars::<Fr>(sample_size);
 
         let cpu_start = now();
         let fast = cpu_msm(&points, &scalars);
-        console::log_1(&format!("CPU Elapsed: {} ms", now() - cpu_start).into());
+        debug(&format!("CPU Elapsed: {} ms", now() - cpu_start));
 
         let result_start = now();
-        let result = compute_msm::<G1Affine>(&points, &scalars).await;
-        console::log_1(&format!("GPU Elapsed: {} ms", now() - result_start).into());
+        let result = run_webgpu_msm::<G1Affine>(&points, &scalars).await;
+        debug(&format!("GPU Elapsed: {} ms", now() - result_start));
 
-        console::log_1(&format!("Result: {result:?}").into());
+        debug(&format!("Result: {result:?}"));
         assert_eq!(fast, result);
+    }
+
+    #[test]
+    fn test_webgpu_msm_cuzk_cpu() {
+        let input_size =  65537;
+        let scalars = sample_scalars::<Fr>(input_size);
+        let points = sample_points::<G1Affine>(input_size);
+
+        let result = pollster::block_on(run_webgpu_msm::<G1Affine>(&points, &scalars));
     }
 }

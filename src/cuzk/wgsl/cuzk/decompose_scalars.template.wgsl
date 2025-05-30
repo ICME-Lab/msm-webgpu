@@ -82,7 +82,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     /// Extract scalar chunks and store them in chunks_arr.
     var chunks_arr: array<u32, {{ num_subtasks }}>;
     for (var i = 0u; i < NUM_SUBTASKS; i++) {
-        let offset = i * INPUT_SIZE;
         chunks_arr[i] = extract_word_from_bytes_le(scalar_bytes, i, CHUNK_SIZE);
     }
     chunks_arr[NUM_SUBTASKS - 1] = scalar_bytes[0] >> (((NUM_SUBTASKS * CHUNK_SIZE - 256u) + 16u) - CHUNK_SIZE);
@@ -111,6 +110,4 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         /// sign of the original index.
         chunks[id + offset] = u32(signed_slices[i]) + s;
     }
-
-    {{{ recompile }}}
 }
