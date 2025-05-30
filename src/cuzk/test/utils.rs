@@ -18,7 +18,7 @@ pub fn calc_start_end(m: usize, n: usize, i: usize) -> (usize, usize) {
 
 pub fn get_element(arr: &[i32], id: i32) -> i32 {
     if id < 0 {
-        if (arr.len() + id as usize) < 0 {
+        if (arr.len() as i32 + id) < 0 {
             return 0;
         }
         arr[arr.len() + id as usize]
@@ -32,7 +32,7 @@ pub fn get_element(arr: &[i32], id: i32) -> i32 {
 
 pub fn get_point_element(arr: &[G1Affine], id: i32) -> G1Affine {
     if id < 0 {
-        if (arr.len() + id as usize) < 0 {
+        if (arr.len() as i32 + id) < 0 {
             return G1Affine::identity();
         }
         arr[arr.len() + id as usize]

@@ -4,15 +4,12 @@ pub mod cuzk;
 
 use crate::cuzk::msm::compute_msm;
 use cuzk::utils::debug;
-use ff::Field;
 use ff::PrimeField;
 use group::{Curve, Group};
 use halo2curves::bn256::Fr;
 use halo2curves::bn256::G1Affine;
-use halo2curves::bn256::G1;
 use halo2curves::{msm::best_multiexp, CurveAffine};
 use rand::thread_rng;
-use rand::Rng;
 use js_sys::Array;          
 
 use crate::cuzk::utils::field_to_bytes;

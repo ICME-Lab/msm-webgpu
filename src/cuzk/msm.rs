@@ -17,7 +17,6 @@ use crate::{points_to_bytes, scalars_to_bytes};
 
 use super::utils::bytes_to_field;
 use super::utils::calc_bitwidth;
-use super::utils::debug;
 use super::utils::{MiscParams, compute_misc_params};
 use ff::Field;
 
