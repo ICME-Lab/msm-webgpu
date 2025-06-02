@@ -3,7 +3,7 @@ use std::time::Instant;
 use halo2curves::{CurveAffine, CurveExt};
 use wgpu::CommandEncoderDescriptor;
 
-use crate::cuzk::{
+use msm_webgpu::cuzk::{
     gpu::{
         create_and_write_storage_buffer, create_and_write_uniform_buffer, create_bind_group,
         create_bind_group_layout, create_compute_pipeline, create_storage_buffer, execute_pipeline,
