@@ -42,7 +42,6 @@ pub fn scalars_to_bytes<F: PrimeField>(v: &[F]) -> Vec<u8> {
 
 /// Convert points to bytes as [x0, y0, x1, y1, ...]
 pub fn points_to_bytes<C: CurveAffine>(g: &[C]) -> Vec<u8> {
-    let start = now();
     let ps = g.iter()
         .flat_map(|affine| {
             let coords = affine.coordinates().unwrap();
@@ -51,7 +50,6 @@ pub fn points_to_bytes<C: CurveAffine>(g: &[C]) -> Vec<u8> {
             [x, y].concat()
         })
         .collect::<Vec<_>>();
-    debug(&format!("Points to bytes took {} ms", now() - start));
     ps
 }
 
@@ -68,9 +66,7 @@ pub async fn run_webgpu_msm<C: CurveAffine>(
     g: &[C],
     v: &[C::Scalar],
 ) -> C::Curve {
-        let start = now();
         let result = compute_msm(g, v).await;
-        debug(&format!("MSM Elapsed: {} ms", now() - start));
         result
 }
 
