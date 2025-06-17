@@ -83,7 +83,7 @@ async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve
     println!("Data length: {:?}", data_u32.len());
 
     let results = data_u32
-        .chunks(20)
+        .chunks(num_words)
         .map(|chunk| {
             let biguint_montgomery = to_biguint_le(chunk, num_words, WORD_SIZE as u32);
             let biguint = biguint_montgomery * &params.rinv % p.clone();
@@ -119,9 +119,10 @@ pub async fn run_webgpu_point_op_async<C: CurveAffine>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use group::Curve;
+    use group::{Curve, Group};
     use group::cofactor::CofactorCurveAffine;
     use halo2curves::bn256::{Fr, G1Affine};
+    use halo2curves::pasta::pallas::{Affine as PallasAffine, Point as PallasPoint, Scalar as PallasScalar};
     use rand::{Rng, thread_rng};
 
     #[test]
@@ -141,7 +142,23 @@ mod tests {
     }
 
     #[test]
-    fn test_webgpu_point_add_identity() {
+    fn test_webgpu_point_add_pallas() {
+        let mut rng = thread_rng();
+        let a = PallasPoint::random(&mut rng).to_affine();
+        println!("a: {:?}", a);
+        let b = PallasPoint::random(&mut rng).to_affine();
+        println!("b: {:?}", b);
+
+        let fast = a + b;
+
+        let result = run_webgpu_point_op::<PallasAffine>("test_point_add", a, b, 0);
+
+        println!("Result: {:?}", result);
+        assert_eq!(fast, result);
+    }
+
+    #[test]
+    fn test_webgpu_point_add_identity_bn256() {
         let mut rng = thread_rng();
         let a = G1Affine::random(&mut rng);
         println!("a: {:?}", a);
@@ -157,7 +174,23 @@ mod tests {
     }
 
     #[test]
-    fn test_webgpu_point_negate() {
+    fn test_webgpu_point_add_identity_pallas() {
+        let mut rng = thread_rng();
+        let a = PallasPoint::random(&mut rng).to_affine();
+        println!("a: {:?}", a);
+        let b = PallasAffine::identity();
+        println!("b: {:?}", b);
+
+        let fast = a + b;
+
+        let result = run_webgpu_point_op::<PallasAffine>("test_point_add_identity", a, b, 0);
+
+        println!("Result: {:?}", result);
+        assert_eq!(fast, result);
+    }
+
+    #[test]
+    fn test_webgpu_point_negate_bn256() {
         let mut rng = thread_rng();
         let a = G1Affine::random(&mut rng);
         println!("a: {:?}", a);
@@ -171,7 +204,21 @@ mod tests {
     }
 
     #[test]
-    fn test_webgpu_point_double_and_add() {
+    fn test_webgpu_point_negate_pallas() {
+        let mut rng = thread_rng();
+        let a = PallasPoint::random(&mut rng).to_affine();
+        println!("a: {:?}", a);
+
+        let fast = -a;
+
+        let result = run_webgpu_point_op::<PallasAffine>("test_negate_point", a, a, 0);
+
+        println!("Result: {:?}", result);
+        assert_eq!(fast, result.to_affine());
+    }
+
+    #[test]
+    fn test_webgpu_point_double_and_add_bn256() {
         let mut rng = thread_rng();
         let a = G1Affine::random(&mut rng);
         println!("a: {:?}", a);
@@ -182,6 +229,23 @@ mod tests {
         let fast = a * Fr::from(scalar as u64);
 
         let result = run_webgpu_point_op::<G1Affine>("test_double_and_add", a, a, scalar);
+
+        println!("Result: {:?}", result);
+        assert_eq!(fast, result);
+    }
+
+    #[test]
+    fn test_webgpu_point_double_and_add_pallas() {
+        let mut rng = thread_rng();
+        let a = PallasPoint::random(&mut rng).to_affine();
+        println!("a: {:?}", a);
+        // random u32
+        let scalar = rng.gen_range(0..u32::MAX);
+        println!("scalar: {:?}", scalar);
+
+        let fast = a * PallasScalar::from(scalar as u64);
+
+        let result = run_webgpu_point_op::<PallasAffine>("test_double_and_add", a, a, scalar);
 
         println!("Result: {:?}", result);
         assert_eq!(fast, result);

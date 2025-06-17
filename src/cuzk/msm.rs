@@ -22,18 +22,6 @@ use ff::{Field, PrimeField};
 
 /// 13-bit limbs.
 pub const WORD_SIZE: usize = 13;
-// /// Field characteristic
-// pub static P_BN254: Lazy<BigUint> = Lazy::new(|| {
-//     BigUint::from_str_radix(
-//         "21888242871839275222246405745257275088696311157297823662689037894645226208583",
-//         10,
-//     )
-//     .expect("Invalid modulus")
-// });
-
-// /// Miscellaneous parameters
-// pub static PARAMS_BN254: Lazy<MiscParams> = Lazy::new(|| compute_misc_params(&P_BN254, WORD_SIZE));
-
 
 fn pad_scalars<C: CurveAffine>(scalars: &[C::Scalar]) -> Vec<C::Scalar> {
     let n = scalars.len();

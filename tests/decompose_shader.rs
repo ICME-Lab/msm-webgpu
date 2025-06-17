@@ -148,14 +148,24 @@ mod tests {
     use msm_webgpu::{sample_points, sample_scalars};
 
     use halo2curves::bn256::{Fr, G1Affine};
-
+    use halo2curves::pasta::pallas::{Affine as PallasAffine, Scalar as PallasScalar};
     #[test]
-    fn test_decompose() {
+    fn test_decompose_bn256() {
         let input_size = 1 << 16;
         let scalars = sample_scalars::<Fr>(input_size);
         let points = sample_points::<G1Affine>(input_size);
 
         let (result_points, _result_scalars) = run_webgpu_decompose::<G1Affine>(&points, &scalars);
+        assert_eq!(result_points, points);
+    }
+
+    #[test]
+    fn test_decompose_pallas() {
+        let input_size = 1 << 16;
+        let scalars = sample_scalars::<PallasScalar>(input_size);
+        let points = sample_points::<PallasAffine>(input_size);
+
+        let (result_points, _result_scalars) = run_webgpu_decompose::<PallasAffine>(&points, &scalars);
         assert_eq!(result_points, points);
     }
 }

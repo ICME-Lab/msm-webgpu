@@ -200,11 +200,18 @@ pub fn points_to_bytes_for_gpu<C: CurveAffine>(
 ) -> Vec<u8> {
     g.iter()
         .flat_map(|affine| {
-            let coords = affine.coordinates().unwrap();
-            let x = field_to_u8_vec_for_gpu(coords.x(), num_words, word_size);
-            let y = field_to_u8_vec_for_gpu(coords.y(), num_words, word_size);
-            let z = field_to_u8_vec_for_gpu(&C::Base::ONE, num_words, word_size);
-            [x, y, z].concat()
+            if affine.is_identity().into() {
+                let x = field_to_u8_vec_for_gpu(&C::Base::ZERO, num_words, word_size);
+                let y = field_to_u8_vec_for_gpu(&C::Base::ONE, num_words, word_size);
+                let z = field_to_u8_vec_for_gpu(&C::Base::ZERO, num_words, word_size);
+                return [x, y, z].concat();
+            } else {
+                let coords = affine.coordinates().unwrap();
+                let x = field_to_u8_vec_for_gpu(coords.x(), num_words, word_size);
+                let y = field_to_u8_vec_for_gpu(coords.y(), num_words, word_size);
+                let z = field_to_u8_vec_for_gpu(&C::Base::ONE, num_words, word_size);
+                [x, y, z].concat()
+            }
         })
         .collect::<Vec<_>>()
 }

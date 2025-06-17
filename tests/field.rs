@@ -109,10 +109,11 @@ mod tests {
     use super::*;
     use ff::Field;
     use halo2curves::bn256::{Fq, G1Affine};
+    use halo2curves::pasta::pallas::{Scalar as PallasFq, Affine as PallasAffine};
     use rand::thread_rng;
 
     #[test]
-    fn test_webgpu_field_add() {
+    fn test_webgpu_field_add_bn256() {
         let scalars = sample_scalars::<Fq>(50);
         for scalar in scalars.chunks(2) {
             let a = scalar[0];
@@ -128,7 +129,23 @@ mod tests {
     }
 
     #[test]
-    fn test_webgpu_field_sub() {
+    fn test_webgpu_field_add_pallas() {
+        let scalars = sample_scalars::<PallasFq>(50);
+        for scalar in scalars.chunks(2) {
+            let a = scalar[0];
+            let b = scalar[1];
+
+            let fast = a + b;
+
+            let result = run_webgpu_field_op::<PallasFq>("test_field_add", a, b);
+
+            println!("Result: {:?}", result);
+            assert_eq!(fast, result);
+        }
+    }
+
+    #[test]
+    fn test_webgpu_field_sub_bn256() {
         let scalars = sample_scalars::<Fq>(50);
         for scalar in scalars.chunks(2) {
             let a = scalar[0];
@@ -144,7 +161,7 @@ mod tests {
     }
 
     #[test]
-    fn test_webgpu_field_mul() {
+    fn test_webgpu_field_mul_bn256() {
         let mut rng = thread_rng();
         let a = Fq::random(&mut rng);
         let b = Fq::random(&mut rng);
@@ -157,7 +174,7 @@ mod tests {
     }
 
     #[test]
-    fn test_webgpu_field_barret_mul() {
+    fn test_webgpu_field_barret_mul_bn256() {
         let mut rng = thread_rng();
         let a = Fq::random(&mut rng);
         let b = Fq::random(&mut rng);
@@ -170,10 +187,36 @@ mod tests {
     }
 
     #[test]
-    fn test_field_to_u8_vec_for_gpu() {
+    fn test_webgpu_field_barret_mul_pallas() {
+        let mut rng = thread_rng();
+        let a = PallasFq::random(&mut rng);
+        let b = PallasFq::random(&mut rng);
+
+        let fast = a;
+        let result = run_webgpu_field_op::<PallasFq>("test_barret_mul", a, b);
+
+        println!("Result: {:?}", result);
+        assert_eq!(fast, result);
+    }
+
+    #[test]
+    fn test_field_to_u8_vec_for_gpu_bn256() {
         let p = compute_p::<G1Affine>();
         let mut rng = thread_rng();
         let a = Fq::random(&mut rng);
+        for word_size in 13..17 {
+            let num_words = calc_num_words(&p, word_size);
+            let bytes = field_to_u8_vec_for_gpu(&a, num_words, word_size);
+            let a_from_bytes = u8s_to_field_without_assertion(&p, &bytes, num_words, word_size);
+            assert_eq!(a, a_from_bytes);
+        }
+    }
+
+    #[test]
+    fn test_field_to_u8_vec_for_gpu_pallas() {
+        let p = compute_p::<PallasAffine>();
+        let mut rng = thread_rng();
+        let a = PallasFq::random(&mut rng);
         for word_size in 13..17 {
             let num_words = calc_num_words(&p, word_size);
             let bytes = field_to_u8_vec_for_gpu(&a, num_words, word_size);

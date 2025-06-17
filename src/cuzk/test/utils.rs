@@ -1,6 +1,6 @@
 use ff::PrimeField;
 use group::{prime::PrimeCurveAffine, Group};
-use halo2curves::bn256::{Fr, G1, G1Affine};
+use halo2curves::CurveAffine;
 
 use crate::cuzk::utils::to_words_le_from_field;
 
@@ -30,15 +30,15 @@ pub fn get_element(arr: &[i32], id: i32) -> i32 {
     }
 }
 
-pub fn get_point_element(arr: &[G1Affine], id: i32) -> G1Affine {
+pub fn get_point_element<C: CurveAffine>(arr: &[C], id: i32) -> C {
     if id < 0 {
         if (arr.len() as i32 + id) < 0 {
-            return G1Affine::identity();
+            return C::identity();
         }
         arr[arr.len() + id as usize]
     } else {
         if id >= arr.len() as i32 {
-            return G1Affine::identity();
+            return C::identity();
         }
         arr[id as usize]
     }
@@ -163,19 +163,19 @@ pub fn decompose_scalars_signed<F: PrimeField>(
 /**
  * Perform SMVP with signed bucket indices
  */
-pub fn cpu_smvp_signed(
+pub fn cpu_smvp_signed<C: CurveAffine>(
     subtask_idx: usize,
     input_size: usize,
     num_columns: usize,
     chunk_size: usize,
     all_csc_col_ptr: &[i32],
     all_csc_val_idxs: &[i32],
-    points: &[G1Affine],
-) -> Vec<G1> {
+    points: &[C],
+) -> Vec<C::Curve> {
     let l = 1 << chunk_size;
     let h = l / 2;
-    let zero = G1::identity();
-    let mut buckets: Vec<G1> = vec![zero; num_columns / 2];
+    let zero = C::Curve::identity();
+    let mut buckets: Vec<C::Curve> = vec![zero; num_columns / 2];
 
     let rp_offset = subtask_idx * (num_columns + 1);
 
@@ -197,7 +197,7 @@ pub fn cpu_smvp_signed(
                 let idx = subtask_idx as i32 * input_size as i32 + k;
                 let val = get_element(all_csc_val_idxs, idx);
                 let point = get_point_element(points, val);
-                sum += G1::from(point);
+                sum += C::Curve::from(point);
             }
 
             let bucket_idx;
@@ -219,23 +219,23 @@ pub fn cpu_smvp_signed(
 }
 
 /// Serial bucket reduction
-pub fn serial_bucket_reduction(buckets: &[G1]) -> G1 {
+pub fn serial_bucket_reduction<C: CurveAffine>(buckets: &[C::Curve]) -> C::Curve {
     let mut indices = vec![];
     for i in 1..buckets.len() {
         indices.push(i);
     }
     indices.push(0);
 
-    let mut bucket_sum = G1::identity();
+    let mut bucket_sum = C::Curve::identity();
     for i in 1..buckets.len() + 1 {
-        let b = buckets[indices[i - 1]] * Fr::from(i as u64);
+        let b = buckets[indices[i - 1]] * C::Scalar::from(i as u64);
         bucket_sum += b;
     }
     bucket_sum
 }
 
 /// Perform running sum in the classic fashion - one siumulated thread only
-pub fn running_sum_bucket_reduction(buckets: &[G1]) -> G1 {
+pub fn running_sum_bucket_reduction<C: CurveAffine>(buckets: &[C::Curve]) -> C::Curve {
     let n = buckets.len();
     let mut m = buckets[0];
     let mut g = m;
@@ -252,9 +252,9 @@ pub fn running_sum_bucket_reduction(buckets: &[G1]) -> G1 {
 
 /// Perform running sum with simulated parallelism. It is up to the caller
 /// to add the resulting points.
-pub fn parallel_bucket_reduction(buckets: &[G1], num_threads: usize) -> Vec<G1> {
+pub fn parallel_bucket_reduction<C: CurveAffine>(buckets: &[C::Curve], num_threads: usize) -> Vec<C::Curve> {
     let buckets_per_thread = buckets.len() / num_threads;
-    let mut bucket_sums: Vec<G1> = vec![];
+    let mut bucket_sums: Vec<C::Curve> = vec![];
 
     for thread_id in 0..num_threads {
         let idx = if thread_id == 0 {
@@ -275,7 +275,7 @@ pub fn parallel_bucket_reduction(buckets: &[G1], num_threads: usize) -> Vec<G1> 
 
         let s = buckets_per_thread * (num_threads - thread_id - 1);
         if s > 0 {
-            g += m * Fr::from(s as u64);
+            g += m * C::Scalar::from(s as u64);
         }
 
         bucket_sums.push(g);
@@ -284,13 +284,13 @@ pub fn parallel_bucket_reduction(buckets: &[G1], num_threads: usize) -> Vec<G1> 
 }
 
 /// The first part of the parallel bucket reduction algo
-pub fn parallel_bucket_reduction_1(
-    buckets: &[G1],
+pub fn parallel_bucket_reduction_1<C: CurveAffine>(
+    buckets: &[C::Curve],
     num_threads: usize,
-) -> (Vec<G1>, Vec<G1>) {
+) -> (Vec<C::Curve>, Vec<C::Curve>) {
     let buckets_per_thread = buckets.len() / num_threads;
-    let mut g_points: Vec<G1> = vec![];
-    let mut m_points: Vec<G1> = vec![];
+    let mut g_points: Vec<C::Curve> = vec![];
+    let mut m_points: Vec<C::Curve> = vec![];
 
     for thread_id in 0..num_threads {
         let idx = if thread_id == 0 {
@@ -316,21 +316,21 @@ pub fn parallel_bucket_reduction_1(
 }
 
 /// The second part of the parallel bucket reduction algo
-pub fn parallel_bucket_reduction_2(
-    g_points: Vec<G1>,
-    m_points: Vec<G1>,
+pub fn parallel_bucket_reduction_2<C: CurveAffine>(
+    g_points: Vec<C::Curve>,
+    m_points: Vec<C::Curve>,
     num_buckets: usize,
     num_threads: usize,
-) -> Vec<G1> {
+) -> Vec<C::Curve> {
     let buckets_per_thread = num_buckets / num_threads;
-    let mut result: Vec<G1> = vec![];
+    let mut result: Vec<C::Curve> = vec![];
 
     for thread_id in 0..num_threads {
         let mut g = g_points[thread_id];
         let m = m_points[thread_id];
         let s = buckets_per_thread * (num_threads - thread_id - 1);
         if s > 0 {
-            g += m * Fr::from(s as u64);
+            g += m * C::Scalar::from(s as u64);
         }
         result.push(g);
     }
