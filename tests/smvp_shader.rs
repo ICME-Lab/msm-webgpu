@@ -7,10 +7,10 @@ use wgpu::CommandEncoderDescriptor;
 use msm_webgpu::cuzk::{
     gpu::{create_storage_buffer, get_adapter, get_device, read_from_gpu_test},
     msm::{
-        P, PARAMS, WORD_SIZE, convert_point_coords_and_decompose_shaders, smvp_gpu, transpose_gpu,
+        convert_point_coords_and_decompose_shaders, smvp_gpu, transpose_gpu, WORD_SIZE
     },
     shader_manager::ShaderManager,
-    utils::{bytes_to_field, debug, to_biguint_le},
+    utils::{bytes_to_field, compute_misc_params, compute_p, debug, to_biguint_le},
 };
 use msm_webgpu::{points_to_bytes, scalars_to_bytes};
 
@@ -18,12 +18,14 @@ async fn smvp_shader<C: CurveAffine>(
     points: &[C],
     scalars: &[C::Scalar],
 ) -> Vec<C::Curve> {
+    let p = compute_p::<C>();
+    let params = compute_misc_params(&p, WORD_SIZE);
     let input_size = scalars.len();
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_columns = 1 << chunk_size;
     let num_rows = input_size.div_ceil(num_columns);
     let num_subtasks = 256_usize.div_ceil(chunk_size);
-    let num_words = PARAMS.num_words;
+    let num_words = params.num_words;
     debug(&format!("Input size: {input_size}"));
     debug(&format!("Chunk size: {chunk_size}"));
     debug(&format!("Num columns: {num_columns}"));
@@ -31,12 +33,12 @@ async fn smvp_shader<C: CurveAffine>(
     debug(&format!("Num subtasks: {num_subtasks}"));
     debug(&format!("Num words: {num_words}"));
     debug(&format!("Word size: {WORD_SIZE}"));
-    println!("Params: {PARAMS:?}");
+    println!("Params: {params:?}");
 
     let point_bytes = points_to_bytes(points);
     let scalar_bytes = scalars_to_bytes(scalars);
 
-    let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size);
+    let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size, &params);
 
     let adapter = get_adapter().await;
     let (device, queue) = get_device(&adapter).await;
@@ -189,7 +191,6 @@ async fn smvp_shader<C: CurveAffine>(
     );
     let smvp_shader = shader_manager.gen_smvp_shader(s_workgroup_size, num_columns);
 
-    debug(&format!("SMVP shader: {smvp_shader}"));
     debug(&format!(
         "s_num_x_workgroups / (num_subtasks / num_subtask_chunk_size): {:?}",
         s_num_x_workgroups / (num_subtasks / num_subtask_chunk_size)
@@ -231,11 +232,11 @@ async fn smvp_shader<C: CurveAffine>(
     // Destroy the GPU device object.
     device.destroy();
 
-    let p_x = bytemuck::cast_slice::<u8, u32>(&data[0]).chunks(20);
-    let p_y = bytemuck::cast_slice::<u8, u32>(&data[1]).chunks(20);
-    let p_z = bytemuck::cast_slice::<u8, u32>(&data[2]).chunks(20);
+    let p_x = bytemuck::cast_slice::<u8, u32>(&data[0]).chunks(num_words);
+    let p_y = bytemuck::cast_slice::<u8, u32>(&data[1]).chunks(num_words);
+    let p_z = bytemuck::cast_slice::<u8, u32>(&data[2]).chunks(num_words);
 
-    
+    println!("Num words: {num_words:?}");
     zip(zip(p_x, p_y), p_z)
         .enumerate()
         .map(|(i, ((x, y), z))| {
@@ -243,13 +244,22 @@ async fn smvp_shader<C: CurveAffine>(
             let p_y_biguint_montgomery = to_biguint_le(y, num_words, WORD_SIZE as u32);
             let p_z_biguint_montgomery = to_biguint_le(z, num_words, WORD_SIZE as u32);
 
-            let p_x_biguint = p_x_biguint_montgomery * &PARAMS.rinv % P.clone();
-            let p_y_biguint = p_y_biguint_montgomery * &PARAMS.rinv % P.clone();
-            let p_z_biguint = p_z_biguint_montgomery * &PARAMS.rinv % P.clone();
+            let p_x_biguint = p_x_biguint_montgomery * &params.rinv % p.clone();
+            let p_y_biguint = p_y_biguint_montgomery * &params.rinv % p.clone();
+            let p_z_biguint = p_z_biguint_montgomery * &params.rinv % p.clone();
             let p_x_field = bytes_to_field(&p_x_biguint.to_bytes_le());
             let p_y_field = bytes_to_field(&p_y_biguint.to_bytes_le());
             let p_z_field = bytes_to_field(&p_z_biguint.to_bytes_le());
-            let p = C::Curve::new_jacobian(p_x_field, p_y_field, p_z_field).unwrap();
+            let p_opt = C::Curve::new_jacobian(p_x_field, p_y_field, p_z_field);
+            let p = if p_opt.is_some().into() {
+                p_opt.unwrap()
+            } else {
+                println!("Index: {i:?}");
+                println!("P x: {p_x_field:?}");
+                println!("P y: {p_y_field:?}");
+                println!("P z: {p_z_field:?}");
+                panic!("Bad point");
+            };
             if p.is_identity().into() && i < 15 {
                 println!("Index: {i:?}");
                 println!("P x: {p_x_field:?}");
@@ -288,9 +298,9 @@ mod tests {
 
     use super::*;
     use halo2curves::bn256::{Fr, G1Affine};
-
+    use halo2curves::pasta::pallas::{Affine as PallasAffine, Scalar as PallasScalar};
     #[test]
-    fn test_webgpu_smvp_shader() {
+    fn test_webgpu_smvp_shader_bn256() {
         let input_size = 1 << 16;
         let scalars = sample_scalars::<Fr>(input_size);
         let points = sample_points::<G1Affine>(input_size);
@@ -312,6 +322,50 @@ mod tests {
         );
 
         let result_bucket_sums = run_webgpu_smvp_shader::<G1Affine>(&points, &scalars);
+        println!("Result bucket sums length: {:?}", result_bucket_sums.len());
+
+        let mut bucket_sums = vec![];
+
+        for subtask_idx in 0..num_subtasks {
+            // Perform SMVP
+            let buckets = cpu_smvp_signed(
+                subtask_idx,
+                input_size,
+                num_columns,
+                chunk_size,
+                &all_csc_col_ptr_cpu,
+                &all_csc_val_idxs_cpu,
+                &points,
+            );
+            println!("Bucket sums length: {:?}", buckets.len());
+            bucket_sums.extend(buckets);
+        }
+        assert_eq!(result_bucket_sums, bucket_sums);
+    }
+
+    #[test]
+    fn test_webgpu_smvp_shader_pallas() {
+        let input_size = 1 << 16;
+        let scalars = sample_scalars::<PallasScalar>(input_size);
+        let points = sample_points::<PallasAffine>(input_size);
+
+        let chunk_size = if input_size >= 65536 { 16 } else { 4 };
+        let num_columns = 1 << chunk_size;
+        let num_rows = (input_size + num_columns - 1) / num_columns;
+        let num_chunks_per_scalar = (256 + chunk_size - 1) / chunk_size;
+        let num_subtasks = num_chunks_per_scalar;
+        let decomposed_scalars = decompose_scalars_signed(&scalars, num_subtasks, chunk_size);
+
+        // Perform multiple transpositions "in parallel"}
+        let (all_csc_col_ptr_cpu, _, all_csc_val_idxs_cpu) = cpu_transpose(
+            decomposed_scalars.concat(),
+            num_columns,
+            num_rows,
+            num_subtasks,
+            input_size,
+        );
+
+        let result_bucket_sums = run_webgpu_smvp_shader::<PallasAffine>(&points, &scalars);
         println!("Result bucket sums length: {:?}", result_bucket_sums.len());
 
         let mut bucket_sums = vec![];

@@ -48,7 +48,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     /// Define custom subtask_idx.
     let subtask_idx = (id / h);
 
-    var inf = POINT_IDENTITY;
+    var inf = get_paf();
 
     let rp_offset = (subtask_idx + subtask_offset) * (num_columns + 1u);
 
