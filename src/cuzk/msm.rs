@@ -12,38 +12,28 @@ use crate::cuzk::gpu::{
     get_adapter, get_device, read_from_gpu,
 };
 use crate::cuzk::shader_manager::ShaderManager;
+use crate::cuzk::utils::compute_p;
 use crate::cuzk::utils::to_biguint_le;
 use crate::{points_to_bytes, scalars_to_bytes};
 
 use super::utils::bytes_to_field;
-use super::utils::calc_bitwidth;
 use super::utils::{MiscParams, compute_misc_params};
-use ff::Field;
-
-/// Calculate the number of words in the field characteristic
-pub fn calc_num_words(word_size: usize) -> usize {
-    let p_bit_length = calc_bitwidth(&P);
-    let mut num_words = p_bit_length / word_size;
-    while num_words * word_size < p_bit_length {
-        num_words += 1;
-    }
-    num_words
-}
+use ff::{Field, PrimeField};
 
 /// 13-bit limbs.
 pub const WORD_SIZE: usize = 13;
+// /// Field characteristic
+// pub static P_BN254: Lazy<BigUint> = Lazy::new(|| {
+//     BigUint::from_str_radix(
+//         "21888242871839275222246405745257275088696311157297823662689037894645226208583",
+//         10,
+//     )
+//     .expect("Invalid modulus")
+// });
 
-/// Field characteristic
-pub static P: Lazy<BigUint> = Lazy::new(|| {
-    BigUint::from_str_radix(
-        "21888242871839275222246405745257275088696311157297823662689037894645226208583",
-        10,
-    )
-    .expect("Invalid modulus")
-});
+// /// Miscellaneous parameters
+// pub static PARAMS_BN254: Lazy<MiscParams> = Lazy::new(|| compute_misc_params(&P_BN254, WORD_SIZE));
 
-/// Miscellaneous parameters
-pub static PARAMS: Lazy<MiscParams> = Lazy::new(|| compute_misc_params(&P, WORD_SIZE));
 
 fn pad_scalars<C: CurveAffine>(scalars: &[C::Scalar]) -> Vec<C::Scalar> {
     let n = scalars.len();
@@ -73,6 +63,8 @@ fn pad_points<C: CurveAffine>(points: &[C]) -> Vec<C> {
  * 2022: https://eprint.iacr.org/2022/1321.pdf
  */
 pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) -> C::Curve {
+    let p = compute_p::<C>();
+    let params = compute_misc_params(&p, WORD_SIZE);
     let padded_scalars = pad_scalars::<C>(scalars);
     let padded_points = pad_points::<C>(points);
     let input_size = padded_scalars.len();
@@ -80,12 +72,12 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     let num_columns = 1 << chunk_size;
     let num_rows = input_size.div_ceil(num_columns);
     let num_subtasks = 256_usize.div_ceil(chunk_size);
-    let num_words = PARAMS.num_words;
+    let num_words = params.num_words;
 
     let point_bytes = points_to_bytes(&padded_points);
     let scalar_bytes = scalars_to_bytes(&padded_scalars);
 
-    let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size);
+    let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size, &params);
 
     let adapter = get_adapter().await;
     let (device, queue) = get_device(&adapter).await;
@@ -350,12 +342,13 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
     device.destroy();
 
     let mut points = vec![];
+    let r_inv = params.clone().rinv;
 
     let g_points_x = bytemuck::cast_slice::<u8, u32>(&data[0])
         .chunks(num_words)
         .map(|x| {
             let x_biguint_montgomery = to_biguint_le(x, num_words, WORD_SIZE as u32);
-            let x_biguint = x_biguint_montgomery * &PARAMS.rinv % P.clone();
+            let x_biguint = x_biguint_montgomery * &r_inv % p.clone();
             
             bytes_to_field(&x_biguint.to_bytes_le())
         })
@@ -364,7 +357,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         .chunks(num_words)
         .map(|y| {
             let y_biguint_montgomery = to_biguint_le(y, num_words, WORD_SIZE as u32);
-            let y_biguint = y_biguint_montgomery * &PARAMS.rinv % P.clone();
+            let y_biguint = y_biguint_montgomery * &r_inv % p.clone();
             
             bytes_to_field(&y_biguint.to_bytes_le())
         })
@@ -373,7 +366,7 @@ pub async fn compute_msm<C: CurveAffine>(points: &[C], scalars: &[C::Scalar]) ->
         .chunks(num_words)
         .map(|z| {
             let z_biguint_montgomery = to_biguint_le(z, num_words, WORD_SIZE as u32);
-            let z_biguint = z_biguint_montgomery * &PARAMS.rinv % P.clone();
+            let z_biguint = z_biguint_montgomery * &r_inv % p.clone();
             
             bytes_to_field(&z_biguint.to_bytes_le())
         })

@@ -1,10 +1,21 @@
-use crate::cuzk::msm::{P, calc_num_words};
 use ff::{Field, PrimeField};
 use halo2curves::CurveAffine;
 use num_bigint::{BigInt, BigUint, Sign};
-use num_traits::One;
+use num_traits::{Num, One};
 #[cfg(target_arch = "wasm32")]
 use web_sys::console;
+
+pub fn compute_p<C: CurveAffine>() -> BigUint {
+    // Trim 0x prefix
+    let modulus = C::Base::MODULUS;
+    let modulus_str = if modulus.starts_with("0x") {
+        &modulus[2..]
+    } else {
+        modulus
+    };
+
+    BigUint::from_str_radix(modulus_str, 16).unwrap()
+}
 
 /// Convert a field element to bytes
 pub fn field_to_bytes<F: PrimeField>(value: &F) -> Vec<u8> {
@@ -127,6 +138,7 @@ pub fn field_to_u8_vec_for_gpu<F: PrimeField>(
 
 /// Convert a vector of bytes into a vector of field elements
 pub fn u8s_to_fields_without_assertion<F: PrimeField>(
+    p: &BigUint,
     u8s: &[u8],
     num_words: usize,
     word_size: usize,
@@ -135,15 +147,16 @@ pub fn u8s_to_fields_without_assertion<F: PrimeField>(
 
     let mut result = vec![];
     for i in 0..(u8s.len() / num_u8s_per_scalar) {
-        let p = i * num_u8s_per_scalar;
-        let s = u8s[p..p + num_u8s_per_scalar].to_vec();
-        result.push(u8s_to_field_without_assertion(&s, num_words, word_size));
+        let t = i * num_u8s_per_scalar;
+        let s = u8s[t..t + num_u8s_per_scalar].to_vec();
+        result.push(u8s_to_field_without_assertion(p, &s, num_words, word_size));
     }
     result
 }
 
 /// Convert a vector of bytes into a field element
 pub fn u8s_to_field_without_assertion<F: PrimeField>(
+    p: &BigUint,
     u8s: &[u8],
     num_words: usize,
     word_size: usize,
@@ -153,11 +166,12 @@ pub fn u8s_to_field_without_assertion<F: PrimeField>(
     for i in (0..a.len()).step_by(2) {
         limbs.push(a[i]);
     }
-    from_words_le_without_assertion(&limbs, num_words, word_size)
+    from_words_le_without_assertion(p,&limbs, num_words, word_size)
 }
 
 /// Convert u16 limbs into a field element
 pub fn from_words_le_without_assertion<F: PrimeField>(
+    p: &BigUint,
     limbs: &[u16],
     num_words: usize,
     word_size: usize,
@@ -169,7 +183,7 @@ pub fn from_words_le_without_assertion<F: PrimeField>(
         let exponent = (num_words - i - 1) * word_size;
         let limb = limbs[num_words - i - 1];
         val += BigUint::from(2u32).pow(exponent as u32) * BigUint::from(limb);
-        if val == *P {
+        if val == *p {
             val = BigUint::ZERO;
         }
     }
@@ -348,18 +362,29 @@ pub fn calc_rinv_and_n0(p: &BigUint, r: &BigUint, log_limb_size: u32) -> (BigUin
 }
 
 /// Miscellaneous parameters for the WebGPU shader
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MiscParams {
     pub num_words: usize,
     pub n0: u32,
     pub r: BigUint,
     pub rinv: BigUint,
+    pub p: BigUint,
+}
+
+/// Calculate the number of words in the field characteristic
+pub fn calc_num_words(p: &BigUint, word_size: usize) -> usize {
+    let p_bit_length = calc_bitwidth(p);
+    let mut num_words = p_bit_length / word_size;
+    while num_words * word_size < p_bit_length {
+        num_words += 1;
+    }
+    num_words
 }
 
 /// Compute miscellaneous parameters for the WebGPU shader
 pub fn compute_misc_params(p: &BigUint, word_size: usize) -> MiscParams {
     assert!(word_size > 0);
-    let num_words = calc_num_words(word_size);
+    let num_words = calc_num_words(p, word_size);
     let r = BigUint::one() << (num_words * word_size);
     let res = calc_rinv_and_n0(p, &r, word_size as u32);
     let rinv = res.0;
@@ -369,6 +394,7 @@ pub fn compute_misc_params(p: &BigUint, word_size: usize) -> MiscParams {
         n0,
         r: r % p,
         rinv,
+        p: p.clone(),
     }
 }
 
@@ -384,20 +410,22 @@ pub fn debug(s: &str) {
 
 #[cfg(test)]
 mod tests {
-    use halo2curves::bn256::{Fq, Fr};
+    use halo2curves::bn256::{Fq, Fr, Bn256, G1Affine};
+    use ff::{Field, PrimeField};
     use num_traits::Num;
     use rand::thread_rng;
 
     use super::*;
-    use crate::cuzk::msm::{PARAMS, WORD_SIZE};
+    use crate::cuzk::msm::WORD_SIZE;
     use crate::sample_scalars;
 
     #[test]
     fn test_to_words_le_from_le_bytes() {
+        let p = compute_p::<G1Affine>();
         let val = sample_scalars::<Fr>(1)[0];
         let bytes = field_to_bytes(&val);
         for word_size in 13..17 {
-            let num_words = calc_num_words(word_size);
+            let num_words = calc_num_words(&p, word_size);
 
             let v = BigUint::from_bytes_le(&bytes);
             let limbs = to_words_le(&v, num_words, word_size);
@@ -408,16 +436,18 @@ mod tests {
 
     #[test]
     fn test_gen_p_limbs() {
-        let p = P.clone();
-        let num_words = calc_num_words(13);
-        let p_limbs = gen_p_limbs(&p, num_words, 13);
+        let p = compute_p::<G1Affine>();
+        let num_words = calc_num_words(&p, WORD_SIZE);
+        let p_limbs = gen_p_limbs(&p, num_words, WORD_SIZE);
         println!("{}", p_limbs);
     }
 
     #[test]
     fn test_gen_r_limbs() {
-        let r = PARAMS.r.clone();
-        let num_words = calc_num_words(WORD_SIZE);
+        let p = compute_p::<G1Affine>();
+        let params = compute_misc_params(&p, WORD_SIZE);
+        let r = params.r.clone();
+        let num_words = calc_num_words(&p, WORD_SIZE);
         let r_limbs = gen_r_limbs(&r, num_words, WORD_SIZE);
         println!("{}", r_limbs);
     }
@@ -425,12 +455,13 @@ mod tests {
     #[test]
     fn test_field_to_u8_vec_for_gpu() {
         // random
+        let p = compute_p::<G1Affine>();
         let mut rng = thread_rng();
         let a = Fq::random(&mut rng);
         for word_size in 13..17 {
-            let num_words = calc_num_words(word_size);
+            let num_words = calc_num_words(&p, word_size);
             let bytes = field_to_u8_vec_for_gpu(&a, num_words, word_size);
-            let a_from_bytes = u8s_to_field_without_assertion(&bytes, num_words, word_size);
+            let a_from_bytes = u8s_to_field_without_assertion(&p, &bytes, num_words, word_size);
             assert_eq!(a, a_from_bytes);
         }
     }

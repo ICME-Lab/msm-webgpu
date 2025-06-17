@@ -1,6 +1,8 @@
 use std::time::Instant;
 
 use ff::PrimeField;
+use num_bigint::BigUint;
+use num_traits::Num;
 use wgpu::CommandEncoderDescriptor;
 
 use msm_webgpu::cuzk::{
@@ -9,24 +11,26 @@ use msm_webgpu::cuzk::{
         create_compute_pipeline, create_storage_buffer, execute_pipeline, get_adapter, get_device,
         read_from_gpu_test,
     },
-    msm::{PARAMS, WORD_SIZE},
+    msm::WORD_SIZE,
     shader_manager::ShaderManager,
-    utils::{bytes_to_field, field_to_u8_vec_for_gpu, to_biguint_le},
+    utils::{bytes_to_field, compute_misc_params, field_to_u8_vec_for_gpu, to_biguint_le},
 };
 
 async fn field_op<F: PrimeField>(op: &str, a: F, b: F) -> F {
-    let a_bytes = field_to_u8_vec_for_gpu(&a, PARAMS.num_words, WORD_SIZE);
-    let b_bytes = field_to_u8_vec_for_gpu(&b, PARAMS.num_words, WORD_SIZE);
+    let p = BigUint::from_str_radix(&F::MODULUS[2..], 16).unwrap();
+    let params = compute_misc_params(&p, WORD_SIZE);
+    let a_bytes = field_to_u8_vec_for_gpu(&a, params.num_words, WORD_SIZE);
+    let b_bytes = field_to_u8_vec_for_gpu(&b, params.num_words, WORD_SIZE);
     let input_size = 1;
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
-    let num_words = PARAMS.num_words;
+    let num_words = params.num_words;
     println!("Input size: {input_size}");
     println!("Chunk size: {chunk_size}");
     println!("Num words: {num_words}");
     println!("Word size: {WORD_SIZE}");
-    println!("Params: {PARAMS:?}");
+    println!("Params: {params:?}");
 
-    let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size);
+    let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size, &params);
 
     let adapter = get_adapter().await;
     let (device, queue) = get_device(&adapter).await;
@@ -98,13 +102,13 @@ pub async fn run_webgpu_field_op_async<F: PrimeField>(op: &str, a: F, b: F) -> F
 #[cfg(test)]
 mod tests {
     use msm_webgpu::{
-        cuzk::{msm::calc_num_words, utils::u8s_to_field_without_assertion},
+        cuzk::utils::{calc_num_words, compute_p, u8s_to_field_without_assertion},
         sample_scalars,
     };
 
     use super::*;
     use ff::Field;
-    use halo2curves::bn256::Fq;
+    use halo2curves::bn256::{Fq, G1Affine};
     use rand::thread_rng;
 
     #[test]
@@ -167,13 +171,13 @@ mod tests {
 
     #[test]
     fn test_field_to_u8_vec_for_gpu() {
-        // random
+        let p = compute_p::<G1Affine>();
         let mut rng = thread_rng();
         let a = Fq::random(&mut rng);
         for word_size in 13..17 {
-            let num_words = calc_num_words(word_size);
+            let num_words = calc_num_words(&p, word_size);
             let bytes = field_to_u8_vec_for_gpu(&a, num_words, word_size);
-            let a_from_bytes = u8s_to_field_without_assertion(&bytes, num_words, word_size);
+            let a_from_bytes = u8s_to_field_without_assertion(&p, &bytes, num_words, word_size);
             assert_eq!(a, a_from_bytes);
         }
     }

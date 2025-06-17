@@ -9,25 +9,27 @@ use msm_webgpu::cuzk::{
         create_bind_group_layout, create_compute_pipeline, create_storage_buffer, execute_pipeline,
         get_adapter, get_device, read_from_gpu_test,
     },
-    msm::{P, PARAMS, WORD_SIZE},
+    msm::WORD_SIZE,
     shader_manager::ShaderManager,
-    utils::{bytes_to_field, points_to_bytes_for_gpu, to_biguint_le},
+    utils::{bytes_to_field, compute_misc_params, compute_p, points_to_bytes_for_gpu, to_biguint_le},
 };
 
 async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve {
-    let a_bytes = points_to_bytes_for_gpu(&[a], PARAMS.num_words, WORD_SIZE);
-    let b_bytes = points_to_bytes_for_gpu(&[b], PARAMS.num_words, WORD_SIZE);
+    let p = compute_p::<C>();
+    let params = compute_misc_params(&p, WORD_SIZE);
+    let a_bytes = points_to_bytes_for_gpu(&[a], params.num_words, WORD_SIZE);
+    let b_bytes = points_to_bytes_for_gpu(&[b], params.num_words, WORD_SIZE);
     let scalar_bytes = scalar.to_le_bytes();
     let input_size = 1;
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
-    let num_words = PARAMS.num_words;
+    let num_words = params.num_words;
     println!("Input size: {input_size}");
     println!("Chunk size: {chunk_size}");
     println!("Num words: {num_words}");
     println!("Word size: {WORD_SIZE}");
-    println!("Params: {PARAMS:?}");
+    println!("Params: {params:?}");
 
-    let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size);
+    let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size, &params);
 
     let adapter = get_adapter().await;
     let (device, queue) = get_device(&adapter).await;
@@ -84,7 +86,7 @@ async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve
         .chunks(20)
         .map(|chunk| {
             let biguint_montgomery = to_biguint_le(chunk, num_words, WORD_SIZE as u32);
-            let biguint = biguint_montgomery * &PARAMS.rinv % P.clone();
+            let biguint = biguint_montgomery * &params.rinv % p.clone();
             let field: <<C as CurveAffine>::CurveExt as CurveExt>::Base =
                 bytes_to_field(&biguint.to_bytes_le());
             field
