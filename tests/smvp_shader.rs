@@ -258,6 +258,7 @@ async fn smvp_shader<C: CurveAffine>(
                 println!("P x: {p_x_field:?}");
                 println!("P y: {p_y_field:?}");
                 println!("P z: {p_z_field:?}");
+
                 panic!("Bad point");
             };
             if p.is_identity().into() && i < 15 {
@@ -299,6 +300,7 @@ mod tests {
     use super::*;
     use halo2curves::bn256::{Fr, G1Affine};
     use halo2curves::pasta::pallas::{Affine as PallasAffine, Scalar as PallasScalar};
+    use halo2curves::secp256k1::{Secp256k1Affine, Fq as Secp256k1Fq};
     #[test]
     fn test_webgpu_smvp_shader_bn256() {
         let input_size = 1 << 16;
@@ -366,6 +368,53 @@ mod tests {
         );
 
         let result_bucket_sums = run_webgpu_smvp_shader::<PallasAffine>(&points, &scalars);
+        println!("Result bucket sums length: {:?}", result_bucket_sums.len());
+
+        let mut bucket_sums = vec![];
+
+        for subtask_idx in 0..num_subtasks {
+            // Perform SMVP
+            let buckets = cpu_smvp_signed(
+                subtask_idx,
+                input_size,
+                num_columns,
+                chunk_size,
+                &all_csc_col_ptr_cpu,
+                &all_csc_val_idxs_cpu,
+                &points,
+            );
+            println!("Bucket sums length: {:?}", buckets.len());
+            bucket_sums.extend(buckets);
+        }
+
+        // println!("Result bucket sums: {:?}", result_bucket_sums.iter().take(10).collect::<Vec<_>>());
+        // println!("Bucket sums: {:?}", bucket_sums.iter().take(10).collect::<Vec<_>>());
+        assert_eq!(result_bucket_sums, bucket_sums);
+    }
+
+    #[test]
+    fn test_webgpu_smvp_shader_secp256k1() {
+        let input_size = 1 << 16;
+        let scalars = sample_scalars::<Secp256k1Fq>(input_size);
+        let points = sample_points::<Secp256k1Affine>(input_size);
+
+        let chunk_size = if input_size >= 65536 { 16 } else { 4 };
+        let num_columns = 1 << chunk_size;
+        let num_rows = (input_size + num_columns - 1) / num_columns;
+        let num_chunks_per_scalar = (256 + chunk_size - 1) / chunk_size;
+        let num_subtasks = num_chunks_per_scalar;
+        let decomposed_scalars = decompose_scalars_signed(&scalars, num_subtasks, chunk_size);
+
+        // Perform multiple transpositions "in parallel"}
+        let (all_csc_col_ptr_cpu, _, all_csc_val_idxs_cpu) = cpu_transpose(
+            decomposed_scalars.concat(),
+            num_columns,
+            num_rows,
+            num_subtasks,
+            input_size,
+        );
+
+        let result_bucket_sums = run_webgpu_smvp_shader::<Secp256k1Affine>(&points, &scalars);
         println!("Result bucket sums length: {:?}", result_bucket_sums.len());
 
         let mut bucket_sums = vec![];

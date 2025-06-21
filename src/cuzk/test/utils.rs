@@ -148,6 +148,7 @@ pub fn decompose_scalars_signed<F: PrimeField>(
 
         // We do not need to handle the case where the final carry equals 1, as the highest word of the field modulus (0x12ab) is smaller than 2^{16-1}
         if carry == 1 {
+            // TODO: Review this
             panic!("final carry is 1");
         }
         as_limbs.push(signed_slices.iter().map(|x| x + shift).collect());

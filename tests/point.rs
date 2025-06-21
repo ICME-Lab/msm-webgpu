@@ -119,10 +119,15 @@ pub async fn run_webgpu_point_op_async<C: CurveAffine>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ff::{Field, PrimeField};
     use group::{Curve, Group};
     use group::cofactor::CofactorCurveAffine;
     use halo2curves::bn256::{Fr, G1Affine};
-    use halo2curves::pasta::pallas::{Affine as PallasAffine, Point as PallasPoint, Scalar as PallasScalar};
+    use halo2curves::pasta::pallas::{Affine as PallasAffine, Point as PallasPoint, Scalar as PallasScalar, Base as PallasBase};
+    use halo2curves::secp256k1::{Fq as Secp256k1Fq, Secp256k1, Secp256k1Affine};
+    use msm_webgpu::cuzk::utils::gen_p_limbs;
+    use num_bigint::BigUint;
+    use num_traits::Num;
     use rand::{Rng, thread_rng};
 
     #[test]
@@ -152,6 +157,22 @@ mod tests {
         let fast = a + b;
 
         let result = run_webgpu_point_op::<PallasAffine>("test_point_add", a, b, 0);
+
+        println!("Result: {:?}", result);
+        assert_eq!(fast, result);
+    }
+
+    #[test]
+    fn test_webgpu_point_add_secp256k1() {
+        let mut rng = thread_rng();
+        let a = Secp256k1Affine::random(&mut rng);
+        println!("a: {:?}", a);
+        let b = Secp256k1Affine::random(&mut rng);
+        println!("b: {:?}", b);
+
+        let fast = a + b;
+
+        let result = run_webgpu_point_op::<Secp256k1Affine>("test_point_add", a, b, 0);
 
         println!("Result: {:?}", result);
         assert_eq!(fast, result);
@@ -190,6 +211,23 @@ mod tests {
     }
 
     #[test]
+    fn test_webgpu_point_add_identity_secp256k1() {
+        let mut rng = thread_rng();
+        let a = Secp256k1Affine::random(&mut rng);
+        println!("a: {:?}", a);
+        let b = Secp256k1Affine::identity();
+        println!("b: {:?}", b);
+
+        let fast = a + b;
+
+        let result = run_webgpu_point_op::<Secp256k1Affine>("test_point_add_identity", a, b, 0);
+
+        println!("Result: {:?}", result);
+        assert_eq!(fast, result);
+    }
+
+
+    #[test]
     fn test_webgpu_point_negate_bn256() {
         let mut rng = thread_rng();
         let a = G1Affine::random(&mut rng);
@@ -205,16 +243,30 @@ mod tests {
 
     #[test]
     fn test_webgpu_point_negate_pallas() {
-        let mut rng = thread_rng();
-        let a = PallasPoint::random(&mut rng).to_affine();
-        println!("a: {:?}", a);
+        for _ in 0..1000 {
+            let mut rng = thread_rng();
+            let a = PallasPoint::random(&mut rng).to_affine();
 
-        let fast = -a;
+            let fast = -a;
 
-        let result = run_webgpu_point_op::<PallasAffine>("test_negate_point", a, a, 0);
+            let result = run_webgpu_point_op::<PallasAffine>("test_negate_point", a, a, 0);
 
-        println!("Result: {:?}", result);
-        assert_eq!(fast, result.to_affine());
+            assert_eq!(fast, result.to_affine());
+        }
+    }
+
+    #[test]
+    fn test_webgpu_point_negate_secp256k1() {
+        for _ in 0..1000 {
+            let mut rng = thread_rng();
+            let a = Secp256k1Affine::random(&mut rng);
+
+            let fast = -a;
+
+            let result = run_webgpu_point_op::<Secp256k1Affine>("test_negate_point", a, a, 0);
+
+            assert_eq!(fast, result.to_affine());
+        }
     }
 
     #[test]
@@ -246,6 +298,23 @@ mod tests {
         let fast = a * PallasScalar::from(scalar as u64);
 
         let result = run_webgpu_point_op::<PallasAffine>("test_double_and_add", a, a, scalar);
+
+        println!("Result: {:?}", result);
+        assert_eq!(fast, result);
+    }
+
+    #[test]
+    fn test_webgpu_point_double_and_add_secp256k1() {
+        let mut rng = thread_rng();
+        let a = Secp256k1Affine::random(&mut rng);
+        println!("a: {:?}", a);
+        // random u32
+        let scalar = rng.gen_range(0..u32::MAX);
+        println!("scalar: {:?}", scalar);
+
+        let fast = a * Secp256k1Fq::from(scalar as u64);
+
+        let result = run_webgpu_point_op::<Secp256k1Affine>("test_double_and_add", a, a, scalar);
 
         println!("Result: {:?}", result);
         assert_eq!(fast, result);

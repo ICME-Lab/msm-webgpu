@@ -15,6 +15,7 @@ use js_sys::Array;
 use crate::cuzk::utils::field_to_bytes;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures;
+
 /// Sample random scalars
 pub fn sample_scalars<F: PrimeField>(n: usize) -> Vec<F> {
     let mut rng = thread_rng();
@@ -71,7 +72,7 @@ pub async fn run_webgpu_msm<C: CurveAffine>(
 }
 
 #[wasm_bindgen]
-pub async fn run_webgpu_msm_web(
+pub async fn run_webgpu_msm_web_bn256(
     sample_size: usize,
     _callback: js_sys::Function,
 ) -> Array {
@@ -126,7 +127,7 @@ pub async fn run_webgpu_msm_web_pallas(
 }
 
 #[wasm_bindgen]
-pub async fn run_cpu_msm_web(
+pub async fn run_cpu_msm_web_bn256(
     sample_size: usize,
     _callback: js_sys::Function,
 ) -> Array {
@@ -159,7 +160,7 @@ pub mod tests_wasm_pack {
 
     use halo2curves::bn256::{Fr, G1Affine};
     use halo2curves::pasta::pallas::{Affine as PallasAffine, Scalar as PallasScalar};
-
+    use halo2curves::secp256k1::{Secp256k1Affine, Fq as Secp256k1Fq};
     #[wasm_bindgen]
     extern "C" {
         #[wasm_bindgen(js_namespace = performance)]
@@ -194,6 +195,23 @@ pub mod tests_wasm_pack {
 
         let result_start = now();
         let result = run_webgpu_msm::<PallasAffine>(&points, &scalars).await;
+        debug(&format!("GPU Elapsed: {} ms", now() - result_start));
+
+        debug(&format!("Result: {result:?}"));
+        assert_eq!(fast, result);
+    }
+
+    pub async fn test_webgpu_msm_cuzk_secp256k1(sample_size: usize) {
+        debug(&format!("Testing with sample size: {sample_size}"));
+        let points = sample_points::<Secp256k1Affine>(sample_size);
+        let scalars = sample_scalars::<Secp256k1Fq>(sample_size);
+
+        let cpu_start = now();
+        let fast = cpu_msm(&points, &scalars);
+        debug(&format!("CPU Elapsed: {} ms", now() - cpu_start));
+
+        let result_start = now();
+        let result = run_webgpu_msm::<Secp256k1Affine>(&points, &scalars).await;
         debug(&format!("GPU Elapsed: {} ms", now() - result_start));
 
         debug(&format!("Result: {result:?}"));
