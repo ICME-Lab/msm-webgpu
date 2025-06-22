@@ -130,49 +130,46 @@ mod tests {
     use num_traits::Num;
     use rand::{Rng, thread_rng};
 
-    #[test]
-    fn test_webgpu_point_add() {
+    fn test_webgpu_point_add<C: CurveAffine>() {
         let mut rng = thread_rng();
-        let a = G1Affine::random(&mut rng);
+        let a = C::Curve::random(&mut rng).to_affine();
         println!("a: {:?}", a);
-        let b = G1Affine::random(&mut rng);
+        let b = C::Curve::random(&mut rng).to_affine();
         println!("b: {:?}", b);
 
         let fast = a + b;
 
-        let result = run_webgpu_point_op::<G1Affine>("test_point_add", a, b, 0);
+        let result = run_webgpu_point_op::<C>("test_point_add", a, b, 0);
 
         println!("Result: {:?}", result);
         assert_eq!(fast, result);
+    }
+
+    #[test]
+    fn test_webgpu_point_add_bn256() {
+        test_webgpu_point_add::<G1Affine>();
     }
 
     #[test]
     fn test_webgpu_point_add_pallas() {
-        let mut rng = thread_rng();
-        let a = PallasPoint::random(&mut rng).to_affine();
-        println!("a: {:?}", a);
-        let b = PallasPoint::random(&mut rng).to_affine();
-        println!("b: {:?}", b);
-
-        let fast = a + b;
-
-        let result = run_webgpu_point_op::<PallasAffine>("test_point_add", a, b, 0);
-
-        println!("Result: {:?}", result);
-        assert_eq!(fast, result);
+        test_webgpu_point_add::<PallasAffine>();
     }
 
     #[test]
     fn test_webgpu_point_add_secp256k1() {
+        test_webgpu_point_add::<Secp256k1Affine>();
+    }
+
+    fn test_webgpu_point_add_identity<C: CurveAffine>() {
         let mut rng = thread_rng();
-        let a = Secp256k1Affine::random(&mut rng);
+        let a = C::Curve::random(&mut rng).to_affine();
         println!("a: {:?}", a);
-        let b = Secp256k1Affine::random(&mut rng);
+        let b = C::identity();
         println!("b: {:?}", b);
 
         let fast = a + b;
 
-        let result = run_webgpu_point_op::<Secp256k1Affine>("test_point_add", a, b, 0);
+        let result = run_webgpu_point_op::<C>("test_point_add_identity", a, b, 0);
 
         println!("Result: {:?}", result);
         assert_eq!(fast, result);
@@ -180,143 +177,79 @@ mod tests {
 
     #[test]
     fn test_webgpu_point_add_identity_bn256() {
-        let mut rng = thread_rng();
-        let a = G1Affine::random(&mut rng);
-        println!("a: {:?}", a);
-        let b = G1Affine::identity();
-        println!("b: {:?}", b);
-
-        let fast = a + b;
-
-        let result = run_webgpu_point_op::<G1Affine>("test_point_add_identity", a, b, 0);
-
-        println!("Result: {:?}", result);
-        assert_eq!(fast, result);
+        test_webgpu_point_add_identity::<G1Affine>();
     }
 
     #[test]
     fn test_webgpu_point_add_identity_pallas() {
-        let mut rng = thread_rng();
-        let a = PallasPoint::random(&mut rng).to_affine();
-        println!("a: {:?}", a);
-        let b = PallasAffine::identity();
-        println!("b: {:?}", b);
-
-        let fast = a + b;
-
-        let result = run_webgpu_point_op::<PallasAffine>("test_point_add_identity", a, b, 0);
-
-        println!("Result: {:?}", result);
-        assert_eq!(fast, result);
+        test_webgpu_point_add_identity::<PallasAffine>();
     }
 
     #[test]
     fn test_webgpu_point_add_identity_secp256k1() {
-        let mut rng = thread_rng();
-        let a = Secp256k1Affine::random(&mut rng);
-        println!("a: {:?}", a);
-        let b = Secp256k1Affine::identity();
-        println!("b: {:?}", b);
-
-        let fast = a + b;
-
-        let result = run_webgpu_point_op::<Secp256k1Affine>("test_point_add_identity", a, b, 0);
-
-        println!("Result: {:?}", result);
-        assert_eq!(fast, result);
+        test_webgpu_point_add_identity::<Secp256k1Affine>();
     }
 
 
-    #[test]
-    fn test_webgpu_point_negate_bn256() {
+    fn test_webgpu_point_negate<C: CurveAffine>() {
+
+        for _ in 0..1000 {
         let mut rng = thread_rng();
-        let a = G1Affine::random(&mut rng);
+        let a = C::Curve::random(&mut rng).to_affine();
         println!("a: {:?}", a);
 
         let fast = -a;
 
-        let result = run_webgpu_point_op::<G1Affine>("test_negate_point", a, a, 0);
+        let result = run_webgpu_point_op::<C>("test_negate_point", a, a, 0);
 
         println!("Result: {:?}", result);
         assert_eq!(fast, result.to_affine());
+        }
+    }
+
+    #[test]
+    fn test_webgpu_point_negate_bn256() {
+        test_webgpu_point_negate::<G1Affine>();
     }
 
     #[test]
     fn test_webgpu_point_negate_pallas() {
-        for _ in 0..1000 {
-            let mut rng = thread_rng();
-            let a = PallasPoint::random(&mut rng).to_affine();
-
-            let fast = -a;
-
-            let result = run_webgpu_point_op::<PallasAffine>("test_negate_point", a, a, 0);
-
-            assert_eq!(fast, result.to_affine());
-        }
+        test_webgpu_point_negate::<PallasAffine>();
     }
 
     #[test]
     fn test_webgpu_point_negate_secp256k1() {
-        for _ in 0..1000 {
-            let mut rng = thread_rng();
-            let a = Secp256k1Affine::random(&mut rng);
+        test_webgpu_point_negate::<Secp256k1Affine>();
+    }
 
-            let fast = -a;
+    fn test_webgpu_point_double_and_add<C: CurveAffine>() {
+        let mut rng = thread_rng();
+        let a = C::Curve::random(&mut rng).to_affine();
+        println!("a: {:?}", a);
+        // random u32
+        let scalar = rng.gen_range(0..u32::MAX);
+        println!("scalar: {:?}", scalar);
 
-            let result = run_webgpu_point_op::<Secp256k1Affine>("test_negate_point", a, a, 0);
+        let fast = a * C::Scalar::from(scalar as u64);
 
-            assert_eq!(fast, result.to_affine());
-        }
+        let result = run_webgpu_point_op::<C>("test_double_and_add", a, a, scalar);
+
+        println!("Result: {:?}", result);
+        assert_eq!(fast, result);
     }
 
     #[test]
     fn test_webgpu_point_double_and_add_bn256() {
-        let mut rng = thread_rng();
-        let a = G1Affine::random(&mut rng);
-        println!("a: {:?}", a);
-        // random u32
-        let scalar = rng.gen_range(0..u32::MAX);
-        println!("scalar: {:?}", scalar);
-
-        let fast = a * Fr::from(scalar as u64);
-
-        let result = run_webgpu_point_op::<G1Affine>("test_double_and_add", a, a, scalar);
-
-        println!("Result: {:?}", result);
-        assert_eq!(fast, result);
+        test_webgpu_point_double_and_add::<G1Affine>();
     }
 
     #[test]
     fn test_webgpu_point_double_and_add_pallas() {
-        let mut rng = thread_rng();
-        let a = PallasPoint::random(&mut rng).to_affine();
-        println!("a: {:?}", a);
-        // random u32
-        let scalar = rng.gen_range(0..u32::MAX);
-        println!("scalar: {:?}", scalar);
-
-        let fast = a * PallasScalar::from(scalar as u64);
-
-        let result = run_webgpu_point_op::<PallasAffine>("test_double_and_add", a, a, scalar);
-
-        println!("Result: {:?}", result);
-        assert_eq!(fast, result);
+        test_webgpu_point_double_and_add::<PallasAffine>();
     }
 
     #[test]
     fn test_webgpu_point_double_and_add_secp256k1() {
-        let mut rng = thread_rng();
-        let a = Secp256k1Affine::random(&mut rng);
-        println!("a: {:?}", a);
-        // random u32
-        let scalar = rng.gen_range(0..u32::MAX);
-        println!("scalar: {:?}", scalar);
-
-        let fast = a * Secp256k1Fq::from(scalar as u64);
-
-        let result = run_webgpu_point_op::<Secp256k1Affine>("test_double_and_add", a, a, scalar);
-
-        println!("Result: {:?}", result);
-        assert_eq!(fast, result);
+        test_webgpu_point_double_and_add::<Secp256k1Affine>();
     }
 }

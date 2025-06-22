@@ -145,27 +145,32 @@ pub async fn run_webgpu_decompose_async<C: CurveAffine>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use halo2curves::secp256k1::Secp256k1Affine;
     use msm_webgpu::{sample_points, sample_scalars};
 
     use halo2curves::bn256::{Fr, G1Affine};
     use halo2curves::pasta::pallas::{Affine as PallasAffine, Scalar as PallasScalar};
+
+    fn test_decompose<C: CurveAffine>() {
+        let input_size = 1 << 16;
+        let scalars = sample_scalars::<C::Scalar>(input_size);
+        let points = sample_points::<C>(input_size);
+
+        let (result_points, _result_scalars) = run_webgpu_decompose::<C>(&points, &scalars);
+        assert_eq!(result_points, points);
+    }
     #[test]
     fn test_decompose_bn256() {
-        let input_size = 1 << 16;
-        let scalars = sample_scalars::<Fr>(input_size);
-        let points = sample_points::<G1Affine>(input_size);
-
-        let (result_points, _result_scalars) = run_webgpu_decompose::<G1Affine>(&points, &scalars);
-        assert_eq!(result_points, points);
+        test_decompose::<G1Affine>();
     }
 
     #[test]
     fn test_decompose_pallas() {
-        let input_size = 1 << 16;
-        let scalars = sample_scalars::<PallasScalar>(input_size);
-        let points = sample_points::<PallasAffine>(input_size);
+        test_decompose::<PallasAffine>();
+    }
 
-        let (result_points, _result_scalars) = run_webgpu_decompose::<PallasAffine>(&points, &scalars);
-        assert_eq!(result_points, points);
+    #[test]
+    fn test_decompose_secp256k1() {
+        test_decompose::<Secp256k1Affine>();
     }
 }

@@ -137,19 +137,22 @@ pub fn decompose_scalars_signed<F: PrimeField>(
             signed_slices[i] = limbs[i] as i32 + carry;
             if signed_slices[i] >= l / 2 {
                 signed_slices[i] = -(l - signed_slices[i]);
-                if signed_slices[i] == -0 {
-                    signed_slices[i] = 0;
-                }
+                // if signed_slices[i] == 0 {
+                //     signed_slices[i] = 0;
+                // }
                 carry = 1;
             } else {
                 carry = 0;
             }
         }
 
-        // We do not need to handle the case where the final carry equals 1, as the highest word of the field modulus (0x12ab) is smaller than 2^{16-1}
         if carry == 1 {
             // TODO: Review this
-            panic!("final carry is 1");
+            // panic!("final carry is 1");
+            println!("Carrying 1");
+            println!("Scalar: {:?}", scalar);
+            println!("Limbs: {:?}", limbs);
+            signed_slices.push(carry);
         }
         as_limbs.push(signed_slices.iter().map(|x| x + shift).collect());
     }

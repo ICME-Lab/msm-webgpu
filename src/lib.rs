@@ -161,61 +161,44 @@ pub mod tests_wasm_pack {
     use halo2curves::bn256::{Fr, G1Affine};
     use halo2curves::pasta::pallas::{Affine as PallasAffine, Scalar as PallasScalar};
     use halo2curves::secp256k1::{Secp256k1Affine, Fq as Secp256k1Fq};
+    use halo2curves::secq256k1::{Secq256k1Affine, Fq as Secq256k1Fq};
     #[wasm_bindgen]
     extern "C" {
         #[wasm_bindgen(js_namespace = performance)]
         fn now() -> f64;
     }
 
-    pub async fn test_webgpu_msm_cuzk_bn256(sample_size: usize) {
+    pub async fn test_webgpu_msm_cuzk<C: CurveAffine>(sample_size: usize) {
         debug(&format!("Testing with sample size: {sample_size}"));
-        let points = sample_points::<G1Affine>(sample_size);
-        let scalars = sample_scalars::<Fr>(sample_size);
+        let points = sample_points::<C>(sample_size);
+        let scalars = sample_scalars::<C::Scalar>(sample_size);
 
         let cpu_start = now();
         let fast = cpu_msm(&points, &scalars);
         debug(&format!("CPU Elapsed: {} ms", now() - cpu_start));
 
         let result_start = now();
-        let result = run_webgpu_msm::<G1Affine>(&points, &scalars).await;
+        let result = run_webgpu_msm::<C>(&points, &scalars).await;
         debug(&format!("GPU Elapsed: {} ms", now() - result_start));
 
         debug(&format!("Result: {result:?}"));
         assert_eq!(fast, result);
+    }
+
+    pub async fn test_webgpu_msm_cuzk_bn256(sample_size: usize) {
+        test_webgpu_msm_cuzk::<G1Affine>(sample_size).await;
     }
 
     pub async fn test_webgpu_msm_cuzk_pallas(sample_size: usize) {
-        debug(&format!("Testing with sample size: {sample_size}"));
-        let points = sample_points::<PallasAffine>(sample_size);
-        let scalars = sample_scalars::<PallasScalar>(sample_size);
-
-        let cpu_start = now();
-        let fast = cpu_msm(&points, &scalars);
-        debug(&format!("CPU Elapsed: {} ms", now() - cpu_start));
-
-        let result_start = now();
-        let result = run_webgpu_msm::<PallasAffine>(&points, &scalars).await;
-        debug(&format!("GPU Elapsed: {} ms", now() - result_start));
-
-        debug(&format!("Result: {result:?}"));
-        assert_eq!(fast, result);
+        test_webgpu_msm_cuzk::<PallasAffine>(sample_size).await;
     }
 
     pub async fn test_webgpu_msm_cuzk_secp256k1(sample_size: usize) {
-        debug(&format!("Testing with sample size: {sample_size}"));
-        let points = sample_points::<Secp256k1Affine>(sample_size);
-        let scalars = sample_scalars::<Secp256k1Fq>(sample_size);
+        test_webgpu_msm_cuzk::<Secp256k1Affine>(sample_size).await;
+    }
 
-        let cpu_start = now();
-        let fast = cpu_msm(&points, &scalars);
-        debug(&format!("CPU Elapsed: {} ms", now() - cpu_start));
-
-        let result_start = now();
-        let result = run_webgpu_msm::<Secp256k1Affine>(&points, &scalars).await;
-        debug(&format!("GPU Elapsed: {} ms", now() - result_start));
-
-        debug(&format!("Result: {result:?}"));
-        assert_eq!(fast, result);
+    pub async fn test_webgpu_msm_cuzk_secq256k1(sample_size: usize) {
+        test_webgpu_msm_cuzk::<Secq256k1Affine>(sample_size).await;
     }
 
 }
