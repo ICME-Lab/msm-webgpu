@@ -5,9 +5,9 @@ use wgpu::CommandEncoderDescriptor;
 
 use msm_webgpu::cuzk::{
     gpu::{get_adapter, get_device, read_from_gpu_test},
-    msm::{P, PARAMS, WORD_SIZE, convert_point_coords_and_decompose_shaders},
+    msm::{convert_point_coords_and_decompose_shaders, WORD_SIZE},
     shader_manager::ShaderManager,
-    utils::{bytes_to_field, debug, to_biguint_le},
+    utils::{bytes_to_field, compute_misc_params, compute_p, debug, to_biguint_le},
 };
 use msm_webgpu::{points_to_bytes, scalars_to_bytes};
 
@@ -15,12 +15,14 @@ async fn decompose_shader<C: CurveAffine>(
     points: &[C],
     scalars: &[C::Scalar],
 ) -> (Vec<C>, Vec<u8>) {
+    let p = compute_p::<C>();
+    let params = compute_misc_params(&p, WORD_SIZE);
     let input_size = scalars.len();
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_columns = 1 << chunk_size;
     let num_rows = input_size.div_ceil(num_columns);
     let num_subtasks = 256_usize.div_ceil(chunk_size);
-    let num_words = PARAMS.num_words;
+    let num_words = params.num_words;
     debug(&format!("Input size: {input_size}"));
     debug(&format!("Chunk size: {chunk_size}"));
     debug(&format!("Num columns: {num_columns}"));
@@ -28,12 +30,12 @@ async fn decompose_shader<C: CurveAffine>(
     debug(&format!("Num subtasks: {num_subtasks}"));
     debug(&format!("Num words: {num_words}"));
     debug(&format!("Word size: {WORD_SIZE}"));
-    debug(&format!("Params: {PARAMS:?}"));
+    debug(&format!("Params: {params:?}"));
 
     let point_bytes = points_to_bytes(points);
     let scalar_bytes = scalars_to_bytes(scalars);
 
-    let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size);
+    let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size, &params);
 
     let adapter = get_adapter().await;
     let (device, queue) = get_device(&adapter).await;
@@ -109,8 +111,8 @@ async fn decompose_shader<C: CurveAffine>(
             let p_x_biguint_montgomery = to_biguint_le(x, num_words, WORD_SIZE as u32);
             let p_y_biguint_montgomery = to_biguint_le(y, num_words, WORD_SIZE as u32);
 
-            let p_x_biguint = p_x_biguint_montgomery * &PARAMS.rinv % P.clone();
-            let p_y_biguint = p_y_biguint_montgomery * &PARAMS.rinv % P.clone();
+            let p_x_biguint = p_x_biguint_montgomery * &params.rinv % p.clone();
+            let p_y_biguint = p_y_biguint_montgomery * &params.rinv % p.clone();
             let p_x_field = bytes_to_field(&p_x_biguint.to_bytes_le());
             let p_y_field = bytes_to_field(&p_y_biguint.to_bytes_le());
 
@@ -143,17 +145,32 @@ pub async fn run_webgpu_decompose_async<C: CurveAffine>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use halo2curves::secp256k1::Secp256k1Affine;
     use msm_webgpu::{sample_points, sample_scalars};
 
     use halo2curves::bn256::{Fr, G1Affine};
+    use halo2curves::pasta::pallas::{Affine as PallasAffine, Scalar as PallasScalar};
+
+    fn test_decompose<C: CurveAffine>() {
+        let input_size = 1 << 16;
+        let scalars = sample_scalars::<C::Scalar>(input_size);
+        let points = sample_points::<C>(input_size);
+
+        let (result_points, _result_scalars) = run_webgpu_decompose::<C>(&points, &scalars);
+        assert_eq!(result_points, points);
+    }
+    #[test]
+    fn test_decompose_bn256() {
+        test_decompose::<G1Affine>();
+    }
 
     #[test]
-    fn test_decompose() {
-        let input_size = 1 << 16;
-        let scalars = sample_scalars::<Fr>(input_size);
-        let points = sample_points::<G1Affine>(input_size);
+    fn test_decompose_pallas() {
+        test_decompose::<PallasAffine>();
+    }
 
-        let (result_points, _result_scalars) = run_webgpu_decompose::<G1Affine>(&points, &scalars);
-        assert_eq!(result_points, points);
+    #[test]
+    fn test_decompose_secp256k1() {
+        test_decompose::<Secp256k1Affine>();
     }
 }

@@ -5,9 +5,9 @@ use wgpu::CommandEncoderDescriptor;
 
 use msm_webgpu::cuzk::{
     gpu::{get_adapter, get_device, read_from_gpu_test},
-    msm::{PARAMS, WORD_SIZE, convert_point_coords_and_decompose_shaders, transpose_gpu},
+    msm::{convert_point_coords_and_decompose_shaders, transpose_gpu, WORD_SIZE},
     shader_manager::ShaderManager,
-    utils::debug,
+    utils::{compute_misc_params, compute_p, debug},
 };
 use msm_webgpu::{points_to_bytes, scalars_to_bytes};
 
@@ -15,12 +15,14 @@ async fn transpose_shader<C: CurveAffine>(
     points: &[C],
     scalars: &[C::Scalar],
 ) -> (Vec<i32>, Vec<i32>) {
+    let p = compute_p::<C>();
+    let params = compute_misc_params(&p, WORD_SIZE);
     let input_size = scalars.len();
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
     let num_columns = 1 << chunk_size;
     let num_rows = input_size.div_ceil(num_columns);
     let num_subtasks = 256_usize.div_ceil(chunk_size);
-    let num_words = PARAMS.num_words;
+    let num_words = params.num_words;
     debug(&format!("Input size: {input_size}"));
     debug(&format!("Chunk size: {chunk_size}"));
     debug(&format!("Num columns: {num_columns}"));
@@ -28,12 +30,12 @@ async fn transpose_shader<C: CurveAffine>(
     debug(&format!("Num subtasks: {num_subtasks}"));
     debug(&format!("Num words: {num_words}"));
     debug(&format!("Word size: {WORD_SIZE}"));
-    println!("Params: {PARAMS:?}");
+    println!("Params: {params:?}");
 
     let point_bytes = points_to_bytes(points);
     let scalar_bytes = scalars_to_bytes(scalars);
 
-    let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size);
+    let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size, &params);
 
     let adapter = get_adapter().await;
     let (device, queue) = get_device(&adapter).await;

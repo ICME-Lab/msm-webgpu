@@ -9,25 +9,27 @@ use msm_webgpu::cuzk::{
         create_bind_group_layout, create_compute_pipeline, create_storage_buffer, execute_pipeline,
         get_adapter, get_device, read_from_gpu_test,
     },
-    msm::{P, PARAMS, WORD_SIZE},
+    msm::WORD_SIZE,
     shader_manager::ShaderManager,
-    utils::{bytes_to_field, points_to_bytes_for_gpu, to_biguint_le},
+    utils::{bytes_to_field, compute_misc_params, compute_p, points_to_bytes_for_gpu, to_biguint_le},
 };
 
 async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve {
-    let a_bytes = points_to_bytes_for_gpu(&[a], PARAMS.num_words, WORD_SIZE);
-    let b_bytes = points_to_bytes_for_gpu(&[b], PARAMS.num_words, WORD_SIZE);
+    let p = compute_p::<C>();
+    let params = compute_misc_params(&p, WORD_SIZE);
+    let a_bytes = points_to_bytes_for_gpu(&[a], params.num_words, WORD_SIZE);
+    let b_bytes = points_to_bytes_for_gpu(&[b], params.num_words, WORD_SIZE);
     let scalar_bytes = scalar.to_le_bytes();
     let input_size = 1;
     let chunk_size = if input_size >= 65536 { 16 } else { 4 };
-    let num_words = PARAMS.num_words;
+    let num_words = params.num_words;
     println!("Input size: {input_size}");
     println!("Chunk size: {chunk_size}");
     println!("Num words: {num_words}");
     println!("Word size: {WORD_SIZE}");
-    println!("Params: {PARAMS:?}");
+    println!("Params: {params:?}");
 
-    let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size);
+    let shader_manager = ShaderManager::new(WORD_SIZE, chunk_size, input_size, &params);
 
     let adapter = get_adapter().await;
     let (device, queue) = get_device(&adapter).await;
@@ -81,10 +83,10 @@ async fn point_op<C: CurveAffine>(op: &str, a: C, b: C, scalar: u32) -> C::Curve
     println!("Data length: {:?}", data_u32.len());
 
     let results = data_u32
-        .chunks(20)
+        .chunks(num_words)
         .map(|chunk| {
             let biguint_montgomery = to_biguint_le(chunk, num_words, WORD_SIZE as u32);
-            let biguint = biguint_montgomery * &PARAMS.rinv % P.clone();
+            let biguint = biguint_montgomery * &params.rinv % p.clone();
             let field: <<C as CurveAffine>::CurveExt as CurveExt>::Base =
                 bytes_to_field(&biguint.to_bytes_le());
             field
@@ -117,71 +119,137 @@ pub async fn run_webgpu_point_op_async<C: CurveAffine>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use group::Curve;
+    use ff::{Field, PrimeField};
+    use group::{Curve, Group};
     use group::cofactor::CofactorCurveAffine;
     use halo2curves::bn256::{Fr, G1Affine};
+    use halo2curves::pasta::pallas::{Affine as PallasAffine, Point as PallasPoint, Scalar as PallasScalar, Base as PallasBase};
+    use halo2curves::secp256k1::{Fq as Secp256k1Fq, Secp256k1, Secp256k1Affine};
+    use msm_webgpu::cuzk::utils::gen_p_limbs;
+    use num_bigint::BigUint;
+    use num_traits::Num;
     use rand::{Rng, thread_rng};
 
-    #[test]
-    fn test_webgpu_point_add() {
+    fn test_webgpu_point_add<C: CurveAffine>() {
         let mut rng = thread_rng();
-        let a = G1Affine::random(&mut rng);
+        let a = C::Curve::random(&mut rng).to_affine();
         println!("a: {:?}", a);
-        let b = G1Affine::random(&mut rng);
+        let b = C::Curve::random(&mut rng).to_affine();
         println!("b: {:?}", b);
 
         let fast = a + b;
 
-        let result = run_webgpu_point_op::<G1Affine>("test_point_add", a, b, 0);
+        let result = run_webgpu_point_op::<C>("test_point_add", a, b, 0);
 
         println!("Result: {:?}", result);
         assert_eq!(fast, result);
     }
 
     #[test]
-    fn test_webgpu_point_add_identity() {
+    fn test_webgpu_point_add_bn256() {
+        test_webgpu_point_add::<G1Affine>();
+    }
+
+    #[test]
+    fn test_webgpu_point_add_pallas() {
+        test_webgpu_point_add::<PallasAffine>();
+    }
+
+    #[test]
+    fn test_webgpu_point_add_secp256k1() {
+        test_webgpu_point_add::<Secp256k1Affine>();
+    }
+
+    fn test_webgpu_point_add_identity<C: CurveAffine>() {
         let mut rng = thread_rng();
-        let a = G1Affine::random(&mut rng);
+        let a = C::Curve::random(&mut rng).to_affine();
         println!("a: {:?}", a);
-        let b = G1Affine::identity();
+        let b = C::identity();
         println!("b: {:?}", b);
 
         let fast = a + b;
 
-        let result = run_webgpu_point_op::<G1Affine>("test_point_add_identity", a, b, 0);
+        let result = run_webgpu_point_op::<C>("test_point_add_identity", a, b, 0);
 
         println!("Result: {:?}", result);
         assert_eq!(fast, result);
     }
 
     #[test]
-    fn test_webgpu_point_negate() {
+    fn test_webgpu_point_add_identity_bn256() {
+        test_webgpu_point_add_identity::<G1Affine>();
+    }
+
+    #[test]
+    fn test_webgpu_point_add_identity_pallas() {
+        test_webgpu_point_add_identity::<PallasAffine>();
+    }
+
+    #[test]
+    fn test_webgpu_point_add_identity_secp256k1() {
+        test_webgpu_point_add_identity::<Secp256k1Affine>();
+    }
+
+
+    fn test_webgpu_point_negate<C: CurveAffine>() {
+
+        for _ in 0..1000 {
         let mut rng = thread_rng();
-        let a = G1Affine::random(&mut rng);
+        let a = C::Curve::random(&mut rng).to_affine();
         println!("a: {:?}", a);
 
         let fast = -a;
 
-        let result = run_webgpu_point_op::<G1Affine>("test_negate_point", a, a, 0);
+        let result = run_webgpu_point_op::<C>("test_negate_point", a, a, 0);
 
         println!("Result: {:?}", result);
         assert_eq!(fast, result.to_affine());
+        }
     }
 
     #[test]
-    fn test_webgpu_point_double_and_add() {
+    fn test_webgpu_point_negate_bn256() {
+        test_webgpu_point_negate::<G1Affine>();
+    }
+
+    #[test]
+    fn test_webgpu_point_negate_pallas() {
+        test_webgpu_point_negate::<PallasAffine>();
+    }
+
+    #[test]
+    fn test_webgpu_point_negate_secp256k1() {
+        test_webgpu_point_negate::<Secp256k1Affine>();
+    }
+
+    fn test_webgpu_point_double_and_add<C: CurveAffine>() {
         let mut rng = thread_rng();
-        let a = G1Affine::random(&mut rng);
+        let a = C::Curve::random(&mut rng).to_affine();
         println!("a: {:?}", a);
         // random u32
         let scalar = rng.gen_range(0..u32::MAX);
         println!("scalar: {:?}", scalar);
 
-        let fast = a * Fr::from(scalar as u64);
+        let fast = a * C::Scalar::from(scalar as u64);
 
-        let result = run_webgpu_point_op::<G1Affine>("test_double_and_add", a, a, scalar);
+        let result = run_webgpu_point_op::<C>("test_double_and_add", a, a, scalar);
 
         println!("Result: {:?}", result);
         assert_eq!(fast, result);
+    }
+
+    #[test]
+    fn test_webgpu_point_double_and_add_bn256() {
+        test_webgpu_point_double_and_add::<G1Affine>();
+    }
+
+    #[test]
+    fn test_webgpu_point_double_and_add_pallas() {
+        test_webgpu_point_double_and_add::<PallasAffine>();
+    }
+
+    #[test]
+    fn test_webgpu_point_double_and_add_secp256k1() {
+        test_webgpu_point_double_and_add::<Secp256k1Affine>();
     }
 }
