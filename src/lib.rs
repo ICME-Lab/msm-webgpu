@@ -8,9 +8,10 @@ use ff::PrimeField;
 use group::{Curve, Group};
 use halo2curves::bn256::Fr;
 use halo2curves::bn256::G1Affine;
-use halo2curves::{msm::best_multiexp, CurveAffine};
+use halo2curves::{msm::msm_best, CurveAffine};
 use rand::thread_rng;
-use js_sys::Array;          
+use js_sys::Array;
+use rand::Rng;          
 
 use crate::cuzk::utils::field_to_bytes;
 use wasm_bindgen::prelude::*;
@@ -19,6 +20,16 @@ use wasm_bindgen_futures;
 pub fn sample_scalars<F: PrimeField>(n: usize) -> Vec<F> {
     let mut rng = thread_rng();
     (0..n).map(|_| F::random(&mut rng)).collect::<Vec<_>>()
+}
+
+/// Sample random scalars
+pub fn sample_32_bit_scalars<F: PrimeField>(n: usize) -> Vec<F> {
+    let mut rng = thread_rng();
+
+    (0..n).map(|_| {
+        let random_u32: u32 = rng.gen_range(0..=u32::MAX);
+        F::from(random_u32 as u64)
+    }).collect::<Vec<_>>()
 }
 
 /// Sample random affine points
@@ -32,7 +43,7 @@ pub fn sample_points<C: CurveAffine>(n: usize) -> Vec<C> {
 
 /// Run CPU MSM computation
 pub fn cpu_msm<C: CurveAffine>(g: &[C], v: &[C::Scalar]) -> C::Curve {
-    best_multiexp(v, g)
+    msm_best(v, g)
 }
 
 /// Convert scalars to bytes
