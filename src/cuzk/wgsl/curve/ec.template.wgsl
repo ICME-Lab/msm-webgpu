@@ -60,7 +60,7 @@ fn point_add(p: Point, q: Point) -> Point {
         if (field_eq(S1, S2)) {
             return point_double(p);
         } else {
-            return POINT_IDENTITY;
+            return get_paf();
         }
     }
 
@@ -86,7 +86,7 @@ fn point_add(p: Point, q: Point) -> Point {
 }
 
 fn scalar_mul(p: Point, k: BigInt) -> Point {
-    var r: Point = POINT_IDENTITY;
+    var r: Point = get_paf();
     var t: Point = p;
     for (var i = 0u; i < NUM_WORDS; i = i + 1u) {
         var k_s = k.limbs[i];
@@ -101,12 +101,15 @@ fn scalar_mul(p: Point, k: BigInt) -> Point {
     return r;
 }
 
-/// Point negation only involves multiplying the X and T coordinates by -1 in
+/// Point negation only involves multiplying the Y coordinate by -1 in
 /// the field.
 fn negate_point(point: Point) -> Point {
     var p = get_p();
     var y = point.y;
-    var neg_y: BigInt;
+    if (field_eq(y, ZERO)) {
+        return point;
+    }
+    var neg_y = ZERO;
     bigint_sub(&p, &y, &neg_y);
     return Point(point.x, neg_y, point.z);
 }
@@ -114,16 +117,18 @@ fn negate_point(point: Point) -> Point {
 
 fn get_paf() -> Point {
     var result: Point;
+    let r = get_r();
     result.x = ZERO;
-    result.y = ONE;
+    result.y = r;
     result.z = ZERO;
     return result;
 }
+
 /// This double-and-add code is adapted from the ZPrize test harness:
 /// https://github.com/demox-labs/webgpu-msm/blob/main/src/reference/webgpu/wgsl/Curve.ts#L78.
 fn double_and_add(point: Point, scalar: u32) -> Point {
     /// Set result to the point at infinity.
-    var result: Point = POINT_IDENTITY; // get_paf();
+    var result: Point = get_paf();
 
     var s = scalar;
     var temp = point;

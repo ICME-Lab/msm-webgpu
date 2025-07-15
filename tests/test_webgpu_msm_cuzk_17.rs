@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests_wasm_pack_17 {
-    use msm_webgpu::tests_wasm_pack::test_webgpu_msm_cuzk;
+    use msm_webgpu::tests_wasm_pack::test_webgpu_msm_cuzk_bn256;
     use wasm_bindgen_test::wasm_bindgen_test;
     use wasm_bindgen_test::*;
 
@@ -8,6 +8,6 @@ mod tests_wasm_pack_17 {
 
     #[wasm_bindgen_test]
     async fn test_webgpu_msm_cuzk_17() {
-        test_webgpu_msm_cuzk(1 << 17).await;
+        test_webgpu_msm_cuzk_bn256(1 << 17).await;
     }
 }

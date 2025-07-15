@@ -83,6 +83,6 @@ fn test_point_add_identity(
     var ar_y = field_mul(&ay, &r);
     var ar_z = field_mul(&az, &r);
     var p_a = Point(ar_x, ar_y, ar_z);
-    var p_b = POINT_IDENTITY;
+    var p_b = get_paf();
     result = point_add(p_a, p_b);
 }
