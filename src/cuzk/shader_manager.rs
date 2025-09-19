@@ -43,10 +43,9 @@ pub static TEST_FIELD_SHADER: Lazy<String> =
 pub static TEST_POINT_SHADER: Lazy<String> =
     Lazy::new(|| include_str!("wgsl/test/test_point.wgsl").to_string());
 
-use crate::cuzk::utils::{calc_bitwidth, gen_mu_limbs, gen_one_limbs, gen_p_limbs, gen_rinv_limbs};
+use crate::cuzk::utils::{calc_bitwidth, gen_mu_limbs, gen_one_limbs, gen_p_limbs, gen_rinv_limbs, MiscParams};
 
 use super::{
-    msm::{P, PARAMS},
     utils::{gen_p_limbs_plus_one, gen_r_limbs, gen_zero_limbs},
 };
 
@@ -71,13 +70,13 @@ pub struct ShaderManager {
 
 impl ShaderManager {
     /// Create a new shader manager
-    pub fn new(word_size: usize, chunk_size: usize, input_size: usize) -> Self {
-        let p_bit_length = calc_bitwidth(&P);
-        let num_words = PARAMS.num_words;
-        let r = PARAMS.r.clone();
-        let rinv = PARAMS.rinv.clone();
-        println!("P: {P:?}");
-        println!("P limbs: {}", gen_p_limbs(&P, num_words, word_size));
+    pub fn new(word_size: usize, chunk_size: usize, input_size: usize, params: &MiscParams) -> Self {
+        let p_bit_length = calc_bitwidth(&params.p);
+        let num_words = params.num_words;
+        let r = params.r.clone();
+        let rinv = params.rinv.clone();
+        println!("P: {:?}", params.p);
+        println!("P limbs: {}", gen_p_limbs(&params.p, num_words, word_size));
         println!("W_MASK: {:?}", (1 << word_size) - 1);
         println!("R limbs: {}", gen_r_limbs(&r, num_words, word_size));
         Self {
@@ -86,15 +85,15 @@ impl ShaderManager {
             input_size,
             num_words,
             index_shift: 1 << (chunk_size - 1),
-            p_limbs: gen_p_limbs(&P, num_words, word_size),
-            p_limbs_plus_one: gen_p_limbs_plus_one(&P, num_words, word_size),
+            p_limbs: gen_p_limbs(&params.p, num_words, word_size),
+            p_limbs_plus_one: gen_p_limbs_plus_one(&params.p, num_words, word_size),
             zero_limbs: gen_zero_limbs(num_words),
             one_limbs: gen_one_limbs(num_words),
             slack: num_words * word_size - p_bit_length,
             w_mask: (1 << word_size) - 1,
-            n0: PARAMS.n0,
+            n0: params.n0,
             r_limbs: gen_r_limbs(&r, num_words, word_size),
-            mu_limbs: gen_mu_limbs(&P, num_words, word_size),
+            mu_limbs: gen_mu_limbs(&params.p, num_words, word_size),
             rinv_limbs: gen_rinv_limbs(&rinv, num_words, word_size),
         }
     }

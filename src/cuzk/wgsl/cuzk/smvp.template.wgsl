@@ -48,7 +48,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     /// Define custom subtask_idx.
     let subtask_idx = (id / h);
 
-    var inf = POINT_IDENTITY;
+    var inf = get_paf();
+    var z = get_r();
 
     let rp_offset = (subtask_idx + subtask_offset) * (num_columns + 1u);
 
@@ -72,7 +73,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
             var x = new_point_x[idx];
             var y = new_point_y[idx];
-            var z = get_r();
+            
 
             let pt = Point(x, y, z);
             sum = point_add(sum, pt);
@@ -86,7 +87,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         var bucket_idx = 0u;
         if (h > row_idx) {
             bucket_idx = h - row_idx;
-            sum = negate_point(sum);
+            let neg_sum = negate_point(sum);
+            sum = neg_sum;
         } else {
             bucket_idx = row_idx - h;
         }
@@ -112,6 +114,4 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             bucket_z[bi] = sum.z;
         }
     }
-
-    {{{ recompile }}}
 }
