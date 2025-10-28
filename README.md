@@ -11,6 +11,10 @@ Further reads on the optimisations applied:
 - [Optimizing Barrett Reduction: Tighter Bounds Eliminate Redundant Subtractions](https://blog.zksecurity.xyz/posts/barrett-tighter-bound/) by Suneal Gong.
 - [Signed Bucket Indexes for Multi-Scalar Multiplication (MSM)](https://hackmd.io/@drouyang/signed-bucket-index) by drouyang.eth.
 
+Made with ❤️ by [ICME Labs](https://blog.icme.io/).
+
+<img width="983" height="394" alt="icme_labs" src="https://github.com/user-attachments/assets/ffc334ed-c301-4ce6-8ca3-a565328904fe" />
+
 ## Test
 
 
